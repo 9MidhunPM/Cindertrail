@@ -355,7 +355,7 @@ func _passage(path: Array, width: float, paving: bool, rail_frequency: int) -> v
 					_block(footing + Vector3.UP * .68, Vector3(.55, .14, .6), angle, HIGHLIGHT)
 					if row + rail_frequency < count:
 						var next: Vector3 = a.lerp(b, float(row + rail_frequency) / count) + spread * hand * .97
-						_beam(footing + Vector3.UP * .50, next + Vector3.UP * .50, .09, STONE_DARK, 4)
+						_beam(footing + Vector3.UP * .50, next + Vector3.UP * .50, .09, STONE_DARK, 4, true)
 
 func _joint_width(path: Array, index: int, width: float) -> Vector3:
 	var point: Vector3 = path[index]
@@ -779,11 +779,18 @@ func _cable(begin: Vector3, end: Vector3, sag: float, powered := false) -> void:
 		add_child(spark)
 		_wire_sparks.append(spark)
 
-func _beam(a: Vector3, b: Vector3, radius: float, color: Color, sides: int) -> void:
+func _beam(a: Vector3, b: Vector3, radius: float, color: Color, sides: int, solid := false) -> void:
 	var forward := a.direction_to(b)
 	var normal := Vector3.UP if absf(forward.y) < .92 else Vector3.RIGHT
 	var right := forward.cross(normal).normalized()
 	var up := right.cross(forward).normalized()
+	if solid:
+		var beam := BoxShape3D.new()
+		beam.size = Vector3(radius * 2.0, radius * 2.0, a.distance_to(b))
+		var collider := CollisionShape3D.new()
+		collider.shape = beam
+		collider.transform = Transform3D(Basis(right, up, -forward), (a + b) * .5)
+		_collision.add_child(collider)
 	for i in sides:
 		var angle := TAU * i / sides
 		var next := TAU * (i + 1) / sides

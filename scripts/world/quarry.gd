@@ -136,7 +136,7 @@ func _build_trail() -> void:
 	var turn := Vector3(-36.0, 0.92, 2.0)
 	var alcove := Vector3(-36.0, 0.92, 6.5)
 	_span_floor(turn, alcove, 3.0)
-	_slab(Vector3(-36.0, .9, 5.25), Vector2(3.15, 3.15), .39, LIMESTONE)
+	_slab(Vector3(-36.0, .9, 5.25), Vector2(3.15, 3.15), .39, LIMESTONE, true)
 	_rock(Vector3(-37.5, .2, 6.8), Vector3(1.8, 1.45, 1.5), SEDIMENT)
 	_rock(Vector3(-34.3, .36, 6.2), Vector3(1.22, 1.78, .98), LIMESTONE)
 	_lantern(Vector3(-34.45, .93, 5.8))
@@ -270,15 +270,15 @@ func _extraction_gallery() -> void:
 				_bar(start,start+Vector3(.04,-.55-_rng.randf_range(.0,.28),.0),.019,SEDIMENT)
 	for i in 3:
 		var step := Vector3(-60.4+i*1.10,1.15+i*.21,-4.98)
-		_slab(step,Vector2(1.33,1.12),.82,_stone())
+		_slab(step,Vector2(1.33,1.12),.82,_stone(),true)
 	for i in 7:
 		var x := -48.6+(i%3)*.74
 		var z := -4.5-(i/3)*.86
 		var high := 1.70+(.32 if i in [2,6] else .0)
-		_slab(Vector3(x,high,z),Vector2(.69,.77),high-1.12,_stone())
+		_slab(Vector3(x,high,z),Vector2(.69,.77),high-1.12,_stone(),true)
 	for i in 5:
 		var x := -54.7+i*1.05
-		_slab(Vector3(x,3.81,-5.93),Vector2(1.02,1.62),.19,TIMBER)
+		_slab(Vector3(x,3.81,-5.93),Vector2(1.02,1.62),.19,TIMBER,true)
 	for x: float in [-54.6,-52.55,-50.65]:
 		for z: float in [-5.22,-6.6]:
 			var foot := Vector3(x,1.12,z)
@@ -615,7 +615,9 @@ func _tile(a: Vector3, b: Vector3, c: Vector3, d: Vector3, color: Color) -> void
 		var j := (i + 1) % 4
 		_quad(top[i], top[j], bottom[j], bottom[i], color.darkened(.16), (top[i] + top[j]) * .5 - center)
 
-func _slab(top_center: Vector3, size: Vector2, depth: float, color: Color) -> void:
+func _slab(top_center: Vector3, size: Vector2, depth: float, color: Color, walkable := false) -> void:
+	if walkable:
+		_box_shape(top_center + Vector3.DOWN * depth * .5, Vector3(size.x, depth, size.y))
 	var x := Vector3.RIGHT * size.x * .5
 	var z := Vector3.BACK * size.y * .5
 	var a := top_center - x - z
