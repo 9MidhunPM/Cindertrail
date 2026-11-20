@@ -478,11 +478,13 @@ func _show_controls() -> void:
 	_page_title.text = "Controls"
 	_back_button.text = "Back to title"
 	for entry in [
-		["W A S D", "Move"], ["Ctrl   ·   Shift", "Hold to walk  /  sprint"], ["Mouse   ·   Left click", "Look  /  fire while traveling"],
+		["W A S D", "Move"], ["Ctrl   ·   Shift", "Hold to walk  /  sprint"],
+		["Left click   ·   F", "Sunsteel sword: tap for a three-strike combo"],
+		["Right click   ·   M", "Sun spark at range  /  open the valley map"],
 		["E", "Unfold shrine, repair, open cache, deliver"],
 		["1   2   3   ·   Left click", "Select module  /  place on socket"],
 		["Space   ·   U", "Start wave  /  upgrade pointed tower"],
-		["Right click   ·   Hold R", "Fire in defense  /  pack shrine"],
+		["Hold R", "Recall towers and pack the shrine"],
 		["Esc   ·   F10", "Pause  /  toggle HUD"]]:
 		var row := _row(_items)
 		var keys := _text(row, entry[0], _sans, 19, GOLD)

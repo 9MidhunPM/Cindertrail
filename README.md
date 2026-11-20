@@ -26,7 +26,9 @@ Follow the spillway off **Tanners’ Road** to reach Last Lantern. Each journey 
 | **1 / 2 / 3**, left click | Select a module, then place it on an open socket |
 | **Space** | Start the attack and begin extracting restoration |
 | **U** | Upgrade the tower under the pointer |
-| Left click while traveling, right click in defense | Fire the traveler's ranged attack |
+| Left click or **F** | Sunsteel sword. Tap again for the three-strike combo (draw cut, rising arc, leaping slam). In defense, it swings toward the pointer unless a tower is selected |
+| Right click | Sun spark, a weak ranged shot toward the camera or pointer |
+| **M** | Open the full valley map. The corner minimap turns with the camera and pins your objective to its rim |
 | **Hold R** | Recall modules and fold the shrine near its pad |
 | **Esc**, **Enter** | Pause or resume. Enter activates the focused menu action |
 | **F10** | Toggle HUD visibility |
