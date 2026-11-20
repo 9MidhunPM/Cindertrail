@@ -441,12 +441,12 @@ func _build_controls() -> void:
 	_pin(footer, 0.5, 1.0, 0.0, -22.0)
 	_guide_panel = _panel(Vector2(14, 7), footer)
 	_guide_panel.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	_guide_panel.accessibility_name = "Lantern"
+	_guide_panel.accessibility_name = "Mote"
 	var guide_style := _style(Color("#10232bee"), Color("#5f8789"), Vector2(14, 7), 3)
 	guide_style.border_width_left = 3
 	_guide_panel.add_theme_stylebox_override("panel", guide_style)
 	var guide_words := _vertical(_guide_panel, 1)
-	var speaker := _label("Lantern", &"Accent")
+	var speaker := _label("Mote", &"Accent")
 	speaker.add_theme_color_override("font_color", TEAL)
 	guide_words.add_child(speaker)
 	_guide_text = _label("", &"Body")

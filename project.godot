@@ -124,6 +124,11 @@ cycle_ability={
 "events": [Object(InputEventKey,"physical_keycode":81)]
 }
 
+guide_help={
+"deadzone": 0.2,
+"events": [Object(InputEventKey,"physical_keycode":72)]
+}
+
 map={
 "deadzone": 0.2,
 "events": [Object(InputEventKey,"physical_keycode":77)]

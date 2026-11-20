@@ -10,6 +10,8 @@ const INTERFACE := preload("res://scenes/ui/hud.tscn")
 const FRONT_END := preload("res://scenes/ui/front_end.tscn")
 const FINALE := preload("res://scenes/ui/beacon_finale.tscn")
 const ARTS := preload("res://scripts/game/traveler_arts.gd")
+const MOTE := preload("res://scenes/player/mote.tscn")
+const MOTE_GUIDE := preload("res://scripts/companion/mote_guide.gd")
 const RAID_GLOW := preload("res://scripts/game/traveler_raid_glow.gd")
 const OBJECTIVE_ROUTE := preload("res://scripts/world/objective_route.gd")
 const QUARRY_REGION := preload("res://scripts/world/quarry.gd")
@@ -35,6 +37,8 @@ var soundscape: CinderSoundscape
 var battle: CinderBattle
 var melee: CinderMelee
 var arts: ARTS
+var mote: CinderMote
+var mote_guide: MOTE_GUIDE
 var raid_glow: RAID_GLOW
 var objective_route: OBJECTIVE_ROUTE
 var hud: CinderHUD
@@ -76,6 +80,10 @@ var _journey_seconds := 0.0
 var _defeated := 0
 var _left_site: CinderSite
 var _first_ability_award := false
+var _guide_context: Dictionary = {}
+var _guide_question_context := ""
+var _guide_next_online := 0
+var _guide_mode := -1
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -118,11 +126,20 @@ func _ready() -> void:
 	arts = ARTS.new()
 	_add_runtime(arts)
 	arts.configure(player, battle, core)
+	arts.cast_succeeded.connect(func(_site: StringName) -> void: raid_glow.accent())
+	arts.cast_rejected.connect(func(reason: String) -> void: hud.art_feedback(reason))
 	arts.achievement_unlocked.connect(func(_title: String) -> void: _first_ability_award = true)
 	player.recovered.connect(_traveler_recovered)
 	hud = INTERFACE.instantiate() as CinderHUD
 	add_child(hud)
 	hud.action_requested.connect(_hud_action)
+	mote = MOTE.instantiate() as CinderMote
+	_add_runtime(mote)
+	mote.configure(player, camera)
+	mote_guide = MOTE_GUIDE.new()
+	_add_runtime(mote_guide)
+	mote_guide.answered.connect(_mote_answered)
+	mote_guide.automatic_answered.connect(_show_mote_line)
 	_checkpoint_enabled = not _direct_launch()
 	arts.profile_enabled = _checkpoint_enabled
 	if not _checkpoint_enabled:
@@ -185,6 +202,7 @@ func _apply_preferences() -> void:
 	director.reduced_motion = _front_end.reduced_motion
 	arts.reduced_motion = director.reduced_motion
 	raid_glow.set_raid(mode == Mode.DEFEND, director.reduced_motion)
+	_sync_mote()
 
 func _enter_journey() -> void:
 	_front_active = false
@@ -412,8 +430,9 @@ func _battle_sound(cue: String) -> void:
 func _update_hud_clock(delta: float) -> void:
 	_hud_clock += delta
 	if _hud_clock >= 0.05:
+		var elapsed := _hud_clock
 		_hud_clock = 0
-		_render_hud()
+		_render_hud(elapsed)
 
 ## Catch releases even when the pointer has crossed onto the HUD since pressing.
 func _input(event: InputEvent) -> void:
@@ -428,6 +447,9 @@ func _notification(what: int) -> void:
 	if what == NOTIFICATION_APPLICATION_FOCUS_OUT and is_instance_valid(melee):
 		melee.cancel()
 		arts.cancel_buffer()
+		if is_instance_valid(mote_guide):
+			mote_guide.cancel()
+			mote_guide.stop_voice()
 
 func _unhandled_input(event: InputEvent) -> void:
 	if _front_active or _settings_open or finale != null:
@@ -461,14 +483,16 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if _paused or _map_open or mode == Mode.WIN or mode == Mode.LOSE:
 		return
+	if event.is_action_pressed("guide_help"):
+		_ask_mote()
+		return
 	if event.is_action_pressed("cycle_ability"):
 		arts.cycle()
 		return
 	if event.is_action_pressed("cast_ability"):
 		var cursor := get_viewport().get_mouse_position()
 		var tactical := mode == Mode.PREPARE or mode == Mode.DEFEND
-		if arts.cast(_sword_direction(cursor), _pointer_ground(cursor) if tactical else Vector3.INF):
-			raid_glow.accent()
+		arts.cast(_sword_direction(cursor), _pointer_ground(cursor) if tactical else Vector3.INF)
 		return
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		director.orbit(event.relative)
@@ -523,7 +547,7 @@ func _handle_click(event: InputEventMouseButton) -> void:
 
 ## Without a nearby target, exploration swings use the camera and defense uses the pointer.
 func swing(pointer: Vector2, source: StringName = &"") -> bool:
-	if melee == null or not player.move_enabled or _map_open or player.is_dashing() or player.is_staggered():
+	if melee == null or not player.move_enabled or _map_open or player.is_staggered():
 		return false
 	var direction := _sword_direction(pointer)
 	return melee.request(direction) if source.is_empty() else melee.press(direction, source)
@@ -539,7 +563,7 @@ func _sword_direction(pointer: Vector2) -> Vector3:
 func _melee_sound(index: int, hits: int) -> void:
 	if index == CinderMelee.ATTACKS.SPIN:
 		return
-	soundscape.cue("slam" if index == 2 else "slash")
+	soundscape.cue("slam" if index in [2, CinderMelee.ATTACKS.DESCENT] else "slash")
 	if hits > 0:
 		soundscape.cue("impact")
 
@@ -694,11 +718,13 @@ func _unlock_site_reward(site: CinderSite) -> void:
 	arts.unlock(site.checkpoint_id)
 	battle.upgrade_cap = CinderBattle.BASE_UPGRADE_CAP + _completed_sites().size()
 	var icon: Texture2D
+	var description := ""
 	for row: Dictionary in arts.achievements():
 		if StringName(row.get("id", "")) == site.checkpoint_id:
 			icon = row.get("icon") as Texture2D
+			description = String(row.get("description", ""))
 			break
-	hud.announce_ability(arts.ability_name(site.checkpoint_id), icon, battle.upgrade_cap, _first_ability_award)
+	hud.announce_ability(arts.ability_name(site.checkpoint_id), icon, battle.upgrade_cap, _first_ability_award, description)
 
 func _can_pack() -> bool:
 	if _transferring:
@@ -746,6 +772,7 @@ func _sync_controls() -> void:
 		and (traveling or mode == Mode.PREPARE or mode == Mode.DEFEND))
 	arts.set_available(player.move_enabled)
 	raid_glow.set_raid(mode == Mode.DEFEND, director.reduced_motion)
+	_sync_mote()
 	if not player.move_enabled and melee:
 		melee.cancel()
 	player.tactical = not traveling
@@ -882,7 +909,6 @@ func _store_checkpoint(safe_position: Vector3) -> void:
 		"landmarks": landmarks.checkpoint_progress(),
 		"ability_selected": arts.selected_id(),
 		"ability_cooldowns": arts.cooldowns(),
-		"ability_cast_lock": arts.cast_lock(),
 		"frontier_version": CinderFrontier.LAYOUT_VERSION,
 		"frontier_discoveries": frontier.claimed_discoveries(),
 		"frontier_revealed": frontier.revealed_discoveries(),
@@ -916,8 +942,7 @@ func _restore_checkpoint() -> void:
 	var complete := _completed_sites()
 	battle.upgrade_cap = CinderBattle.BASE_UPGRADE_CAP + complete.size()
 	arts.restore(complete, StringName(_checkpoint.get("ability_selected", &"")),
-		_checkpoint.get("ability_cooldowns", _checkpoint.get("ability_cooldown", 0.0)),
-		float(_checkpoint.get("ability_cast_lock", 0.0)))
+		_checkpoint.get("ability_cooldowns", _checkpoint.get("ability_cooldown", 0.0)))
 	bell_road.apply_reserve(grove.remaining_energy, grove.spec.energy, false)
 	summit.cleared = bool(_checkpoint.get("guardian_cleared", false))
 	summit.halfway_seen = bool(_checkpoint.get("guardian_sighted", false))
@@ -982,11 +1007,11 @@ func _hint(nearest: CinderSite) -> String:
 		return landmarks.hint(player.global_position, _landmark_aim(), active_site, battle, false)
 	return ""
 
-func _render_hud() -> void:
+func _render_hud(elapsed := 0.0) -> void:
 	if hud == null or layout == null:
 		return
 	var local_site := active_site if active_site != null else _near_site()
-	hud.render({
+	var state := {
 		"health": core.health, "restoration": core.restoration,
 		"at_summit": active_site == summit.site,
 		"guardian_health": summit.health_percent(), "guardian_phase": summit.phase_name(),
@@ -1004,7 +1029,82 @@ func _render_hud() -> void:
 		"paused": _paused,
 		"settings_open": _settings_open, "checkpoint_available": not _checkpoint.is_empty(),
 		"checkpoint_hint": "The last safe trail checkpoint will be used." if not _safe_checkpoint() and not _checkpoint.is_empty() else "",
-	}.merged(_interface_state()))
+	}.merged(_interface_state())
+	hud.render(state)
+	if _mote_in_journey():
+		_refresh_mote_context(state, local_site)
+		if elapsed > 0.0:
+			_show_mote_line(mote_guide.observe(_guide_context, elapsed))
+
+func _mote_in_journey() -> bool:
+	return (layout != null and not _front_active and not _paused and not _map_open
+		and not _settings_open and finale == null and mode not in [Mode.WIN, Mode.LOSE])
+
+func _sync_mote() -> void:
+	var present := _mote_in_journey()
+	mote.set_presence(present, mode in [Mode.DEPLOY, Mode.PREPARE, Mode.DEFEND, Mode.PACK], director.reduced_motion)
+	var changed := _guide_mode != mode
+	if changed:
+		_guide_mode = mode
+		hud.guide_line("")
+	if changed or not present:
+		mote_guide.cancel()
+		mote_guide.stop_voice()
+
+func _refresh_mote_context(state: Dictionary, local_site: CinderSite) -> void:
+	var guardian := summit.guide_state()
+	guardian.erase("target")
+	var pursuers := 0
+	for enemy in battle.enemies:
+		if is_instance_valid(enemy) and enemy.pursuing and not enemy.fading:
+			pursuers += 1
+	var site_id := local_site.checkpoint_id if local_site != null else &""
+	_guide_context = {
+		"mode": str(state.mode).to_lower(),
+		"health": state.health, "restoration": state.restoration,
+		"objective": state.objective, "objective_distance": state.get("compass_distance", state.objective_distance),
+		"site_id": site_id, "site": state.site, "energy": state.energy,
+		"threat": state.threat, "wave": state.get("wave", 0),
+		"wave_active": state.get("wave_active", false), "wave_left": state.get("wave_left", 0),
+		"at_summit": state.at_summit, "guardian_state": guardian, "guardian_cleared": summit.cleared,
+		"guardian_action": summit.hint() if not guardian.is_empty() else "",
+		"ability_name": state.get("ability_name", ""), "ability_description": state.get("ability_description", ""),
+		"ability_cooldown": state.get("ability_cooldown", 0.0), "pursuers": pursuers,
+		"landmark": landmarks.guide_for(site_id), "region": state.get("region", ""),
+		"moving": Vector2(player.velocity.x, player.velocity.z).length_squared() > 0.09,
+	}
+
+func _mote_context_signature() -> String:
+	var guardian: Dictionary = _guide_context.get("guardian_state", {})
+	return "%s/%s/%s/%s" % [_guide_context.get("mode"), _guide_context.get("site_id"), guardian.get("phase"),
+		float(_guide_context.get("health", 100)) <= 30.0]
+
+func _ask_mote() -> void:
+	if not _mote_in_journey():
+		return
+	_render_hud()
+	const QUESTION := "What should I do right now, and how?"
+	if mote_guide.is_busy():
+		_show_mote_line(mote_guide.advice(_guide_context, QUESTION))
+		return
+	var now := Time.get_ticks_msec()
+	var online := now >= _guide_next_online and mote_guide.online_available()
+	_guide_question_context = _mote_context_signature()
+	if online:
+		_guide_next_online = now + 12000
+		_show_mote_line(mote_guide.advice(_guide_context, QUESTION))
+	mote_guide.ask(QUESTION, _guide_context, online)
+
+func _mote_answered(text: String) -> void:
+	if _guide_question_context == _mote_context_signature():
+		_show_mote_line(text)
+
+func _show_mote_line(text: String) -> void:
+	if text.is_empty() or not _mote_in_journey():
+		return
+	hud.guide_line(text)
+	mote.speak()
+	mote_guide.speak(text)
 
 ## Objective, wave, shop and hover details for the interface.
 func _interface_state() -> Dictionary:

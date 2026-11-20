@@ -15,6 +15,8 @@ The project uses the Mobile Vulkan renderer. Run it from Godot to play the curre
 
 The title opens on the Flooded Grove. **New Journey** starts the twelve-page illustrated prologue. **Continue Journey** resumes at the last safe checkpoint. A checkpoint preserves your trail position, shrine health, restoration, scrap, modules, caches, unlocked shortcuts, remaining camp reserves and local threat. The game saves when you are carrying the shrine on safe ground after breaking pursuit.
 
+Press **H** to ask Mote, the moth companion, for a tip about your current objective. Mote gives advice offline and can generate trail dialogue with a local OpenAI key. The narrated showcase runs from the prologue through sunrise and loops in one window. [Mote setup and showcase controls](docs/MOTE_AND_SHOWCASE.md)
+
 The six main camps share one continuous 3D world and all use the same protected sun. Each main camp has 25 points of restoration. Expect quick attacks and a short break after each cleared wave. Drain four main camps or combine partial reserves, then bring the sun to the hilltop beacon.
 
 **New Journey** combines one of three base valleys with independently selected trail forks, shrine clearings, and town blocks. The Grove approach is your starting point. Follow the moonlit trails through Western Arcade, Bellmakers’ Steps, and Mineral Ward. Each town has a side path with a supply cache. Continue and Retry rebuild your saved valley. Older journeys retain their original routes and positions.
@@ -45,7 +47,8 @@ At full restoration, follow the compass to the ridge beyond Fallen Relay. Press 
 | **T** | Start a defense or resume extraction |
 | **U** | Upgrade the tower under the pointer |
 | **G**, **Q** | Cast or cycle earned shrine abilities |
-| Left click or **F** | Tap for a draw cut, rising backhand, and leaping slam. Each strike turns toward the nearest unobstructed enemy within 4.2 m. Hold until the blade glows and chimes, then release for a spinning slash. With a module selected, left click places it |
+| Left click or **F** | Tap for a draw cut, rising backhand, and leaping slam. Swing out of a dash for Sunwake Cut or swing on the way down from a jump for Falling Star. Hold until the blade chimes, then release for a spinning slash. With a module selected, left click places it |
+| **H** | Ask Mote what to do next |
 | Right click | Sun spark, a weak ranged shot toward the camera or pointer |
 | **M** | Open the full valley map. The corner minimap turns with the camera and pins your objective to its rim |
 | **Hold R** | Recall modules and fold the shrine near its pad |

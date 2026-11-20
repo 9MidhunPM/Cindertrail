@@ -229,8 +229,9 @@ func _situation(context: Dictionary) -> String:
 		return "The sun can barely hold! Get close and repair it with scrap. If this camp is turning on us, pack and take the trail."
 	if topic == "pursuit":
 		return "Something followed us out. Keep moving and dash clear if it closes in. The next shrine can wait until we've made space."
-	if topic.begins_with("landmark:"):
-		var landmark: Dictionary = context.landmark
+	var landmark: Variant = context.get("landmark")
+	var at_wave := mode == "defend" and bool(context.get("wave_active", false))
+	if landmark is Dictionary and (topic.begins_with("landmark:") or at_wave):
 		var detail := _label(landmark, "detail")
 		if not detail.is_empty():
 			return "%s. %s" % [_label(landmark, "title").trim_suffix("."), detail]
