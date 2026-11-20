@@ -3,18 +3,18 @@ extends SceneTree
 const MAIN := "res://scenes/main.tscn"
 const SIZE := Vector2i(1920, 1080)
 const MODES := ["Explore", "Deploy", "Prepare", "Defend", "Pack", "Transit", "Win", "Lose"]
-const QUARRY_PATH := [
+const QUARRY_PATH_BASE := [
     Vector3(-9.0, 0.7, 1.7), Vector3(-16.0, 0.7, 1.0), Vector3(-24.0, 0.7, 1.0),
     Vector3(-28.0, 0.7, 1.0), Vector3(-33.0, 0.8, 2.4), Vector3(-39.0, 1.0, 2.0),
     Vector3(-45.0, 1.15, 0.0), Vector3(-51.0, 1.15, 0.0),
 ]
-const RELAY_PATH := [
+const RELAY_PATH_BASE := [
     Vector3(0.5, 0.7, -4.4), Vector3(2.0, 0.7, -12.5), Vector3(0.0, 0.7, -19.0),
     Vector3(0.0, 0.68, -24.0), Vector3(0.0, 0.68, -27.0), Vector3(4.0, 1.6, -34.0),
     Vector3(7.0, 2.7, -41.0), Vector3(8.54, 4.8, -44.55),
     Vector3(9.0, 4.8, -47.0), Vector3(10.0, 4.8, -51.0),
 ]
-const BEACON_PATH := [
+const BEACON_PATH_BASE := [
     Vector3(16.0, 4.8, -56.0), Vector3(20.0, 5.4, -62.0), Vector3(20.0, 7.3, -69.0),
     Vector3(19.0, 9.3, -77.0), Vector3(20.0, 11.0, -81.0), Vector3(20.0, 11.0, -83.0),
 ]
@@ -22,15 +22,21 @@ const GROVE_SOUTH := [
     Vector3(0.2, 0.7, 4.5), Vector3(-2.6, 0.7, 10.0), Vector3(-3.4, 0.7, 16.0),
     Vector3(-1.0, 0.68, 24.7),
 ]
-const QUARRY_SOUTH := [
+const QUARRY_SOUTH_BASE := [
     Vector3(-45, 1.15, 0), Vector3(-39, 1.0, 2), Vector3(-36, 0.92, 2),
     Vector3(-36, 0.92, 6.5),
 ]
-const RELAY_FROM_EAST := [
+const RELAY_FROM_EAST_BASE := [
     Vector3(23.4, 4.40, -51.4), Vector3(19.4, 4.8, -52.45),
     Vector3(16.7, 4.8, -53), Vector3(10, 4.8, -53),
 ]
 
+# Routes through the relocated Quarry and Relay, built from the live trail graph.
+var QUARRY_PATH: Array = []
+var RELAY_PATH: Array = []
+var BEACON_PATH: Array = []
+var QUARRY_SOUTH: Array = []
+var RELAY_FROM_EAST: Array = []
 var game: Variant
 var viewport: Viewport
 var output_dir: String
@@ -101,6 +107,7 @@ func _run() -> void:
     if viewport == root:
         current_scene = game
     await _physics_frames(6)
+    _build_routes()
     if not _check(_mode() == "Explore", "Run begins in Explore"):
         _finish()
         return
@@ -123,11 +130,17 @@ func _run() -> void:
         "campaign-combinations":
             _campaign_combinations()
         "eastern-ascent":
-            _position_player(Vector3(28, 4.01, -51.4))
+            _position_player(Vector3(28, 4.01, -51.4) + CinderDistricts.offset("relay"))
             await _physics_frames(12)
             game.core.restoration = 100.0
             if await _walk_route(RELAY_FROM_EAST, "Relay eastern span"):
                 await _deliver(game.core.get_instance_id())
+        "wildlife":
+            if _check(use_window, "Wildlife capture needs a graphical viewport"):
+                await _lanternwood_wildlife()
+        "atelier":
+            if _check(use_window, "The detail capture needs a graphical viewport"):
+                await _atelier()
         "relay-profile":
             await _relay_profile()
         "outer-profile":
@@ -156,6 +169,22 @@ func _run() -> void:
         _:
             _check(false, "Unknown case: " + route_case)
     _finish()
+
+
+func _shift(points: Array, offset: Vector3) -> Array:
+    return points.map(func(point: Vector3) -> Vector3: return point + offset)
+
+
+func _build_routes() -> void:
+    var q := CinderDistricts.offset("quarry")
+    var r := CinderDistricts.offset("relay")
+    var west: PackedVector3Array = game.outer_valley.route_between_nodes("grove_west", "quarry_gate")
+    var north: PackedVector3Array = game.outer_valley.route_between_nodes("grove_north", "relay_gate")
+    QUARRY_PATH = QUARRY_PATH_BASE.slice(0, 2) + Array(west) + _shift(QUARRY_PATH_BASE.slice(3), q)
+    RELAY_PATH = RELAY_PATH_BASE.slice(0, 3) + Array(north) + _shift(RELAY_PATH_BASE.slice(4), r)
+    BEACON_PATH = _shift(BEACON_PATH_BASE, r)
+    QUARRY_SOUTH = _shift(QUARRY_SOUTH_BASE, q)
+    RELAY_FROM_EAST = _shift(RELAY_FROM_EAST_BASE, r)
 
 
 func _grove() -> void:
@@ -202,6 +231,118 @@ func _grove() -> void:
     frame_recording = false
 
 
+func _atelier() -> void:
+    game.hud.hide()
+    await _capture("grove-approach.png")
+    var camera: Camera3D = game.camera
+    var director: CinderCamera = game.director
+    var traveler: Node3D = game.player.visual
+    var focus := traveler.global_position + Vector3.UP * 1.02
+    director.set_physics_process(false)
+    camera.fov = 36.0
+    var original_facing := traveler.rotation.y
+    for side: int in [-1, 1]:
+        # Turn toward the lit crossing for the portrait; restore normal facing for the harness.
+        traveler.rotation.y = original_facing + 2.57 if side < 0 else original_facing
+        var offset := traveler.global_basis * Vector3(1.28, .32, side * 3.62)
+        camera.global_position = focus + offset
+        camera.look_at(focus)
+        await _capture("traveler-front.png" if side < 0 else "traveler-back.png")
+    director.set_physics_process(true)
+    director.reset_pose()
+    await _physics_frames(8)
+    await _record_gait()
+    if not await _deploy(game.grove):
+        return
+    game.battle.place(0, 0)
+    if not _check(game.start_wave(), "Grove extraction starts through normal wave input"):
+        return
+    await _physics_frames(92)
+    _check(game.core.restoration > 0.0 and game.core.get_node("SiteEnergyStreams").visible,
+        "The shrine visibly draws energy while its reserve falls")
+    await _capture("grove-extraction.png")
+    var frames := _clip_directory("extraction")
+    if not frames.is_empty():
+        for i in 42:
+            await _physics_frames(3)
+            if not await _write_clip_frame(frames, i):
+                break
+            if i == 41:
+                _encode_clip(frames, "grove-extraction.mp4")
+    game.hud.show()
+    await _capture("grove-extraction-hud.png")
+    if await _pack():
+        await _lanternwood_wildlife()
+
+
+func _lanternwood_wildlife() -> void:
+    var camp: CinderSite = _find_site("Lanternwood")
+    _position_player(camp.anchor.global_position)
+    await _physics_frames(22)
+    game.hud.hide()
+    var habitat: Node = game.get_node("WildlifeHabitats")
+    for animal in habitat.animals:
+        if animal.visible and animal.species == animal.Species.DEER:
+            var focus: Vector3 = animal.global_position + Vector3.UP * .8
+            game.director.set_physics_process(false)
+            game.camera.global_position = focus + Vector3(2.0, 1.1, 4.8)
+            game.camera.look_at(focus)
+            game.camera.fov = 43.0
+            await _capture("lanternwood-wildlife.png")
+            return
+    _check(false, "Find grazing deer at Lanternwood")
+
+
+func _record_gait() -> void:
+    var frames := _clip_directory("gait")
+    if frames.is_empty():
+        return
+    var start: Vector3 = game.player.global_position
+    Input.action_press("move_forward")
+    Input.action_press("walk")
+    var written := 0
+    for i in 48:
+        if i == 14:
+            Input.action_release("walk")
+        elif i == 24:
+            Input.action_press("sprint")
+        elif i == 39:
+            Input.action_release("move_forward")
+            Input.action_release("sprint")
+        await _physics_frames(3)
+        if not await _write_clip_frame(frames, i):
+            break
+        written += 1
+    for action in ["walk", "sprint", "move_forward"]:
+        Input.action_release(action)
+    measurements["movement_meters"] = game.player.global_position.distance_to(start)
+    _check(measurements.movement_meters > 3.0, "Walking, jogging and sprinting moved the traveler")
+    if not _check(written == 48, "Sampled the movement and stop"):
+        return
+    _encode_clip(frames, "traveler-movement.mp4")
+
+
+func _clip_directory(label: String) -> String:
+    var frames := OS.get_user_data_dir().path_join("%s-%d" % [label, OS.get_process_id()])
+    return frames if _check(DirAccess.make_dir_recursive_absolute(frames) == OK, "Prepare " + label + " clip") else ""
+
+
+func _write_clip_frame(directory: String, index: int) -> bool:
+    await RenderingServer.frame_post_draw
+    var frame := viewport.get_texture().get_image()
+    frame.resize(960, 540, Image.INTERPOLATE_BILINEAR)
+    if frame.save_jpg(directory.path_join("%03d.jpg" % index), .92) != OK:
+        return _check(false, "Write motion frame")
+    return true
+
+
+func _encode_clip(frames: String, filename: String) -> void:
+    var args := PackedStringArray(["-hide_banner", "-loglevel", "error", "-y", "-framerate", "20",
+        "-i", frames.path_join("%03d.jpg"), "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "19",
+        "-movflags", "+faststart", output_dir.path_join(filename)])
+    _check(OS.execute("ffmpeg", args) == 0, "Encode " + filename)
+
+
 func _record_clip() -> void:
     var folder := output_dir.path_join("transition_frames")
     if DirAccess.make_dir_recursive_absolute(folder) != OK:
@@ -225,7 +366,8 @@ func _record_clip() -> void:
 func _relocation() -> void:
     var grove: Variant = game.grove
     var identity: int = game.core.get_instance_id()
-    if not await _cross_grove():
+    # The stricter economy needs the Grove cache to afford a field and its upgrade.
+    if not await _collect_grove_supplies() or not await _cross_grove():
         return
     game.interact()
     if not await _wait_mode("Prepare", 180):
@@ -543,6 +685,8 @@ func _deliver(identity: int) -> bool:
         return false
     if not await _walk_route(BEACON_PATH, "Relay to hilltop beacon"):
         return false
+    if not await _fight_guardian():
+        return false
     game.interact()
     if not await _wait_mode("Win", 180):
         return false
@@ -551,6 +695,48 @@ func _deliver(identity: int) -> bool:
         await _physics_frames(160)
         await _capture("beacon-sunrise.png")
     return true
+
+
+func _fight_guardian(capture := false) -> bool:
+    game.interact()
+    if not await _wait_mode("Prepare", 180):
+        return false
+    if not _check(game.active_site == game.summit.site and game.core.form == SunCore.Form.DEPLOYED,
+            "The restored sun unfolds at the crown before delivery"):
+        return false
+    var crown: CinderSite = game.summit.site
+    if not await _walk_to(crown.anchor.global_position + Vector3(-.5, .12, -.5)):
+        return false
+    for index in crown.sockets.size():
+        game.battle.place(index, 0)
+    if not _check(game.start_wave(), "Challenge the Vesper Colossus"):
+        return false
+    if capture:
+        await _physics_frames(24)
+        await _capture("vesper-summit.png")
+    var saw_open := false
+    for tick in range(0, 7000, 3):
+        if game.summit.cleared or _mode() == "Lose":
+            break
+        var boss: CinderEnemy = game.summit.guardian
+        if not is_instance_valid(boss):
+            break
+        if capture and not measurements.has("summit_defense") and _enemy_count() >= 2:
+            await _capture("vesper-escorts.png")
+            measurements["summit_defense"] = await _profile(150, 8)
+        var origin: Vector3 = game.player.global_position + Vector3.UP * 1.13
+        game.battle.attack(origin, origin.direction_to(boss.body_center()))
+        if boss.phase_name() == "Chest exposed" and not saw_open:
+            saw_open = true
+            if capture:
+                await _physics_frames(12)
+                await _capture("vesper-exposed.png")
+        await _physics_frames(3)
+    if capture:
+        _check(measurements.has("summit_defense"), "Profile the guardian during its escort phase")
+    if not _check(game.summit.cleared and _mode() == "Prepare", "The guardian falls in live combat"):
+        return false
+    return await _walk_to(game.beacon.global_position + Vector3(0.0, .12, 1.55))
 
 
 func _relay_profile() -> void:
@@ -702,6 +888,8 @@ func _dawn_frame() -> void:
     var identity: int = game.core.get_instance_id()
     _position_player(beacon.global_position + Vector3(0.0, 0.12, 1.85))
     await _physics_frames(8)
+    if not await _fight_guardian(true):
+        return
     game.interact()
     if not await _wait_mode("Win", 80):
         return
@@ -998,7 +1186,7 @@ func _finish() -> void:
         "graphics_api": RenderingServer.get_current_rendering_driver_name(),
         "gpu": RenderingServer.get_video_adapter_name(),
         "gpu_api_version": RenderingServer.get_video_adapter_api_version(),
-        "resolution": "%dx%d" % [SIZE.x, SIZE.y] if use_window else "headless",
+        "resolution": "%dx%d" % [viewport.size.x, viewport.size.y] if use_window else "headless",
         "elapsed_seconds": float(Time.get_ticks_usec() - start_usec) / 1000000.0,
         "physics_frames_awaited": physics_samples,
         "transition_frames": clip_frames,
