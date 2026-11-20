@@ -965,9 +965,7 @@ func _hint(nearest: CinderSite) -> String:
 		var shortcut := outer_valley.nearby_shortcut(player.global_position)
 		if not shortcut.is_empty():
 			return "E   Open " + shortcut
-		if core.restoration >= 99.999:
-			return "Follow the ridge beyond Fallen Relay to the beacon"
-		return "Follow the stone causeway to the shrine pad" if _near(grove.anchor, 22.0) and mode == Mode.EXPLORE else "Follow the trail markers to another ancient site"
+		return ""
 	if mode == Mode.DEPLOY:
 		return "Unfolding shrine"
 	if mode == Mode.PACK:
@@ -1050,6 +1048,7 @@ func _interface_state() -> Dictionary:
 		state["wave_active"] = battle.active_wave
 		state["wave_left"] = remaining
 		state["wave_total"] = battle.total_in_wave
+		state["wave_lanes"] = active_site.lane_names
 		state["engaged"] = battle.engaged
 		state["next_wave"] = battle.intermission if battle.engaged and not battle.active_wave else -1.0
 		state["breather"] = CinderBattle.WAVES.breather
