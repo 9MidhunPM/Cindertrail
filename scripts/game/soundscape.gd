@@ -1,7 +1,24 @@
 class_name CinderSoundscape
 extends Node
 
+const SCORE := preload("res://scripts/game/journey_score.gd")
+const FOLEY := "res://art/audio/foley/"
+const LOCAL_VOICES := 16
+const SPATIAL_VOICES := 12
+const WORLD_SOUND_RANGE := 55.0
+
 var _effects: Dictionary = {}
+var _takes: Dictionary = {}
+var _last_take: Dictionary = {}
+var _random := RandomNumberGenerator.new()
+var _local: Array[AudioStreamPlayer] = []
+var _spatial: Array[AudioStreamPlayer3D] = []
+var _beds: Array[AudioStreamPlayer3D] = []
+var _voice_serial := 0
+var _listener: AudioListener3D
+var _traveler: Node3D
+var _camera: Camera3D
+var _score: SCORE
 var _ambient: AudioStreamPlayer
 var _foot := false
 var _draw: AudioStreamPlayer
@@ -10,6 +27,7 @@ var _last_call: Dictionary[String, int] = {}
 var _ending: AudioStreamPlayer
 var _ending_fade: Tween
 var _ending_mark := -1.0
+var wading := false
 
 const SUNRISE_SCORE := "res://art/audio/valley/last_sunrise.ogg"
 const ENDING_MARKS := {&"handoff": 0.0, &"arch": 4.0, &"ford": 9.0,
@@ -27,9 +45,15 @@ const CREATURE_CALLS := {
 }
 
 func _ready() -> void:
-	if DisplayServer.get_name() == "headless":
+	if DisplayServer.get_name() == "headless" and not get_tree().has_meta(&"audio_qa"):
 		set_process(false)
+		set_physics_process(false)
 		return
+	_random.randomize()
+	_load_foley()
+	_score = SCORE.new()
+	_score.name = "JourneyScore"
+	add_child(_score)
 	_effects = {
 		"footstep": _stream(0.15, [96.0, 171.0], 0.24, 700),
 		"footstep_alt": _stream(0.12, [111.0, 245.0], 0.23, 1900),
@@ -57,19 +81,123 @@ func _ready() -> void:
 	hum.loop_end = roundi(hum.get_length() * hum.mix_rate)
 	_draw = AudioStreamPlayer.new()
 	_draw.stream = hum
+	_draw.bus = &"Ambience"
 	_draw.volume_db = -60.0
 	add_child(_draw)
 	set_process(false)
 	_ambient = AudioStreamPlayer.new()
-	_ambient.stream = _ambience()
+	_ambient.bus = &"Ambience"
+	_ambient.stream = _looping_bed("wind")
 	_ambient.volume_db = -20
 	add_child(_ambient)
 	_ambient.play()
+	for index in LOCAL_VOICES:
+		var voice := AudioStreamPlayer.new()
+		voice.name = "Effect%d" % index
+		voice.bus = &"Effects"
+		add_child(voice)
+		_local.append(voice)
+	for index in SPATIAL_VOICES:
+		var voice := AudioStreamPlayer3D.new()
+		voice.name = "SpatialEffect%d" % index
+		voice.bus = &"Effects"
+		voice.unit_size = 7.0
+		voice.max_distance = WORLD_SOUND_RANGE
+		voice.attenuation_filter_cutoff_hz = 7000.0
+		add_child(voice)
+		_spatial.append(voice)
+
+func bind_listener(traveler: Node3D, camera: Camera3D) -> void:
+	_traveler = traveler
+	_camera = camera
+	if _score == null or _listener != null:
+		return
+	_listener = AudioListener3D.new()
+	add_child(_listener)
+	_move_listener()
+	_listener.make_current()
+
+func update_score(preparing: bool, defending: bool, pursued: bool, guardian_alive: bool,
+		pressure: int = 0) -> void:
+	if _score != null:
+		_score.update_context(preparing, defending, pursued, guardian_alive, pressure)
+
+func stop_score() -> void:
+	if _score != null:
+		_score.stop_score()
+
+func _physics_process(_delta: float) -> void:
+	if is_instance_valid(_listener) and is_instance_valid(_traveler):
+		_move_listener()
+
+func _move_listener() -> void:
+	# Positional hearing stays beside the traveler when the defense camera rises.
+	_listener.global_position = _traveler.global_position + Vector3.UP * 1.4
+	if is_instance_valid(_camera):
+		_listener.global_rotation = Vector3(0.0, _camera.global_rotation.y, 0.0)
+
+func _load_foley() -> void:
+	for entry in ResourceLoader.list_directory(FOLEY):
+		if not entry.ends_with("/"):
+			continue
+		var takes: Array[AudioStream] = []
+		var files := ResourceLoader.list_directory(FOLEY + entry)
+		files.sort()
+		for filename in files:
+			if filename.get_extension().to_lower() not in ["wav", "ogg"]:
+				continue
+			var take := load(FOLEY + entry + filename) as AudioStream
+			if take != null:
+				takes.append(take)
+		if not takes.is_empty():
+			_takes[entry.trim_suffix("/")] = takes
+
+func _looping_bed(name: String) -> AudioStream:
+	var takes: Array = _takes.get(name, [])
+	if not takes.is_empty():
+		var sample: AudioStream = takes[0].duplicate()
+		if sample is AudioStreamOggVorbis:
+			sample.loop = true
+		elif sample is AudioStreamWAV:
+			sample.loop_mode = AudioStreamWAV.LOOP_FORWARD
+			sample.loop_begin = 0
+			sample.loop_end = roundi(sample.get_length() * sample.mix_rate)
+		return sample
+	return _ambience()
+
+func place_ambience(name: String, point: Vector3, reach := 35.0) -> void:
+	if not _takes.has(name) or not point.is_finite():
+		return
+	var bed := AudioStreamPlayer3D.new()
+	bed.bus = &"Ambience"
+	bed.stream = _looping_bed(name)
+	bed.unit_size = reach * .24
+	bed.max_distance = reach
+	bed.volume_db = -16.0
+	add_child(bed)
+	bed.global_position = point
+	bed.play()
+	_beds.append(bed)
 
 func _exit_tree() -> void:
+	for voice in _local:
+		if is_instance_valid(voice):
+			voice.stop()
+			voice.stream = null
+	for voice in _spatial:
+		if is_instance_valid(voice):
+			voice.stop()
+			voice.stream = null
+	for bed in _beds:
+		if is_instance_valid(bed):
+			bed.stop()
+			bed.stream = null
 	if _ambient != null:
 		_ambient.stop()
 		_ambient.stream = null
+	if _draw != null:
+		_draw.stop()
+		_draw.stream = null
 	if _ending != null:
 		_ending.stop()
 		_ending.stream = null
@@ -99,9 +227,11 @@ func ending_cue(section: StringName) -> void:
 			return
 		_ending = AudioStreamPlayer.new()
 		_ending.name = "LastSunriseScore"
+		_ending.bus = &"Music"
 		_ending.stream = score
 		add_child(_ending)
 	if section == &"handoff" or not _ending.playing:
+		stop_score()
 		if _ending_fade:
 			_ending_fade.kill()
 		_ending_fade = create_tween()
@@ -117,18 +247,7 @@ func ending_cue(section: StringName) -> void:
 	_ending_mark = mark
 
 func toll_bell(world_position: Vector3, submerged: bool) -> void:
-	if _effects.is_empty():
-		return
-	var voice := AudioStreamPlayer3D.new()
-	voice.name = "BelfryToll"
-	voice.stream = _effects["belfry_submerged" if submerged else "belfry_lifted"]
-	voice.volume_db = -10.0 if submerged else -7.0
-	voice.unit_size = 12.0
-	voice.max_distance = 50.0 if submerged else 65.0
-	add_child(voice)
-	voice.global_position = world_position
-	voice.finished.connect(voice.queue_free)
-	voice.play()
+	cue("belfry_submerged" if submerged else "belfry_lifted", world_position)
 
 func _bell_tone(submerged: bool) -> AudioStreamWAV:
 	var stream := AudioStreamWAV.new()
@@ -167,21 +286,73 @@ func _bell_tone(submerged: bool) -> AudioStreamWAV:
 	stream.data = samples
 	return stream
 
-func cue(cue_name: String) -> void:
+func cue(cue_name: String, world_position := Vector3.INF) -> void:
 	if _effects.is_empty():
 		return
-	if CREATURE_CALLS.has(cue_name):
-		var now := Time.get_ticks_msec()
-		if now - _last_call.get(cue_name, -1000) < 160:
+	var is_bell := cue_name.begins_with("belfry_")
+	var is_step := cue_name.begins_with("footstep")
+	var priority := 1
+	if CREATURE_CALLS.has(cue_name) or is_bell:
+		priority = 3
+	elif cue_name in ["slash", "slam", "spin", "blade_ready", "impact", "hurt", "deploy", "pack", "wave"]:
+		priority = 2
+	var spatial := world_position.is_finite()
+	var distance := 0.0
+	if spatial and is_instance_valid(_traveler):
+		distance = world_position.distance_to(_traveler.global_position)
+		if distance > (65.0 if is_bell else WORLD_SOUND_RANGE):
 			return
-		_last_call[cue_name] = now
-	var sound: AudioStreamWAV = _effects.get(cue_name, _effects["build"])
-	var effect := AudioStreamPlayer.new()
+		if distance > 25.0 and not is_bell:
+			priority = maxi(0, priority - 1)
+	var now := Time.get_ticks_msec()
+	var cooldown := 160 if CREATURE_CALLS.has(cue_name) else (65 if is_step else 40)
+	if now - _last_call.get(cue_name, -1000) < cooldown:
+		return
+	var sound := _sample(cue_name)
+	if sound == null:
+		return
+	var effect: Node = _reserve_voice(_spatial if spatial else _local, priority)
+	if effect == null:
+		return
+	_voice_serial += 1
+	_last_call[cue_name] = now
+	effect.set_meta(&"voice_serial", _voice_serial)
+	effect.set_meta(&"priority", priority)
 	effect.stream = sound
-	effect.volume_db = -18.0 if cue_name.begins_with("footstep") else -11.0
-	add_child(effect)
-	effect.finished.connect(effect.queue_free)
+	var gain := -16.0 if is_step else (-8.0 if priority == 3 else -11.0)
+	effect.volume_db = gain + _random.randf_range(-1.6, .0)
+	effect.pitch_scale = 1.0 if priority == 3 else _random.randf_range(.962, 1.04)
+	if spatial:
+		effect.global_position = world_position
+		effect.unit_size = 12.0 if is_bell else 7.0
+		effect.max_distance = 65.0 if is_bell else WORLD_SOUND_RANGE
 	effect.play()
+
+func _sample(cue_name: String) -> AudioStream:
+	var takes: Array = _takes.get(cue_name, [])
+	if not takes.is_empty():
+		var index := _random.randi_range(0, takes.size() - 1)
+		if takes.size() > 1 and index == _last_take.get(cue_name, -1):
+			index = (index + 1) % takes.size()
+		_last_take[cue_name] = index
+		return takes[index]
+	return _effects.get(cue_name) as AudioStream
+
+func _reserve_voice(pool: Array, incoming_priority: int) -> Node:
+	var oldest: Node = null
+	var least_priority := incoming_priority
+	for voice in pool:
+		if not voice.playing:
+			return voice
+		var priority: int = voice.get_meta(&"priority")
+		if priority <= least_priority and (
+				priority < least_priority or oldest == null
+				or voice.get_meta(&"voice_serial") < oldest.get_meta(&"voice_serial")):
+			oldest = voice
+			least_priority = priority
+	if oldest != null:
+		oldest.stop()
+	return oldest
 
 func hear_extraction() -> void:
 	if _draw == null:
@@ -202,7 +373,10 @@ func _process(delta: float) -> void:
 
 func footfall(_running: bool) -> void:
 	_foot = not _foot
-	cue("footstep" if _foot else "footstep_alt")
+	var selected := "footstep" if _takes.has("footstep") or _foot else "footstep_alt"
+	if wading and _takes.has("footstep_wet"):
+		selected = "footstep_wet"
+	cue(selected)
 
 func _stream(duration: float, tones: Array[float], grit: float, seed_value: int) -> AudioStreamWAV:
 	var output := AudioStreamWAV.new()

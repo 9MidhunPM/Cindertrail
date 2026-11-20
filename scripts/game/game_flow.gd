@@ -113,6 +113,7 @@ func _ready() -> void:
 	core.destroyed.connect(_lose)
 	soundscape = CinderSoundscape.new()
 	_add_runtime(soundscape)
+	soundscape.bind_listener(player, director.camera)
 	traveler.footfall.connect(soundscape.footfall)
 	battle = CinderBattle.new()
 	_add_runtime(battle)
@@ -366,6 +367,8 @@ func _build_journey(selected: JOURNEY_LAYOUT) -> void:
 	_add_runtime(objective_route)
 	objective_route.bind(self)
 	hud.bind(self)
+	soundscape.place_ambience("water", grove_terrain.to_global(Vector3(-16.0, .3, -6.0)), 43.0)
+	soundscape.place_ambience("woodland", outer_valley.junctions.get("west", Vector3.INF), 38.0)
 
 func _add_wayside_cache(id: String, point: Vector3) -> void:
 	if not _claimed_caches.has(id):
@@ -436,8 +439,23 @@ func _physics_process(delta: float) -> void:
 			_extract(delta)
 	if mode == Mode.PREPARE or mode == Mode.DEFEND:
 		_update_socket()
+	_update_score()
 	_update_checkpoint(delta)
 	_update_hud_clock(delta)
+
+func _update_score() -> void:
+	var traveling := mode == Mode.EXPLORE or mode == Mode.TRANSIT
+	var pursued := false
+	for enemy in battle.enemies:
+		if is_instance_valid(enemy) and not enemy.fading and enemy.pursuing:
+			pursued = true
+			break
+	var striking := mode == Mode.DEFEND and battle.engaged and not battle.held
+	var engaged := striking and (not battle.active_wave or battle.remaining_spawns < battle.total_in_wave)
+	var retreat := (traveling or mode == Mode.PACK) and pursued
+	soundscape.wading = grove_terrain.wet_depth_at(player.global_position) or grove.wet_depth_at(player.global_position)
+	soundscape.update_score(mode == Mode.PREPARE, engaged, retreat,
+		is_instance_valid(summit.guardian) and not summit.cleared, battle.enemies.size())
 
 func _battle_sound(cue: String) -> void:
 	if cue == "hit":
@@ -881,6 +899,7 @@ func _lose() -> void:
 	if mode == Mode.WIN or mode == Mode.LOSE:
 		return
 	mode = Mode.LOSE
+	soundscape.stop_score()
 	_selected = -1
 	if battle != null:
 		battle.stop()

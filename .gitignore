@@ -1,5 +1,6 @@
 .godot/
 build/
+!art/audio/foley/build/
 evidence/
 __pycache__/
 .env

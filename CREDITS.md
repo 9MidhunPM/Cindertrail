@@ -18,6 +18,10 @@ The layered traveler and its 2K atlas were authored for Cindertrail in `scripts/
 
 The alternate valley terrain and collision meshes are original exports from `tools/build_outer_valley.py` and the three authored trail networks in `data/outer_valley/`. The Sunsteel sword choreography, blade trails, and charge and release sounds were authored on the Cindertrail traveler rig.
 
+## Downloaded music and sound
+
+The six valley cues are edited loops of Scott Buckley's CC BY 4.0 recordings. The foley blends CC0 sounds by Kenney and Rubberduck. See the [track credits](art/audio/score/README.md) and [recording sources](art/audio/foley/README.md).
+
 ## Downloaded optional surface maps
 
 ambientCG: `PavingStones036`, `Metal032`, `Fabric030`, `WoodFloor050`. These downloads use CC0 1.0 Universal. Exact downloaded files, source URLs, dates and SHA-256 checksums are in `art/textures/third_party/ambientCG/SOURCE_MANIFEST.json`, with companion `CREDITS.md`.
