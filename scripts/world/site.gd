@@ -10,6 +10,9 @@ var sockets: Array[Marker3D] = []
 var lanes: Array[PackedVector3Array] = []
 var threat := 0
 var remaining_energy := 0.0
+var checkpoint_id: StringName:
+	get:
+		return spec.id if spec.id != &"" else StringName(spec.label.to_snake_case())
 var label: String:
 	get:
 		return spec.label

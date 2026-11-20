@@ -1,0 +1,17 @@
+{
+ "sites": [
+  {"node":"west","resource":"lanternwood","label":"Lanternwood","names":["Root hollow","Foxglove bank"],"sockets":[[-4,-1],[-2,3.8],[2.5,-3.1],[4,1]],"lanes":[[[-15,-5],[-11,-3],[-7,-4],[-4,-3],[-2,-1],[0,0]], [[-8,13],[-8,8],[-6,6],[-4,4.7],[-2,2],[0,0]]],"eye":[4,16,18],"target":[-3,0.5,1]},
+  {"node":"south","resource":"sunken_aqueduct","label":"Sunken Aqueduct","names":["Western towpath","Sluice crossing"],"sockets":[[-4,2],[-2,-3],[2,3],[5,-2]],"lanes":[[[-14,0],[-10,0],[-7,0],[-3,0],[0,0]], [[4,-15],[4,-9],[1,-8],[1,-4],[0,0]]],"eye":[11,18,18],"target":[-2,0.5,-2]},
+  {"node":"east","resource":"sunwatch","label":"Sunwatch Observatory","names":["Dial stair","Survey gallery","East rim"],"sockets":[[-3,3],[-3,-2],[1,-4],[4,1],[1,4]],"lanes":[[[-15,4],[-10,4],[-8,1],[-5,1],[0,0]], [[-4,-16],[-4,-12],[-1,-11],[-1,-5],[0,0]], [[14,-5],[10,-4],[8,-2],[4,-1],[0,0]]],"eye":[7,20,20],"target":[0,0.6,-2]}
+ ],
+ "caches": [
+  ["woodland_keepers","west",[5,0,5]],["sluice_keeper","south",[7,0,3]],
+  ["surveyor","east",[5,0,-7]],["western_arcade","ruins",[-2.5,0,1.8]],
+  ["orchard_pass","saddle",[-2,0,-2]],["mineral_spring","spring",[-2,0,2]],
+  ["east_terrace","terrace",[2,0,2.5]]
+ ],
+ "gates":[
+   {"id":"bellmakers_cut","name":"Bellmakers’ lift","trail":"Bellmakers’ cut","section":1,"toward":"terrace"},
+   {"id":"aqueduct_towpath","name":"Towpath bridge","trail":"Aqueduct towpath","section":1,"toward":"ruins"}
+ ]
+}

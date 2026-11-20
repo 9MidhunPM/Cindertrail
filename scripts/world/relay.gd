@@ -21,7 +21,7 @@ const WEST := [Vector3(-7, 3.10, -52.6), Vector3(-2.2, 3.98, -52.6),
 const NORTH := [Vector3(3.8, 3.75, -68), Vector3(3.8, 4.58, -62.5),
 	Vector3(6.0, 4.8, -57.8), CENTER]
 const EAST := [Vector3(28, 3.88, -51.4), Vector3(23.4, 4.40, -51.4),
-	Vector3(16.7, 4.8, -53), CENTER]
+	Vector3(19.4, 4.8, -52.45), Vector3(16.7, 4.8, -53), CENTER]
 const BEACON_TRAIL := [Vector3(16, 4.8, -56), Vector3(20, 5.4, -62),
 	Vector3(20, 7.3, -69), Vector3(19, 9.3, -77), Vector3(20, 11, -81), SUMMIT]
 
