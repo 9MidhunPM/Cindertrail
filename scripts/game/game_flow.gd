@@ -10,9 +10,12 @@ const FRONT_END := preload("res://scenes/ui/front_end.tscn")
 const QUARRY_REGION := preload("res://scripts/world/quarry.gd")
 const RELAY_REGION := preload("res://scripts/world/relay.gd")
 const OUTER_VALLEY := preload("res://scenes/world/outer_valley.tscn")
+const FRONTIER := preload("res://scripts/world/frontier.gd")
 const CACHE_MODEL := preload("res://art/models/supply_crate.glb")
 const PACK_SECONDS := 1.7
 const OPENING := Vector3(-3.0, 0.76, 15.0)
+const LEGACY_JOURNEY_SEED := 34519
+const MIRROR_CACHE_ID := "sunwatch_mirror_recess"
 
 var mode := Mode.EXPLORE
 var player: CinderPlayer
@@ -26,7 +29,10 @@ var soundscape: CinderSoundscape
 var battle: CinderBattle
 var hud: CinderHUD
 var grove: CinderSite
+var grove_terrain: CinderGrove
 var outer_valley: CinderOuterValley
+var frontier: CinderFrontier
+var landmarks: CinderCampLandmarks
 var sites: Array[CinderSite] = []
 var active_site: CinderSite
 var beacon: Marker3D
@@ -55,8 +61,8 @@ func _ready() -> void:
 	_capture_mouse = DisplayServer.get_name() != "headless" and not OS.has_feature("movie")
 	atmosphere = CinderAtmosphere.new()
 	_add_runtime(atmosphere)
-	var terrain := CinderGrove.new()
-	_add_runtime(terrain)
+	grove_terrain = CinderGrove.new()
+	_add_runtime(grove_terrain)
 	_build_sites()
 	player = CinderPlayer.new()
 	player.name = "Traveler"
@@ -88,7 +94,9 @@ func _ready() -> void:
 	hud.action_requested.connect(_hud_action)
 	_add_cache(Vector3(-6.1, 0.72, 9.0), 16)
 	_checkpoint_enabled = not _direct_launch()
-	if _checkpoint_enabled:
+	if not _checkpoint_enabled:
+		_open_frontier(int(get_tree().get_meta(&"journey_seed", LEGACY_JOURNEY_SEED)))
+	else:
 		_checkpoint = JourneyCheckpoint.read()
 		_front_end = FRONT_END.instantiate() as CinderFrontEnd
 		add_child(_front_end)
@@ -135,9 +143,11 @@ func _begin_journey() -> void:
 		_checkpoint.clear()
 	else:
 		_notify("The new journey could not replace the last checkpoint")
+	_open_frontier(randi())
 	_enter_journey()
 
 func _continue_journey() -> void:
+	_open_frontier(int(_checkpoint.get("journey_seed", LEGACY_JOURNEY_SEED)))
 	if not _checkpoint.is_empty():
 		_restore_checkpoint()
 	_enter_journey()
@@ -212,6 +222,23 @@ func _build_sites() -> void:
 	for index in outer_valley.caches.size():
 		_add_cache(outer_valley.caches[index], 14, outer_valley.cache_ids[index])
 	_waymark("Pilgrims’ Cross", Vector3(-2.5, 0.72, 19.3), Vector3.BACK)
+	landmarks = CinderCampLandmarks.new()
+	_add_runtime(landmarks)
+	landmarks.revealed_cache.connect(_reveal_mirror_cache)
+	landmarks.configure(grove_terrain, quarry, relay, outer_valley)
+
+func _open_frontier(journey_seed: int) -> void:
+	if frontier != null:
+		return
+	frontier = FRONTIER.new()
+	frontier.journey_seed = journey_seed
+	_add_runtime(frontier)
+	sites.append(frontier.site)
+	outer_valley.seed_life(journey_seed)
+
+func _reveal_mirror_cache(point: Vector3) -> void:
+	if not _claimed_caches.has(MIRROR_CACHE_ID):
+		_add_cache(point, 14, MIRROR_CACHE_ID)
 
 func _waymark(label: String, point: Vector3, direction: Vector3) -> void:
 	var marker := CinderWaymark.new()
@@ -351,15 +378,42 @@ func interact() -> void:
 			_caches.erase(cache)
 			cache.queue_free()
 			return
+		var discovery := landmarks.discover(player.global_position)
+		if not discovery.is_empty():
+			soundscape.cue("collect")
+			_notify(discovery)
+			return
 		var site := _near_site()
 		if site != null:
 			_deploy(site)
+		elif _interact_frontier():
+			return
 		elif outer_valley.try_open_shortcut(player.global_position):
 			soundscape.cue("collect")
 			_notify("Shortcut opened")
-	elif (mode == Mode.PREPARE or mode == Mode.DEFEND) and _near(active_site.anchor, 5.5):
-		if battle != null:
+	elif mode == Mode.PREPARE or mode == Mode.DEFEND:
+		var action := landmarks.defend(active_site, player.global_position, _landmark_aim(), battle) if mode == Mode.DEFEND else ""
+		if not action.is_empty():
+			_notify(action)
+		elif _near(active_site.anchor, 5.5):
 			battle.repair()
+
+func _landmark_aim() -> Vector3:
+	if active_site != null and active_site.checkpoint_id == CinderCampLandmarks.RELAY:
+		return _pointer_ground(get_viewport().get_mouse_position())
+	return Vector3.INF
+
+func _interact_frontier() -> bool:
+	if frontier == null:
+		return false
+	var result := frontier.interact_at(player.global_position)
+	if result.is_empty():
+		return false
+	battle.scrap += int(result.get("scrap", 0))
+	player.visual.gesture(&"collect")
+	soundscape.cue("collect")
+	_notify(String(result.get("message", "")))
+	return true
 
 func _deploy(site: CinderSite) -> void:
 	active_site = site
@@ -367,6 +421,8 @@ func _deploy(site: CinderSite) -> void:
 	player.visual.gesture(&"deploy")
 	core.transfer(site.anchor, SunCore.Form.DEPLOYED, 0.91)
 	director.show_site(site.view_position, site.view_target)
+	if site == grove:
+		grove_terrain.release_herons()
 	player.recovery_point = site.anchor.global_position + Vector3(0, 0.1, 2)
 	if battle != null:
 		battle.prepare(site, core)
@@ -526,6 +582,10 @@ func _save_checkpoint() -> void:
 		"scrap": battle.scrap, "inventory": battle.inventory.duplicate(true),
 		"sites": records, "claimed": _claimed_caches,
 		"shortcuts": outer_valley.unlocked_shortcut_ids(),
+		"landmarks": landmarks.checkpoint_progress(),
+		"journey_seed": frontier.journey_seed, "frontier_version": CinderFrontier.LAYOUT_VERSION,
+		"frontier_discoveries": frontier.claimed_discoveries(),
+		"frontier_revealed": frontier.revealed_discoveries(),
 	}
 	if state != _checkpoint and JourneyCheckpoint.write(state):
 		_checkpoint = state
@@ -539,7 +599,7 @@ func _restore_checkpoint() -> void:
 	player.visual.rotation.y = _checkpoint.get("facing", 0.0)
 	core.health = clampf(_checkpoint.get("health", 100.0), 0.01, 100.0)
 	core.restoration = clampf(_checkpoint.get("restoration", 0.0), 0.0, 100.0)
-	battle.scrap = maxi(0, _checkpoint.get("scrap", 20))
+	battle.scrap = maxi(0, _checkpoint.get("scrap", battle.scrap))
 	battle.inventory.assign(_checkpoint.get("inventory", []))
 	for module in battle.inventory:
 		module.socket = -1
@@ -550,6 +610,15 @@ func _restore_checkpoint() -> void:
 		site.threat = maxi(0, record.get("threat", 0))
 	_claimed_caches = _checkpoint.get("claimed", PackedStringArray())
 	outer_valley.restore_shortcuts(_checkpoint.get("shortcuts", PackedStringArray()))
+	var saved_frontier := int(_checkpoint.get("frontier_version", CinderFrontier.LAYOUT_VERSION))
+	if saved_frontier == CinderFrontier.LAYOUT_VERSION:
+		frontier.restore_discoveries(_checkpoint.get("frontier_discoveries", PackedStringArray()),
+			_checkpoint.get("frontier_revealed", PackedStringArray()))
+	elif player.global_position.z > CinderFrontier.ENTRANCE.z:
+		player.global_position = CinderFrontier.ENTRANCE + Vector3.UP * 0.10
+		player.recovery_point = player.global_position
+		player.reset_physics_interpolation()
+	landmarks.restore_progress(_checkpoint.get("landmarks", {}))
 	for index in range(_caches.size() - 1, -1, -1):
 		if _claimed_caches.has(_caches[index].get_meta(&"checkpoint_id")):
 			var cache := _caches.pop_at(index) as Node3D
@@ -563,6 +632,7 @@ func _notify(message: String) -> void:
 	_notice_time = 4.0
 
 func _hint(nearest: CinderSite) -> String:
+	landmarks.hide_prompt()
 	if mode == Mode.EXPLORE or mode == Mode.TRANSIT:
 		if _near(beacon, 2.6):
 			if core.restoration >= 99.999:
@@ -570,14 +640,21 @@ func _hint(nearest: CinderSite) -> String:
 			return "Restore the sun before lighting the beacon"
 		if _near_cache() != null:
 			return "E   Recover supplies"
+		var discovery := landmarks.hint(player.global_position, Vector3.INF, null, battle, true)
+		if not discovery.is_empty():
+			return discovery
 		if nearest != null:
 			return "E   Unfold shrine at %s" % nearest.label
+		if frontier != null:
+			var expedition := frontier.hint_at(player.global_position)
+			if not expedition.is_empty():
+				return expedition
 		var shortcut := outer_valley.nearby_shortcut(player.global_position)
 		if not shortcut.is_empty():
 			return "E   Open " + shortcut
 		if core.restoration >= 99.999:
 			return "Follow the ridge beyond Fallen Relay to the beacon"
-		return "Follow the stone causeway to the shrine pad" if mode == Mode.EXPLORE else "Follow the trail markers to another ancient site"
+		return "Follow the stone causeway to the shrine pad" if _near(grove.anchor, 22.0) and mode == Mode.EXPLORE else "Follow the trail markers to another ancient site"
 	if mode == Mode.DEPLOY:
 		return "Unfolding shrine"
 	if mode == Mode.PACK:
@@ -586,6 +663,8 @@ func _hint(nearest: CinderSite) -> String:
 		if active_site.remaining_energy <= 0.001 or core.restoration >= 99.999:
 			return "Hold R   Pack the shrine"
 		return "Space   Start wave     •     E   Repair"
+	if mode == Mode.DEFEND:
+		return landmarks.hint(player.global_position, _landmark_aim(), active_site, battle, false)
 	return ""
 
 func _render_hud() -> void:

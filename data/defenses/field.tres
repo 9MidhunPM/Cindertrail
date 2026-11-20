@@ -7,8 +7,11 @@
 script = ExtResource("1")
 model = ExtResource("2")
 label = "Field"
-price = 7
-reach = 6.5
+price = 10
+reach = 5.0
 interval = 1.5
-power = 0.46
+power = 0.64
 splash = 0
+upgrade_cost = 9
+upgrade_gain = 0.08
+summary = "Slows every enemy inside its ring. Deals no damage."

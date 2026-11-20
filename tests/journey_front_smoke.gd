@@ -84,4 +84,63 @@ func _run() -> void:
 	game = current_scene
 	await _press("ContinueJourney")
 	_check(game.core.restoration == 3.5 and game.hud.visible, "Continue resumes from the same checkpoint")
+	await _check_frontier()
 	quit(1 if failures else 0)
+
+func _check_frontier() -> void:
+	var first_seed := CinderFrontier.new()
+	first_seed.journey_seed = 108
+	root.add_child(first_seed)
+	var second_seed := CinderFrontier.new()
+	second_seed.journey_seed = 441
+	root.add_child(second_seed)
+	_check(first_seed.paths[1] != second_seed.paths[1] or first_seed.paths[2] != second_seed.paths[2],
+		"Different journey seeds assemble different trail layouts")
+	first_seed.free()
+	second_seed.free()
+	var expedition: CinderFrontier = game.frontier
+	var paths := expedition.paths.duplicate()
+	var seed_before := expedition.journey_seed
+	var loot_before: int = game.battle.scrap
+	_place(expedition.discovery_points()[0])
+	await _frames(6)
+	game.interact()
+	_place(expedition.discovery_points()[0])
+	await _frames(6)
+	game.interact()
+	_check(expedition.claimed_discoveries().size() == 1 and game.battle.scrap > loot_before,
+		"A frontier clue leads to a one-time supply reward")
+	var sun_id: int = game.core.get_instance_id()
+	_place(expedition.site.anchor.global_position + Vector3.BACK)
+	await _frames(6)
+	game.interact()
+	await _frames(85)
+	_check(game.active_site == expedition.site and game.start_wave(), "Last Lantern deploys and starts a defense")
+	await _frames(146)
+	Input.action_press("pack")
+	await _frames(166)
+	Input.action_release("pack")
+	_check(game.core.form == SunCore.Form.CARRIED and game.core.get_instance_id() == sun_id,
+		"Packing carries the original sun out of the frontier camp")
+	_place(CinderFrontier.FORK)
+	await _frames(130)
+	game._save_checkpoint()
+	var saved := JourneyCheckpoint.read()
+	_check(saved.get("position", Vector3.ZERO).z > CinderFrontier.ENTRANCE.z,
+		"Checkpoint can be taken on safe ground inside the frontier")
+	game._hud_action(&"title")
+	await scene_changed
+	game = current_scene
+	await _press("ContinueJourney")
+	await _frames(7)
+	expedition = game.frontier
+	_check(expedition.journey_seed == seed_before and expedition.paths == paths and game.player.is_on_floor(),
+		"Continue reconstructs the same trail before placing the traveler")
+	_check(expedition.site.threat == 1 and expedition.site.remaining_energy < 10.0,
+		"The optional camp keeps its depleted reserve and threat")
+	_check(expedition.claimed_discoveries().size() == 1 and expedition.hint_at(expedition.discovery_points()[0]).is_empty(),
+		"Collected frontier supplies stay collected after Continue")
+
+func _place(point: Vector3) -> void:
+	game.player.global_position = point + Vector3.UP * 0.12
+	game.player.velocity = Vector3.ZERO

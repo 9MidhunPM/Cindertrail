@@ -4,6 +4,7 @@ extends CharacterBody3D
 var stats: CinderEnemyStats
 var health: float
 var site_of_origin: CinderSite
+var origin_lane := -1
 var route: PackedVector3Array
 var pursuing := false
 var fading := false
@@ -23,6 +24,8 @@ var limbs: Array[Node3D] = []
 var phases := PackedFloat32Array()
 var rest_heights := PackedFloat32Array()
 var fissure: StandardMaterial3D
+var _disruption := 0.0
+var _fallback := Vector3.INF
 
 func configure(spec: CinderEnemyStats, path: PackedVector3Array, camp: CinderSite) -> void:
 	stats = spec
@@ -129,6 +132,12 @@ func wound(amount: float) -> void:
 	health -= amount
 	last_hit = 0.15
 
+func disrupt(duration: float, push_back := false) -> void:
+	_disruption = maxf(_disruption, duration)
+	attack_timer = maxf(attack_timer, duration + 0.25)
+	_fallback = route[clampi(step - 2, 0, route.size() - 2)] if push_back and route.size() > 1 else Vector3.INF
+	last_hit = 0.15
+
 func body_center() -> Vector3:
 	return global_position + Vector3.UP * stats.height * 0.7
 
@@ -152,7 +161,12 @@ func advance(core: SunCore, delta: float, field_factor: float) -> bool:
 	if site_of_origin.wet_depth_at(global_position):
 		speed *= 0.53
 	var movement := Vector3.ZERO
-	if not near:
+	if _disruption > 0.0:
+		_disruption = maxf(0.0, _disruption - delta)
+		near = false
+		if _fallback != Vector3.INF and flat_distance(global_position, _fallback) > 0.45:
+			movement = (_fallback - global_position).slide(Vector3.UP).normalized() * 5.0
+	elif not near:
 		movement = (direction.normalized() + separation.limit_length(0.55)).normalized() * speed
 		if movement.length_squared() > 0.001:
 			rotation.y = lerp_angle(rotation.y, atan2(movement.x, movement.z), 1.0-exp(-10*delta))

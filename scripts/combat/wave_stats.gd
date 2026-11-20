@@ -7,3 +7,13 @@ extends Resource
 @export var breather := 4.0
 @export var active_limit := 18
 @export var leash := 34.0
+## Extra attackers per survived wave, multiplied by the site's intensity.
+@export var count_growth := 1.3
+## One more attacker for every step of sun restoration.
+@export var restoration_step := 33.3
+## First wave that includes an armored brute.
+@export var brute_from := 3
+## From the wave after brute_from, every Nth attacker is a brute.
+@export var brute_every := 6
+## Scrap awarded when a wave is held.
+@export var clear_bonus := 2

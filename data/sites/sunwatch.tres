@@ -7,6 +7,6 @@ script = ExtResource("1")
 label = "Sunwatch Observatory"
 id = &"sunwatch_observatory"
 energy = 25.0
-rate = 0.063
+rate = 0.3
 intensity = 1.25
 lane_names = PackedStringArray("Dial stair", "Survey gallery", "East rim")

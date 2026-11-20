@@ -7,6 +7,6 @@ script = ExtResource("1")
 label = "Broken Quarry"
 id = &"broken_quarry"
 energy = 25.0
-rate = 0.061
+rate = 0.3
 intensity = 0.86
 lane_names = PackedStringArray("Crane pass")

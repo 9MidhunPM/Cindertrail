@@ -146,6 +146,13 @@ func _run() -> void:
                 await _relay_profile()
                 await _reset_capture()
                 await _dawn_frame()
+        "living-tour":
+            if _check(use_window, "Living valley tour requires a graphical display"):
+                await _living_tour()
+        "rapid-grove":
+            await _rapid_grove()
+        "camp-landmarks":
+            await _camp_landmarks()
         _:
             _check(false, "Unknown case: " + route_case)
     _finish()
@@ -429,7 +436,8 @@ func _complete_run(use_quarry: bool) -> void:
 
 
 func _campaign_combinations() -> void:
-    if not _check(game.sites.size() == 6, "Six camps loaded"):
+    if not _check(game.sites.size() == 7 and game.sites[-1] == game.frontier.site,
+            "Six main camps and the optional frontier camp loaded"):
         return
     var tested := 0
     for a in range(6):
@@ -573,6 +581,102 @@ func _relay_profile() -> void:
     measurements["relay_defense"]["site_threat"] = relay.threat
     measurements["relay_defense"]["starting_restoration"] = 85.0
     await _capture("fallen-relay-defense.png")
+
+
+func _living_tour() -> void:
+    await _capture("grove-crossing.png")
+    for site: CinderSite in game.sites:
+        if not await _deploy(site):
+            return
+        game.battle.scrap = 60
+        for index in mini(site.sockets.size(), 4):
+            game.battle.place(index, (index + 2) % 3)
+        var relay := site.checkpoint_id == &"fallen_relay"
+        if relay:
+            site.threat = 5
+        _check(game.start_wave(), "Started a wave at " + site.label)
+        await _physics_frames(110 if relay else 52)
+        if relay:
+            measurements["relay_wave"] = await _profile(120, 12)
+        await _capture(String(site.checkpoint_id) + ".png")
+        if not await _pack():
+            return
+    _check(_core_count() == 1, "One sun persists across all seven camps")
+
+
+func _rapid_grove() -> void:
+    if not await _collect_grove_supplies() or not await _cross_grove() or not await _interact_at_pad():
+        return
+    var battle: CinderBattle = game.battle
+    var camp: CinderSite = game.grove
+    if not _check(battle.place(0, 0) and battle.place(2, 2), "Nearby supplies afford the opening defenses"):
+        return
+    if not _check(game.start_wave(), "Start the first Grove wave"):
+        return
+    var min_health := 100.0
+    var first_brute := 0
+    var peak := 0
+    for frame in range(0, 120 * 60, 15):
+        await _physics_frames(15)
+        min_health = minf(min_health, game.core.health)
+        peak = maxi(peak, battle.enemies.size())
+        for enemy in battle.enemies:
+            if first_brute == 0 and enemy.stats == CinderBattle.BRUTE:
+                first_brute = camp.threat
+        if game.core.health <= 0.0:
+            _check(false, "Shrine survives the Grove defense")
+            return
+        if camp.remaining_energy <= 0.001:
+            measurements["defense_seconds"] = (frame + 15) / 60.0
+            measurements["minimum_core_health"] = min_health
+            measurements["peak_enemies"] = peak
+            _check(first_brute == 3, "Grove first spawns a brute in wave three")
+            _check(peak <= 18 and game.core.restoration >= 24.999, "Cleared the full reserve within the enemy budget")
+            return
+        _assist_target()
+        if battle.scrap >= battle.REPAIR_COST and game.core.health <= 80.0:
+            game.interact()
+        elif battle.scrap >= CinderBattle.MODULES[0].price and not battle.towers.has(1):
+            battle.place(1, 0)
+        elif battle.scrap >= CinderBattle.MODULES[0].price and not battle.towers.has(3):
+            battle.place(3, 0)
+        elif battle.upgrade_cost(0) >= 0 and battle.scrap >= battle.upgrade_cost(0):
+            battle.upgrade(0)
+    _check(false, "Restore all Grove reserve within two minutes")
+
+
+func _camp_landmarks() -> void:
+    var camp_landmarks: CinderCampLandmarks = game.landmarks
+    var outdoor: CinderOuterValley = game.outer_valley
+    for area: StringName in [camp_landmarks.LANTERNWOOD, camp_landmarks.SUNWATCH]:
+        for point in outdoor.landmark_positions(area):
+            _position_player(point + Vector3.UP * 0.07)
+            await _physics_frames(3)
+            game.interact()
+    var progress := camp_landmarks.checkpoint_progress()
+    _check(progress.get(camp_landmarks.LANTERNWOOD) == 1, "A traveler can relight the lost lantern")
+    _check(progress.get(camp_landmarks.SUNWATCH) == 2, "Aligning both mirrors prepares the survey beam")
+    _position_player(outdoor.observatory_cache_position() + Vector3.UP * 0.10)
+    await _physics_frames(3)
+    var initial: int = game.battle.scrap
+    game.interact()
+    _check(game.battle.scrap == initial + 14, "The mirror discovery reveals actual collectable supplies")
+    for site: CinderSite in game.sites.slice(0, 6):
+        if not await _deploy(site):
+            return
+        _check(game.start_wave(), "Started the first attack at " + site.label)
+        var origin := site.anchor.global_position
+        var points: PackedVector3Array = camp_landmarks.get("_positions")[site.checkpoint_id]
+        _position_player(points[-1] + Vector3.UP * 0.07)
+        await _physics_frames(3)
+        game.interact()
+        var used := camp_landmarks.hint(game.player.global_position, Vector3.INF, site, game.battle, false)
+        _check(used == "Landmark recharges next wave", site.label + " landmark spends one charge")
+        game.interact()
+        _check(game.get("_notice") == "The landmark recharges each wave.", site.label + " rejects a second use")
+        _position_player(origin + Vector3(0, 0.10, 2))
+        if not await _pack():
+            return
 
 
 func _quarry_frame() -> void:

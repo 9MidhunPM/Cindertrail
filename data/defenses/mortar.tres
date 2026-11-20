@@ -7,8 +7,12 @@
 script = ExtResource("1")
 model = ExtResource("2")
 label = "Mortar"
-price = 12
-reach = 14
-interval = 2.45
-power = 19
-splash = 3.1
+price = 16
+reach = 12
+interval = 3.1
+power = 13
+splash = 2.4
+min_reach = 3.0
+upgrade_cost = 12
+upgrade_gain = 0.3
+summary = "Lobs slow shells that hurt groups. Cannot hit close targets."

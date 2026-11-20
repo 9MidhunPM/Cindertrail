@@ -7,6 +7,6 @@ script = ExtResource("1")
 label = "Flooded Grove"
 id = &"flooded_grove"
 energy = 25.0
-rate = 0.066
+rate = 0.3
 intensity = 1.0
 lane_names = PackedStringArray("Western shallows", "Eastern ford")

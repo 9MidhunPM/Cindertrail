@@ -6,7 +6,12 @@
 script = ExtResource("1")
 base_count = 4
 max_count = 14
-interval = 1.55
-breather = 4.0
+interval = 0.55
+breather = 1.5
 active_limit = 18
-leash = 34.0
+leash = 40.0
+count_growth = 1.0
+restoration_step = 20.0
+brute_from = 3
+brute_every = 5
+clear_bonus = 3

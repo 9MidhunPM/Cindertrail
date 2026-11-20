@@ -6,8 +6,8 @@
 [resource]
 script = ExtResource("1")
 model = ExtResource("2")
-health = 67
-speed = 1.55
-damage = 7
+health = 140
+speed = 1.62
+damage = 10
 height = 1.5
-bounty = 2
+bounty = 4

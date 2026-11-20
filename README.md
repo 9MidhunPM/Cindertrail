@@ -4,7 +4,7 @@ An open-world, portable-base tower-defense adventure. Explore a continuous 3D va
 
 ## Play
 
-Extract the Linux x86_64 build and run `./Cindertrail.x86_64`. To run from source, open [project.godot](project.godot) in Godot 4.7.2 and press **F5**, or use the terminal commands below.
+Open [project.godot](project.godot) in Godot 4.7.2 and press **F5**, or run these commands from the project directory.
 
 ```sh
 godot --headless --editor --path . --import
@@ -13,12 +13,16 @@ godot --path .
 
 The title opens on the Flooded Grove. **New journey** starts the four-panel motion comic. **Continue journey** resumes at the last safe checkpoint. A checkpoint preserves your trail position, shrine health, restoration, scrap, modules, caches, unlocked shortcuts, remaining camp reserves and local threat. The game saves when you are carrying the shrine on safe ground after breaking pursuit.
 
-The six camps share one continuous 3D world and all use the same protected sun. Each camp has 25 points of restoration. Defend four camps to exhaustion or combine partial reserves from several camps, then bring the restored sun to the hilltop beacon.
+The six main camps share one continuous 3D world and all use the same protected sun. Each main camp has 25 points of restoration. Expect quick attacks and a short break after each cleared wave. Drain four main camps or combine partial reserves, then bring the sun to the hilltop beacon.
+
+Camp landmarks can swing a wave. Press **E** at a bell, crane, relay switch, lantern, sluice wheel, or mirror control. At Fallen Relay, aim the pointer at the lane you want to pulse. Follow the moths in Lanternwood and align the Sunwatch mirrors during exploration to prepare those defenses.
+
+Follow the spillway off **Tanners’ Road** to reach Last Lantern. Each journey assembles two different frontier trails with discoveries and an optional 10-point camp. You can return along either branch, and Continue restores your layout and discoveries.
 
 | Input | Action |
 | --- | --- |
 | **WASD**, mouse, **Shift**, **Ctrl** | Move, look, sprint and walk |
-| **E** | Unfold at a pad, open a supply crate or shortcut, repair near the deployed shrine, or deliver the restored sun |
+| **E** | Use a nearby landmark, unfold the shrine, collect supplies, repair, or deliver the restored sun |
 | **1 / 2 / 3**, left click | Select a module, then place it on an open socket |
 | **Space** | Start the attack and begin extracting restoration |
 | **U** | Upgrade the tower under the pointer |

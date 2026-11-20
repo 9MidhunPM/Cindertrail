@@ -11,10 +11,12 @@ const MODULES: Array[CinderModuleStats] = [
 const CRAWLER: CinderEnemyStats = preload("res://data/enemies/crawler.tres")
 const BRUTE: CinderEnemyStats = preload("res://data/enemies/brute.tres")
 const WAVES: CinderWaveStats = preload("res://data/waves/valley.tres")
-const REPAIR_COST := 5
-const REPAIR_AMOUNT := 30.0
+const REPAIR_COST := 8
+const REPAIR_AMOUNT := 20.0
+const SPARK_DAMAGE := 4.0
+const SPARK_COOLDOWN := 0.55
 
-var scrap := 20
+var scrap := 16
 var active_wave := false
 var enemies: Array[CinderEnemy] = []
 # Each entry is an owned module. Its installed socket is temporary.
@@ -31,6 +33,8 @@ var spawn_timer := 0.0
 var intermission := 0.0
 var weapon_timer := 0.0
 var last_breadcrumb := Vector3.INF
+var _landmark_lane := -1
+var _landmark_seconds := 0.0
 
 func bind_carried_core(carried: SunCore) -> void:
 	core = carried
@@ -77,6 +81,8 @@ func recall() -> void:
 	active_wave = false
 	remaining_spawns = 0
 	last_breadcrumb = Vector3.INF
+	_landmark_lane = -1
+	_landmark_seconds = 0.0
 
 func stop() -> void:
 	halted = true
@@ -142,7 +148,7 @@ func upgrade(index: int) -> bool:
 	if tower.level >= 3:
 		message.emit("This module is fully upgraded.")
 		return false
-	var cost := 6 * tower.level
+	var cost := upgrade_cost(index)
 	if scrap < cost:
 		message.emit("Upgrade costs %d scrap." % cost)
 		return false
@@ -189,8 +195,8 @@ func attack(origin: Vector3, dir: Vector3) -> bool:
 			end = enemy.body_center()
 	_visual_shot(origin, end, false, Color(0.70, 0.95, 1.0))
 	if target:
-		_hit(target, 5.5)
-	weapon_timer = 0.46
+		_hit(target, SPARK_DAMAGE)
+	weapon_timer = SPARK_COOLDOWN
 	sound.emit("attack")
 	return true
 
@@ -202,10 +208,17 @@ func forecast() -> String:
 	return "%s  ·  %d hostiles  ·  %s" % ["/".join(site.lane_names), count, "brute contact" if _has_brute(upcoming) else "crawlers"]
 
 func _has_brute(wave: int) -> bool:
-	return wave >= 3 or (site.intensity > 1.1 and wave >= 2)
+	return wave >= WAVES.brute_from or (site.intensity > 1.1 and wave >= WAVES.brute_from - 1)
 
 func _count_for(wave: int) -> int:
-	return clampi(WAVES.base_count + roundi((wave - 1) * 1.3 * site.intensity) + floori(core.restoration / 33.3), WAVES.base_count, WAVES.max_count)
+	var growth := roundi((wave - 1) * WAVES.count_growth * site.intensity)
+	return clampi(WAVES.base_count + growth + floori(core.restoration / WAVES.restoration_step), WAVES.base_count, WAVES.max_count)
+
+## Scrap needed to raise the tower in this socket by one level; -1 when it cannot be upgraded.
+func upgrade_cost(index: int) -> int:
+	if not towers.has(index) or towers[index].level >= 3:
+		return -1
+	return towers[index].stats.upgrade_cost * towers[index].level
 
 func _start_wave() -> void:
 	site.threat += 1
@@ -215,6 +228,20 @@ func _start_wave() -> void:
 	spawn_timer = 0.0
 	sound.emit("wave")
 	message.emit("Wave %d  ·  %s" % [site.threat, forecast()])
+
+## Bias only nearby crawler reinforcements. Brutes keep their original route.
+func bias_next_spawns(lane_index: int, seconds := 3.0) -> bool:
+	if halted or held or not site or lane_index < 0 or lane_index >= site.lanes.size() or seconds <= 0.0:
+		return false
+	_landmark_lane = lane_index
+	_landmark_seconds = seconds
+	return true
+
+func landmark_hit(enemy: CinderEnemy, damage: float) -> void:
+	if halted or not site or not is_instance_valid(enemy) or damage <= 0.0:
+		return
+	if enemy.site_of_origin == site and not enemy.pursuing and enemies.has(enemy):
+		_hit(enemy, damage)
 
 func _advance_waves(delta: float) -> void:
 	if not engaged or held or site.remaining_energy <= 0 or core.restoration >= 100.0:
@@ -228,25 +255,33 @@ func _advance_waves(delta: float) -> void:
 		spawn_timer -= delta
 		if spawn_timer <= 0.0 and enemies.size() < WAVES.active_limit and not site.lanes.is_empty():
 			var sequence := total_in_wave - remaining_spawns
-			var lane := site.lanes[(sequence + site.threat - 1) % site.lanes.size()]
+			var escort := site.threat > WAVES.brute_from and sequence % WAVES.brute_every == WAVES.brute_every - 2
+			var brute := _has_brute(site.threat) and (sequence == total_in_wave - 1 or escort)
+			var lane_index := (sequence + site.threat - 1) % site.lanes.size()
+			if not brute and _landmark_seconds > 0.0:
+				lane_index = _landmark_lane
+			var lane := site.lanes[lane_index]
 			if lane.size() >= 2:
-				var spec := BRUTE if _has_brute(site.threat) and (sequence == total_in_wave-1 or (site.threat >= 5 and sequence % 6 == 4)) else CRAWLER
 				var enemy := CinderEnemy.new()
 				add_child(enemy)
-				enemy.configure(spec, lane, site)
+				enemy.configure(BRUTE if brute else CRAWLER, lane, site)
+				enemy.origin_lane = lane_index
 				enemies.append(enemy)
 				remaining_spawns -= 1
 				spawn_timer = WAVES.interval / clampf(site.intensity, 0.85, 1.45)
 	elif enemies.is_empty():
 		active_wave = false
 		intermission = WAVES.breather
-		scrap += 2
-		message.emit("Wave held  ·  +2 scrap  ·  next in %ds" % int(WAVES.breather))
+		_landmark_seconds = 0.0
+		scrap += WAVES.clear_bonus
+		message.emit("Wave held  ·  +%d scrap  ·  next in %.1fs" % [WAVES.clear_bonus, WAVES.breather])
 
 func _physics_process(delta: float) -> void:
 	if halted or not is_instance_valid(core):
 		return
 	weapon_timer = maxf(0.0, weapon_timer - delta)
+	if active_wave and not held:
+		_landmark_seconds = maxf(0.0, _landmark_seconds - delta)
 	_advance_waves(delta)
 	if enemies.is_empty():
 		return
@@ -266,7 +301,7 @@ func _physics_process(delta: float) -> void:
 		var slow := 1.0
 		for tower in towers.values():
 			if tower.kind == 1 and enemy.global_position.distance_to(tower.global_position) <= tower.stats.reach:
-				slow = minf(slow, tower.stats.power / (1.0 + 0.14 * (tower.level - 1)))
+				slow = minf(slow, tower.stats.power / (1.0 + tower.stats.upgrade_gain * (tower.level - 1)))
 		enemy.separation = Vector3.ZERO
 		for other in enemies:
 			var offset := enemy.global_position - other.global_position
@@ -286,7 +321,8 @@ func _update_tower(tower: CinderInstalledModule, delta: float) -> void:
 	var target: CinderEnemy
 	var closest := INF
 	for enemy in enemies:
-		if tower.global_position.distance_to(enemy.global_position) <= tower.stats.reach:
+		var range_to := tower.global_position.distance_to(enemy.global_position)
+		if range_to <= tower.stats.reach and range_to >= tower.stats.min_reach:
 			var urgency := core.global_position.distance_squared_to(enemy.global_position)
 			if urgency < closest:
 				closest = urgency
@@ -298,7 +334,7 @@ func _update_tower(tower: CinderInstalledModule, delta: float) -> void:
 	if tower.cooldown > 0.0:
 		return
 	var muzzle := tower.fire()
-	var power := tower.stats.power * (1.0 + 0.48*(tower.level-1))
+	var power := tower.stats.power * (1.0 + tower.stats.upgrade_gain * (tower.level - 1))
 	var lob := tower.kind == 2
 	if lob:
 		end += Vector3(target.velocity.x, 0.0, target.velocity.z) * 0.5

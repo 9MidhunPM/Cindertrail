@@ -7,8 +7,11 @@
 script = ExtResource("1")
 model = ExtResource("2")
 label = "Bolt"
-price = 8
-reach = 10
-interval = 0.7
-power = 9
+price = 12
+reach = 8.5
+interval = 0.95
+power = 6
 splash = 0
+upgrade_cost = 10
+upgrade_gain = 0.3
+summary = "Fires amber bolts at one target at a time."

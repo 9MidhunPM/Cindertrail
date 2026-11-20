@@ -346,7 +346,7 @@ func _default_hint(mode: String, selected: int, socket: int, restoration: float)
 func _control_hints(mode: String, selected: int) -> String:
 	match mode:
 		"Prepare", "Defend":
-			var keys := "1–3 Select  ·  U Upgrade  ·  E Repair  ·  RMB Fire  ·  Hold R Pack"
+			var keys := "1–3 Select  ·  U Upgrade  ·  E Interact or repair  ·  RMB Fire  ·  Hold R Pack"
 			if selected >= 0:
 				keys += "  ·  Esc Cancel"
 			return keys

@@ -25,6 +25,9 @@ func _run() -> void:
 	var battle: CinderBattle = game.battle
 	var grove: CinderSite = game.grove
 	var core: SunCore = game.core
+	# Use the nearby cache to cover the configured purchase and upgrade costs.
+	game.player.position = Vector3(-4.08, 0.72, 9.0)
+	game.interact()
 	game.player.position = grove.anchor.global_position + Vector3(0, 0.10, 1.0)
 	game.interact()
 	await _frames(100)
@@ -52,9 +55,12 @@ func _run() -> void:
 	_check(wet_speed > 0.4 and dry_speed > wet_speed * 1.25, "Crawlers slow in the water and recover on dry land")
 	_check(core.health < 100 and core.restoration > 0, "Combat and extraction run together")
 	var starting_scrap := battle.scrap
-	_check(battle.place(0, 1) and battle.scrap == starting_scrap - 7, "Buying a slowing emitter debits its price")
-	_check(not battle.place(0, 2) and not battle.place(19, 0) and battle.scrap == starting_scrap - 7, "Invalid placements are free")
-	_check(battle.upgrade(0) and battle.scrap == starting_scrap - 13, "Upgrade purchased and attached to the module")
+	var field: CinderModuleStats = CinderBattle.MODULES[1]
+	_check(battle.place(0, 1) and battle.scrap == starting_scrap - field.price, "Buying a slowing emitter debits its price")
+	_check(not battle.place(0, 2) and not battle.place(19, 0) and battle.scrap == starting_scrap - field.price,
+		"Invalid placements are free")
+	_check(battle.upgrade(0) and battle.scrap == starting_scrap - field.price - field.upgrade_cost,
+		"Upgrade purchased and attached to the module")
 	var hp_at_pack := core.health
 	Input.action_press("pack")
 	await _frames(165)
