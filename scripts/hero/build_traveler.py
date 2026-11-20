@@ -1,4 +1,4 @@
-"""Rebuild the original traveler mesh with blender -b -P scripts/hero/build_traveler.py."""
+"""Rebuild the articulated traveler and folded shrine fittings with blender -b -P scripts/hero/build_traveler.py."""
 import bpy
 import math
 from pathlib import Path
