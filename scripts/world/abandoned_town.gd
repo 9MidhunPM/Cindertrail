@@ -2,7 +2,7 @@ extends Node3D
 ## Authored street and roof compositions share one painted masonry kit.
 
 const MESH := preload("res://scripts/world/environment_mesh.gd")
-const WATER := preload("res://art/materials/frontier_water.gdshader")
+const WATER := preload("res://art/materials/stylized/cistern_water.gdshader")
 const LAMP := preload("res://art/materials/sun_amber.tres")
 const STONE := Color("#d4c8ac")
 const SAND := Color("#af9274")
@@ -367,12 +367,12 @@ func _cistern(at: Vector3) -> void:
 		_solid(at + Vector3(0, .23, s * 1.52), Vector3(3.21, .63, .35))
 	var surface := at + Vector3.UP * .30
 	var water := MeshInstance3D.new()
+	water.name = "CisternWater"
 	var plane := PlaneMesh.new()
 	plane.size = Vector2(3.28, 2.69)
 	water.mesh = plane
 	var current := ShaderMaterial.new()
 	current.shader = WATER
-	current.set_shader_parameter("brush_detail", MESH.BRUSH)
 	water.material_override = current
 	water.position = surface
 	water.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
