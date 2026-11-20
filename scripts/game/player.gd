@@ -6,6 +6,10 @@ var tactical := false
 var camera: Camera3D
 var visual: TravelerVisual
 var recovery_point: Vector3
+## Seconds of committed swing: steering is reduced and the facing is held.
+var attack_hold := 0.0
+## Short forward burst from a swing, decaying each physics step.
+var lunge := Vector3.ZERO
 
 func _ready() -> void:
 	collision_layer = 2
@@ -34,11 +38,17 @@ func _physics_process(delta: float) -> void:
 	var speed := 6.1 if Input.is_action_pressed("sprint") else 3.65
 	if Input.is_action_pressed("walk"):
 		speed = 2.05
+	if attack_hold > 0.0:
+		attack_hold = maxf(0.0, attack_hold - delta)
+		speed *= 0.28
 	velocity.x = move_toward(velocity.x, direction.x * speed, delta * 31.0)
 	velocity.z = move_toward(velocity.z, direction.z * speed, delta * 31.0)
 	velocity.y = maxf(-24.0, velocity.y - delta * 21.0)
+	velocity += lunge
 	move_and_slide()
-	if direction.length_squared() > 0.01:
+	velocity -= lunge
+	lunge = lunge.move_toward(Vector3.ZERO, delta * 22.0)
+	if direction.length_squared() > 0.01 and attack_hold <= 0.0:
 		var heading := atan2(-direction.x, -direction.z)
 		visual.rotation.y = lerp_angle(visual.rotation.y, heading, 1.0 - exp(-13.0 * delta))
 	if visual != null:

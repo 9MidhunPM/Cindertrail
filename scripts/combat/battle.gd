@@ -3,6 +3,8 @@ extends Node3D
 
 signal message(text: String)
 signal sound(cue: String)
+## Damage dealt to a creature. source is "melee", "spark" or "tower".
+signal damaged(point: Vector3, amount: float, source: StringName, fatal: bool)
 
 const MODULES: Array[CinderModuleStats] = [
 	preload("res://data/defenses/bolt.tres"), preload("res://data/defenses/field.tres"),
@@ -195,7 +197,7 @@ func attack(origin: Vector3, dir: Vector3) -> bool:
 			end = enemy.body_center()
 	_visual_shot(origin, end, false, Color(0.70, 0.95, 1.0))
 	if target:
-		_hit(target, SPARK_DAMAGE)
+		_hit(target, SPARK_DAMAGE, &"spark")
 	weapon_timer = SPARK_COOLDOWN
 	sound.emit("attack")
 	return true
@@ -361,8 +363,32 @@ func _splash(point: Vector3, radius: float, power: float) -> void:
 		if CinderEnemy.flat_distance(enemy.global_position, point) <= radius:
 			_hit(enemy, power)
 
-func _hit(enemy: CinderEnemy, amount: float) -> void:
+## Resolve a blade swing. Each creature is struck at most once per call.
+func melee(origin: Vector3, forward: Vector3, reach: float, half_arc: float, damage: float, knockback: float) -> int:
+	if halted:
+		return 0
+	var aim := forward.slide(Vector3.UP).normalized()
+	var struck := 0
+	for i in range(enemies.size() - 1, -1, -1):
+		var enemy := enemies[i]
+		if enemy.fading:
+			continue
+		var offset := (enemy.global_position - origin).slide(Vector3.UP)
+		var size := 0.45 if enemy.stats.height >= 1.0 else 0.25
+		if offset.length() > reach + size or absf(enemy.global_position.y - origin.y) > 1.8:
+			continue
+		if half_arc < PI and offset.length() > 0.5 and aim.angle_to(offset.normalized()) > half_arc:
+			continue
+		var away := offset.normalized() if offset.length() > 0.05 else aim
+		enemy.shove(away * knockback, 0.32)
+		enemy.flash()
+		_hit(enemy, damage, &"melee")
+		struck += 1
+	return struck
+
+func _hit(enemy: CinderEnemy, amount: float, source := &"tower") -> void:
 	enemy.wound(amount)
+	damaged.emit(enemy.body_center(), amount, source, enemy.health <= 0)
 	if enemy.health <= 0:
 		enemies.erase(enemy)
 		scrap += enemy.stats.bounty

@@ -26,6 +26,11 @@ var rest_heights := PackedFloat32Array()
 var fissure: StandardMaterial3D
 var _disruption := 0.0
 var _fallback := Vector3.INF
+## Melee knockback velocity, decaying back to zero.
+var knock := Vector3.ZERO
+var _flash := 0.0
+var _flash_meshes: Array[MeshInstance3D] = []
+static var _flash_material: ShaderMaterial
 
 func configure(spec: CinderEnemyStats, path: PackedVector3Array, camp: CinderSite) -> void:
 	stats = spec
@@ -132,6 +137,37 @@ func wound(amount: float) -> void:
 	health -= amount
 	last_hit = 0.15
 
+## Knock the creature away from a blade strike and stagger it briefly.
+func shove(push: Vector3, stun: float) -> void:
+	var heavy := stats.height >= 1.0
+	knock = push.slide(Vector3.UP) * (0.35 if heavy else 1.0)
+	disrupt(stun * (0.5 if heavy else 1.0))
+	if not heavy and push.length() > 6.0:
+		velocity.y = 3.2
+
+## White hit flash drawn as a temporary overlay pass.
+func flash() -> void:
+	if _flash_material == null:
+		_flash_material = ShaderMaterial.new()
+		_flash_material.shader = preload("res://scripts/combat/hit_flash.gdshader")
+	if _flash_meshes.is_empty():
+		for piece in model.find_children("*", "MeshInstance3D", true, false):
+			_flash_meshes.append(piece)
+	_flash = 1.0
+	for piece in _flash_meshes:
+		piece.material_overlay = _flash_material
+		piece.set_instance_shader_parameter(&"flash", 1.0)
+
+func _fade_flash(delta: float) -> void:
+	if _flash <= 0.0:
+		return
+	_flash = maxf(0.0, _flash - delta / 0.14)
+	for piece in _flash_meshes:
+		if _flash <= 0.0:
+			piece.material_overlay = null
+		else:
+			piece.set_instance_shader_parameter(&"flash", _flash)
+
 func disrupt(duration: float, push_back := false) -> void:
 	_disruption = maxf(_disruption, duration)
 	attack_timer = maxf(attack_timer, duration + 0.25)
@@ -170,6 +206,10 @@ func advance(core: SunCore, delta: float, field_factor: float) -> bool:
 		movement = (direction.normalized() + separation.limit_length(0.55)).normalized() * speed
 		if movement.length_squared() > 0.001:
 			rotation.y = lerp_angle(rotation.y, atan2(movement.x, movement.z), 1.0-exp(-10*delta))
+	if knock.length_squared() > 0.0004:
+		movement += knock
+		knock = knock.move_toward(Vector3.ZERO, delta * 16.0)
+	_fade_flash(delta)
 	velocity.x = movement.x
 	velocity.z = movement.z
 	velocity.y = maxf(velocity.y - 18.0 * delta, -14.0)

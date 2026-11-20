@@ -21,6 +21,9 @@ func _ready() -> void:
 		"wave": _stream(0.58, [98.0, 147.0], 0.06, 101),
 		"collect": _stream(0.28, [440.0, 659.3, 880.0], 0.01, 121),
 		"win": _stream(1.9, [196.0, 246.9, 293.7, 392.0], 0.012, 12),
+		"slash": _sweep(0.17, 1900.0, 520.0, 0.55, 211),
+		"slam": _sweep(0.42, 420.0, 70.0, 0.75, 223),
+		"impact": _stream(0.11, [118.0, 176.0], 0.62, 227),
 	}
 	_ambient = AudioStreamPlayer.new()
 	_ambient.stream = _ambience()
@@ -64,6 +67,29 @@ func _stream(duration: float, tones: Array[float], grit: float, seed_value: int)
 			signal_value += sin(TAU * tones[j] * time) * 0.32 * fade / (1 + j)
 		var envelope := smoothstep(0.0, 0.014, time) * (1.0 - smoothstep(0.01, duration, time))
 		samples.encode_s16(i * 2, roundi(signal_value * envelope * 20030.0))
+	output.data = samples
+	return output
+
+## Filtered noise whose pitch falls from start to end: a blade whoosh or a slam.
+func _sweep(duration: float, start: float, end: float, grit: float, seed_value: int) -> AudioStreamWAV:
+	var output := AudioStreamWAV.new()
+	output.format = AudioStreamWAV.FORMAT_16_BITS
+	output.mix_rate = 22050
+	var samples := PackedByteArray()
+	samples.resize(int(duration * output.mix_rate) * 2)
+	var random := RandomNumberGenerator.new()
+	random.seed = seed_value
+	var low := 0.0
+	var phase := 0.0
+	for i in samples.size() / 2:
+		var t := float(i) / output.mix_rate / duration
+		var cutoff := lerpf(start, end, t)
+		var alpha := clampf(TAU * cutoff / output.mix_rate, 0.0, 1.0)
+		low += (random.randf_range(-1.0, 1.0) - low) * alpha
+		phase += TAU * cutoff * 0.25 / output.mix_rate
+		var value := low * grit * 3.0 + sin(phase) * 0.18 * (1.0 - t)
+		var envelope := smoothstep(0.0, 0.08, t) * pow(1.0 - t, 1.6)
+		samples.encode_s16(i * 2, roundi(clampf(value * envelope, -1.0, 1.0) * 22000.0))
 	output.data = samples
 	return output
 

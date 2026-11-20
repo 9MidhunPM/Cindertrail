@@ -11,6 +11,9 @@ var tactical_look := Vector3.ZERO
 var ending := false
 var mouse_sensitivity := 1.0
 var reduced_motion := false
+## Screen shake from 0 to 1. Offset grows with its square and decays steadily.
+var trauma := 0.0
+var _shake_time := 0.0
 var _blend := 0.0
 var _view := Transform3D.IDENTITY
 
@@ -44,6 +47,19 @@ func show_ending(view_position: Vector3, view_target: Vector3) -> void:
 func settled() -> bool:
 	return _blend >= 0.995 if tactical else _blend <= 0.005
 
+func add_trauma(amount: float) -> void:
+	trauma = clampf(trauma + amount * (0.35 if reduced_motion else 1.0), 0.0, 1.0)
+
+func _shake(delta: float) -> void:
+	if trauma <= 0.0:
+		return
+	_shake_time += delta
+	trauma = maxf(0.0, trauma - delta * 1.8)
+	var power := trauma * trauma
+	var jolt := Vector3(sin(_shake_time * 47.0), sin(_shake_time * 53.0 + 1.3), 0.0) * power
+	camera.global_transform = camera.global_transform.translated_local(jolt * Vector3(0.22, 0.16, 0.0))
+	camera.rotate_object_local(Vector3.FORWARD, sin(_shake_time * 41.0 + 0.7) * power * 0.03)
+
 func _physics_process(delta: float) -> void:
 	if player == null:
 		return
@@ -55,6 +71,7 @@ func _physics_process(delta: float) -> void:
 			Transform3D(Basis.IDENTITY, tactical_position).looking_at(tactical_look), weight)
 	_view = _view.interpolate_with(target, 1.0 - exp(-14.0 * delta))
 	camera.global_transform = _view
+	_shake(delta)
 	camera.fov = 56.0 if reduced_motion else lerpf(56.0, 46.0, weight)
 
 func _explore_pose(check_collision: bool) -> Transform3D:

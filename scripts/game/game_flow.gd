@@ -27,6 +27,7 @@ var core: SunCore
 var atmosphere: CinderAtmosphere
 var soundscape: CinderSoundscape
 var battle: CinderBattle
+var melee: CinderMelee
 var hud: CinderHUD
 var grove: CinderSite
 var grove_terrain: CinderGrove
@@ -89,6 +90,10 @@ func _ready() -> void:
 	battle.bind_carried_core(core)
 	battle.message.connect(_notify)
 	battle.sound.connect(_battle_sound)
+	melee = CinderMelee.new()
+	_add_runtime(melee)
+	melee.bind(player, battle, director)
+	melee.swung.connect(_melee_sound)
 	hud = INTERFACE.instantiate() as CinderHUD
 	add_child(hud)
 	hud.action_requested.connect(_hud_action)
@@ -322,6 +327,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			_selected = 2 if _selected != 2 else -1
 		if event.is_action_pressed("upgrade") and battle != null:
 			battle.upgrade(_hovered)
+	if event.is_action_pressed("melee"):
+		swing(get_viewport().get_mouse_position())
 	if event is InputEventMouseButton and event.pressed:
 		_handle_click(event)
 
@@ -334,7 +341,9 @@ func _handle_click(event: InputEventMouseButton) -> void:
 		if battle.place(_hovered, _selected):
 			_selected = -1
 		return
-	if (tactical and event.button_index == MOUSE_BUTTON_RIGHT) or (not tactical and event.button_index == MOUSE_BUTTON_LEFT):
+	if event.button_index == MOUSE_BUTTON_LEFT:
+		swing(event.position)
+	elif event.button_index == MOUSE_BUTTON_RIGHT:
 		var origin := player.global_position + Vector3.UP * 1.13
 		var direction := -camera.global_basis.z
 		if tactical:
@@ -345,6 +354,22 @@ func _handle_click(event: InputEventMouseButton) -> void:
 			direction.y = clampf(direction.y, -0.12, 0.18)
 		if battle.attack(origin, direction.normalized()):
 			player.visual.gesture(&"fire")
+
+## Swing the sunsteel blade toward the camera's facing, or toward the pointer in defense.
+func swing(pointer: Vector2) -> bool:
+	if melee == null or not player.move_enabled:
+		return false
+	var direction := -camera.global_basis.z
+	if mode == Mode.PREPARE or mode == Mode.DEFEND:
+		var pointed := _pointer_ground(pointer)
+		if pointed != Vector3.INF:
+			direction = pointed - player.global_position
+	return melee.request(direction)
+
+func _melee_sound(index: int, hits: int) -> void:
+	soundscape.cue("slam" if index == 2 else "slash")
+	if hits > 0:
+		soundscape.cue("impact")
 
 func _pointer_ground(pointer: Vector2) -> Vector3:
 	var start := camera.project_ray_origin(pointer)

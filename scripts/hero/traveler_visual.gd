@@ -2,13 +2,17 @@ class_name TravelerVisual
 extends Node3D
 
 signal footfall(running: bool)
+## Emitted at the contact frame of a melee swing.
+signal strike(index: int)
 
 const THIGH_LENGTH := 0.395
 const SHIN_LENGTH := 0.355
 const GESTURE_LENGTH := {
 	&"deploy": 1.05, &"pack": 1.05, &"fire": 0.30,
-	&"hurt": 0.47, &"collect": 0.64, &"deliver": 1.65,
+	&"hurt": 0.47, &"collect": 0.64, &"deliver": 1.65, &"sheathe": 0.55,
 }
+const ATTACKS := preload("res://scripts/hero/traveler_attacks.gd")
+const SHEATHE_DELAY := 3.2
 
 @onready var carry_anchor: Node3D = $CarryAnchor
 @onready var _pelvis := _joint("Pelvis")
@@ -37,6 +41,21 @@ var _reach := Vector2.ZERO
 var _crouch := 0.0
 var _recoil := 0.0
 var _flinch := 0.0
+var _hands: Array[Node3D]
+var _mantles: Array[Node3D]
+var _skirts: Array[Node3D]
+var _weapon: Node3D
+var _sheath: Node3D
+var _grip: Transform3D
+var _ember: StandardMaterial3D
+var drawn := false
+var _attack := -1
+var _attack_age := 0.0
+var _struck := false
+var _attack_weight := 0.0
+var _guard_weight := 0.0
+var _idle_armed := 0.0
+var _hop := 0.0
 
 func _ready() -> void:
 	for side in ["L", "R"]:
@@ -46,6 +65,14 @@ func _ready() -> void:
 		_arms.append(_joint("Arm" + side))
 		_elbows.append(_joint("Elbow" + side))
 		_tails.append(_joint("Tail" + side))
+		_hands.append(_joint("Hand" + side))
+		_mantles.append(_joint("Mantle" + side))
+		_skirts.append(_joint("Skirt" + side))
+	_weapon = _joint("Weapon")
+	_sheath = _joint("Sheath")
+	_grip = _weapon.transform
+	_ember = _own_ember()
+	_set_drawn(false)
 	_rest_y = _pelvis.position.y
 	carry_anchor.reparent(_body, true)
 	_last_heading = rotation.y
@@ -53,6 +80,47 @@ func _ready() -> void:
 
 func _joint(joint_name: String) -> Node3D:
 	return $Traveler.find_child(joint_name, true, false) as Node3D
+
+func _own_ember() -> StandardMaterial3D:
+	var blade := _weapon.find_child("*Geometry", true, false) as MeshInstance3D
+	if blade == null:
+		return null
+	for surface in blade.mesh.get_surface_count():
+		var source := blade.mesh.surface_get_material(surface) as StandardMaterial3D
+		if source != null and source.emission_enabled:
+			var unique := source.duplicate() as StandardMaterial3D
+			blade.set_surface_override_material(surface, unique)
+			return unique
+	return null
+
+func _set_drawn(value: bool) -> void:
+	drawn = value
+	var holder := _hands[1] if value else _sheath
+	if _weapon.get_parent() != holder:
+		_weapon.reparent(holder, false)
+	_weapon.transform = _grip if value else Transform3D.IDENTITY
+
+## Begin a melee swing. Returns false while another swing is still committed.
+func attack(index: int) -> bool:
+	if _attack >= 0 and _attack_age < ATTACKS.cancel_at(_attack):
+		return false
+	if not drawn:
+		_set_drawn(true)
+	_attack = index
+	_attack_age = 0.0
+	_struck = false
+	_idle_armed = 0.0
+	if _action == &"sheathe":
+		_age = _duration
+	return true
+
+func attacking() -> bool:
+	return _attack >= 0
+
+## World-space base and tip of the blade, used by the swing trail.
+func blade_segment() -> PackedVector3Array:
+	var basis := _weapon.global_basis
+	return PackedVector3Array([_weapon.global_position - basis.z * 0.09, _weapon.global_position - basis.z * 0.57])
 
 func gesture(action: StringName) -> void:
 	if GESTURE_LENGTH.has(action):
@@ -90,6 +158,10 @@ func _update_gesture(delta: float) -> void:
 		&"deliver":
 			reach = Vector2(1.22, 1.31)
 			dip = 0.065
+		&"sheathe":
+			reach = Vector2(0.0, -0.55)
+			if _age >= _duration * 0.45 and drawn:
+				_set_drawn(false)
 	var blend := 1.0 - exp(-22.0 * delta)
 	_reach = _reach.lerp(reach * weight, blend)
 	_crouch = lerpf(_crouch, dip * weight, blend)
@@ -151,6 +223,75 @@ func animate(delta: float, speed: float, tactical: bool) -> void:
 	var coat_target := Vector3(-0.032 - _stride * (0.08 + run * 0.13),
 		swing * 0.085 - _turn * 0.13, -sin(angle - 0.3) * _stride * 0.054 - _turn * 0.12)
 	_coat.rotation = _coat.rotation.lerp(coat_target, 1.0 - exp(-9.0 * delta))
+	_secondary(delta)
+	_combat(delta, run)
+
+## Capelet flaps lift with the arms and the split coat panels follow the thighs.
+func _secondary(delta: float) -> void:
+	var follow := 1.0 - exp(-14.0 * delta)
+	for i in range(2):
+		var side := -1.0 if i == 0 else 1.0
+		var lift := Vector3(clampf(_arms[i].rotation.x * 0.34, -0.25, 0.95), 0.0,
+			clampf(_arms[i].rotation.z * 0.45, -0.2, 0.7) if side > 0.0 else clampf(_arms[i].rotation.z * 0.45, -0.7, 0.2))
+		_mantles[i].rotation = _mantles[i].rotation.lerp(lift, follow)
+		var thigh := _thighs[i].rotation.x
+		var panel := Vector3(clampf(thigh * 0.62 - _body.rotation.x * 0.25, -0.12, 0.95), 0.0, side * 0.02)
+		_skirts[i].rotation = _skirts[i].rotation.lerp(panel, follow)
+
+func _combat(delta: float, run: float) -> void:
+	var pose: Dictionary = {}
+	if _attack >= 0:
+		_attack_age += delta
+		var length: float = ATTACKS.length(_attack)
+		if not _struck and _attack_age >= ATTACKS.impact(_attack):
+			_struck = true
+			strike.emit(_attack)
+		if _attack_age >= length:
+			_attack = -1
+		else:
+			pose = ATTACKS.sample(_attack, _attack_age)
+	var target_weight := 0.0 if pose.is_empty() else 1.0
+	_attack_weight = move_toward(_attack_weight, target_weight, delta * (14.0 if target_weight > 0.0 else 6.0))
+	_guard_weight = lerpf(_guard_weight, float(drawn and _attack < 0) * (1.0 - run * 0.7), 1.0 - exp(-8.0 * delta))
+	if drawn and _attack < 0:
+		_idle_armed += delta
+		if _idle_armed > SHEATHE_DELAY and _action != &"sheathe":
+			gesture(&"sheathe")
+	if _ember:
+		var heat := 1.4 + 5.0 * _attack_weight + (0.0 if pose.is_empty() else float(pose.get("heat", 0.0)) * 6.0)
+		_ember.emission_energy_multiplier = lerpf(_ember.emission_energy_multiplier, heat, 1.0 - exp(-20.0 * delta))
+	if pose.is_empty():
+		pose = ATTACKS.guard(run)
+	var w := maxf(_attack_weight, _guard_weight)
+	if w <= 0.001:
+		_hands[1].rotation = _hands[1].rotation.lerp(Vector3.ZERO, 1.0 - exp(-10.0 * delta))
+		_hop = lerpf(_hop, 0.0, 1.0 - exp(-12.0 * delta))
+		return
+	var aw := _attack_weight
+	_pelvis.position.y += -float(pose.get("crouch", 0.0)) * aw
+	_hop = lerpf(_hop, float(pose.get("hop", 0.0)) * aw, 1.0 - exp(-30.0 * delta))
+	_pelvis.position.y += _hop
+	_pelvis.rotation.y = lerpf(_pelvis.rotation.y, float(pose.get("hips", 0.0)) * aw, 1.0 - exp(-24.0 * delta))
+	_body.rotation += (pose.get("body", Vector3.ZERO) as Vector3) * aw
+	_head.rotation += (pose.get("head", Vector3.ZERO) as Vector3) * aw
+	_arms[1].rotation = _arms[1].rotation.lerp(pose.get("arm_r", _arms[1].rotation), w)
+	_elbows[1].rotation.x = lerpf(_elbows[1].rotation.x, float(pose.get("elbow_r", _elbows[1].rotation.x)), w)
+	if pose.has("arm_l"):
+		var lw := aw if _attack >= 0 else w * 0.6
+		_arms[0].rotation = _arms[0].rotation.lerp(pose.arm_l, lw)
+		_elbows[0].rotation.x = lerpf(_elbows[0].rotation.x, float(pose.get("elbow_l", 0.4)), lw)
+	_aim_blade(pose.get("blade", Vector3.FORWARD), w)
+
+## Rotate the sword hand so the blade points along a direction in the traveler's frame.
+func _aim_blade(direction: Vector3, weight: float) -> void:
+	var hand := _hands[1]
+	var parent_basis := (hand.get_parent() as Node3D).global_basis.orthonormalized()
+	var world_dir := (global_basis * direction).normalized()
+	var flat_side := global_basis.x if absf(world_dir.dot(global_basis.y)) > 0.9 else global_basis.y
+	var desired := Basis.looking_at(world_dir, flat_side)
+	var local := (parent_basis.inverse() * desired).get_rotation_quaternion()
+	var current := Quaternion.from_euler(hand.rotation)
+	hand.quaternion = current.slerp(local, clampf(weight, 0.0, 1.0))
 
 func _turn_head(swing: float) -> float:
 	var glance := sin(_time * 0.66) * (1.0 - _stride) * 0.056
