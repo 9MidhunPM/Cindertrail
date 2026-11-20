@@ -153,6 +153,9 @@ func cancel_attack() -> void:
 	_attack_weight = 0.0
 	_hop = 0.0
 
+func active_attack_index() -> int:
+	return _attack
+
 func attack_age() -> float:
 	return _attack_age
 
@@ -333,7 +336,10 @@ func animate(delta: float, speed: float, tactical: bool) -> void:
 	_pelvis.position.y += _hop
 	_combat(delta, run, pose)
 	_grip_shrine()
-	if _attack == 2:
+	if _attack == ATTACKS.DESCENT:
+		var support := smoothstep(0.03, 0.11, _attack_age) * (1.0 - smoothstep(0.23, 0.46, _attack_age))
+		_reach_hand(0, _weapon.global_position + _weapon.global_basis.z * .052, support)
+	elif _attack == 2:
 		var support := smoothstep(0.03, 0.13, _attack_age) * (1.0 - smoothstep(0.48, 0.70, _attack_age))
 		_reach_hand(0, _weapon.global_position + _weapon.global_basis.z * 0.052, support)
 	_secondary(delta)
@@ -394,6 +400,9 @@ func _advance_attack(delta: float) -> Dictionary:
 	var pose: Dictionary = {}
 	if _attack >= 0:
 		_attack_age += delta
+		# The overhead pose hangs in the air until real capsule contact.
+		if _attack == ATTACKS.DESCENT and not _on_ground and not _struck:
+			_attack_age = minf(_attack_age, .13)
 		var length: float = ATTACKS.length(_attack)
 		if _attack_age >= length:
 			_attack = -1
@@ -483,6 +492,9 @@ func _place_foot(i: int, phase: float, run: float, stance: float, cycle_length: 
 		var lead := side if _attack == 1 else -side
 		forward += lead * 0.15 * beat
 		lift += maxf(lead, 0.0) * sin(PI * minf(1.0, _attack_age / ATTACKS.impact(_attack))) * 0.065
+	elif _attack == ATTACKS.DASH_CUT:
+		var brace := sin(PI * minf(1.0, _attack_age / .40))
+		forward += side * .20 * brace
 	elif _attack == ATTACKS.SPIN:
 		var pivot := sin(PI * ATTACKS.spin_progress(_attack_age))
 		forward -= side * 0.16 * pivot

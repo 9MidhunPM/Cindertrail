@@ -6,9 +6,13 @@ extends RefCounted
 ##   1 Rising arc  - a backhand climbing from low left to high right.
 ##   2 Dawnbreaker - a short leap and two-handed slam that bursts outward.
 ##   3 Sunwheel    - a charged, single revolution with an extended blade.
+##   4 Sunwake Cut - an outward sweep when a grounded dash comes to a stop.
+##   5 Falling Star - gather in the air, strike when the traveler meets the ground.
 
 const COUNT := 3
 const SPIN := 3
+const DASH_CUT := 4
+const DESCENT := 5
 const SPIN_START_YAW := -PI / 2.0
 const SPIN_TURN_SIGN := 1.0
 const SPIN_START := 0.12
@@ -68,6 +72,30 @@ const SWINGS := [
 			"elbow_r": 0.95, "blade": Vector3(0.3, -0.35, -0.88), "arm_l": Vector3(0.25, 0.0, -0.18),
 			"elbow_l": 0.55}],
 	]},
+	{"length": 0.51, "impact": 0.13, "cancel": 0.34, "keys": [
+		[0.00, {"body": Vector3(-.36,-.48,.19), "hips": -.27, "crouch": .09, "arm_r": Vector3(.52,-.18,1.03),
+			"elbow_r": 1.12, "blade": Vector3(.79,.04,.61), "arm_l": Vector3(.70,.05,-.29), "elbow_l": .92}],
+		[0.08, {"body": Vector3(-.29,-.42,.16), "hips": -.18, "crouch": .08, "arm_r": Vector3(.58,-.13,1.35),
+			"elbow_r": .59, "blade": Vector3(.97,-.16,-.15), "arm_l": Vector3(.20,.06,-.66), "elbow_l": .58, "heat": .64}],
+		[0.13, {"body": Vector3(-.13,.26,.04), "hips": .17, "crouch": .055, "arm_r": Vector3(1.52,.02,.65),
+			"elbow_r": .12, "blade": Vector3(.05,-.02,-.99), "arm_l": Vector3(-.17,.14,-.84), "elbow_l": .65, "heat": 1.0}],
+		[0.23, {"body": Vector3(-.07,.86,-.09), "hips": .39, "crouch": .025, "arm_r": Vector3(1.55,.20,-.61),
+			"elbow_r": .32, "blade": Vector3(-.94,.24,-.20), "arm_l": Vector3(-.38,.09,-.61), "elbow_l": .75, "heat": .57}],
+		[0.51, {"body": Vector3(-.04,.12,0), "hips": .04, "crouch": .01, "arm_r": Vector3(.58,0,.30),
+			"elbow_r": .88, "blade": Vector3(.3,-.36,-.88), "arm_l": Vector3(.20,.04,-.25), "elbow_l": .55}],
+	]},
+	{"length": 0.66, "impact": 0.17, "cancel": 0.45, "keys": [
+		[0.00, {"body": Vector3(.13,-.36,-.08), "hips": -.13, "crouch": .03, "arm_r": Vector3(2.57,-.08,.49),
+			"elbow_r": 1.02, "blade": Vector3(.45,.76,.46), "arm_l": Vector3(1.42,.12,-.36), "elbow_l": 1.05}],
+		[0.13, {"body": Vector3(.03,-.24,-.11), "hips": -.13, "crouch": .035, "arm_r": Vector3(2.63,-.06,.35),
+			"elbow_r": .56, "blade": Vector3(.42,.87,-.22), "arm_l": Vector3(2.30,.06,-.17), "elbow_l": .82, "heat": .76}],
+		[0.17, {"body": Vector3(-.43,.30,.08), "hips": .19, "crouch": .18, "arm_r": Vector3(1.32,.08,.10),
+			"elbow_r": .14, "blade": Vector3(-.23,-.76,-.61), "arm_l": Vector3(1.20,.06,-.12), "elbow_l": .19, "heat": 1.0}],
+		[0.27, {"body": Vector3(-.32,.43,.12), "hips": .22, "crouch": .15, "arm_r": Vector3(.80,.08,-.17),
+			"elbow_r": .31, "blade": Vector3(-.57,-.76,-.30), "arm_l": Vector3(.77,.05,-.19), "elbow_l": .30, "heat": .47}],
+		[0.66, {"body": Vector3(-.03,.08,0), "hips": .025, "crouch": .01, "arm_r": Vector3(.55,0,.30),
+			"elbow_r": .89, "blade": Vector3(.3,-.35,-.88), "arm_l": Vector3(.26,0,-.22), "elbow_l": .54}],
+	]},
 ]
 ## Damage, reach (m), half-arc (radians, PI = all around) and knockback per swing.
 const HITS := [
@@ -75,8 +103,11 @@ const HITS := [
 	{"damage": 11.0, "reach": 2.35, "arc": 1.25, "knock": 5.0, "lunge": 2.2},
 	{"damage": 20.0, "reach": 2.9, "arc": PI, "knock": 8.5, "lunge": 3.4},
 	{"damage": 18.0, "reach": 2.9, "arc": PI, "knock": 5.8, "lunge": 0.0},
+	{"damage": 15.0, "reach": 2.70, "arc": 1.38, "knock": 5.8, "lunge": 0.0},
+	{"damage": 21.0, "reach": 2.48, "arc": 1.7, "knock": 7.4, "lunge": 0.0},
 ]
-const TRAIL_WINDOWS := [Vector2(0.07, 0.24), Vector2(0.08, 0.28), Vector2(0.30, 0.44), Vector2(SPIN_START, SPIN_END)]
+const TRAIL_WINDOWS := [Vector2(0.07, 0.24), Vector2(0.08, 0.28), Vector2(0.30, 0.44),
+	Vector2(SPIN_START, SPIN_END), Vector2(.065, .255), Vector2(.115, .28)]
 
 static func spin_progress(age: float) -> float:
 	return smoothstep(SPIN_START, SPIN_END, age)

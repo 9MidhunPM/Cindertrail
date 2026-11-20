@@ -51,6 +51,7 @@ func _run() -> void:
 	await _nearest_and_buffer()
 	await _combo_defeat()
 	await _obstructions()
+	await _contextual_cuts()
 	await _charge()
 	await _tactical_inputs()
 	await _frames(260)
@@ -141,6 +142,47 @@ func _obstructions() -> void:
 	_check(struck == 0 and high.health == health and covered.health == health and outside.health == health,
 		"Even a radial strike respects range, height and solid cover")
 	wall.queue_free()
+	await _reset_encounter()
+
+func _contextual_cuts() -> void:
+	var start := traveler.global_position
+	var foe := _enemy(Vector3.FORWARD * 3.35)
+	var before := foe.health
+	_check(traveler.begin_swept_dash(Vector3.FORWARD, 2.34, .18, &"dash"), "A grounded dash starts before the follow-up")
+	await _frames(2)
+	_key(KEY_F, true)
+	_key(KEY_F, false)
+	await _frames(4)
+	_check(swings.is_empty() and foe.health == before, "A buffered dash cut preserves the sweep until its exit")
+	await _frames(41)
+	_check(swings == [CinderMelee.ATTACKS.DASH_CUT] and foe.health == before - 15.0 and hit_counts == [1],
+		"F during Shift produces one Sunwake Cut at the real blade contact")
+	await _reset_encounter()
+	traveler.global_position = start
+	traveler.velocity = Vector3.ZERO
+	await _frames(5)
+	foe = _enemy(Vector3.FORWARD * 1.35)
+	before = foe.health
+	Input.action_press("jump")
+	await _frames(2)
+	Input.action_release("jump")
+	for frame in 44:
+		await physics_frame
+		if not traveler.is_on_floor() and traveler.velocity.y < -.22:
+			break
+	_click(MOUSE_BUTTON_LEFT, true, Vector2(360,240))
+	_click(MOUSE_BUTTON_LEFT, false, Vector2(360,240))
+	var airborne_damage := false
+	for frame in 45:
+		await physics_frame
+		if not traveler.is_on_floor() and foe.health < before:
+			airborne_damage = true
+	_check(not airborne_damage and swings == [CinderMelee.ATTACKS.DESCENT] and foe.health == before - 21.0,
+		"Left-click while descending holds Falling Star in the air and damages once on landing")
+	await _reset_encounter()
+	game.melee.request(Vector3.FORWARD)
+	await _frames(40)
+	_check(swings == [0], "A grounded cut after either variation restarts the normal combo")
 	await _reset_encounter()
 
 func _charge() -> void:
