@@ -21,6 +21,21 @@ The native Grove comparison showed that pale paving hid parts of the energy draw
 | Journey persistence | The title's Continue action restored the frontier layout, discovery claims, camp reserve, and threat from an isolated save. |
 | Final defense | A full-restoration checkpoint from the previous version opened summit preparation. Retreat, defeat, retry, a zero-scrap spark victory, and final delivery passed. A native run fought the guardian and its escorts and reached sunrise. |
 
+## Drowned Bell Road
+
+![Native gameplay shows the drowned arch on approach, the rising bell in defense, the open causeway and the traveler walking its roof](images/drowned-bell-road.webp)
+
+Approach Flooded Grove and listen for the muffled bell. Fish scatter near the sunken arcade. After the shrine has drawn 12.5 of the Grove's 25 restoration points, amber light travels to the ruin and the roof rises to join two existing causeways. Pack the shrine and take either crossing. The new route is wide enough for a pursuing crawler to follow.
+
+Comparing the first capture with the Grove stills led to a higher resting crown, a clearer amber pulse across the cream paving, and flush stone landings on the two causeways. The final 1080p capture used the native Mobile Vulkan renderer on Intel Arc. A 24-frame sample of the raised crossing with one pursuer averaged 11.77 ms and reached 17.43 ms at the 95th percentile.
+
+The Grove's saved reserve determines whether the road is open. The smoke test covers partial extraction over two live defenses, retreat with the original sun, dry detours, pursuit, and reopening legacy and seeded checkpoints through Continue. It also verifies that reduced motion opens the road with a short transition.
+
+```bash
+XDG_DATA_HOME="$(mktemp -d)" CINDERTRAIL_TEST_SAVE=1 godot --headless --fixed-fps 60 --script tests/bell_road_smoke.gd
+godot --fixed-fps 30 --script tools/qa/bell_road_capture.gd -- --out="$PWD/evidence/bell-road" --record-transition
+```
+
 ## Native performance
 
 Godot 4.7.2 on Linux, Mobile Vulkan, Intel Core Ultra 7 255H with integrated Intel Arc graphics, 1,920 × 1,080. Times are wall time between rendered frames with vsync enabled.
