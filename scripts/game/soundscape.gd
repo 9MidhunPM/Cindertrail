@@ -41,6 +41,8 @@ func _ready() -> void:
 		"impact": _stream(0.11, [118.0, 176.0], 0.62, 227),
 	}
 	_effects.merge(CREATURE_CALLS)
+	_effects["belfry_submerged"] = _bell_tone(true)
+	_effects["belfry_lifted"] = _bell_tone(false)
 	var hum := preload("res://art/audio/valley/extraction.wav").duplicate() as AudioStreamWAV
 	hum.loop_mode = AudioStreamWAV.LOOP_FORWARD
 	hum.loop_end = roundi(hum.get_length() * hum.mix_rate)
@@ -59,6 +61,57 @@ func _exit_tree() -> void:
 	if _ambient != null:
 		_ambient.stop()
 		_ambient.stream = null
+
+func toll_bell(world_position: Vector3, submerged: bool) -> void:
+	if _effects.is_empty():
+		return
+	var voice := AudioStreamPlayer3D.new()
+	voice.name = "BelfryToll"
+	voice.stream = _effects["belfry_submerged" if submerged else "belfry_lifted"]
+	voice.volume_db = -10.0 if submerged else -7.0
+	voice.unit_size = 12.0
+	voice.max_distance = 50.0 if submerged else 65.0
+	add_child(voice)
+	voice.global_position = world_position
+	voice.finished.connect(voice.queue_free)
+	voice.play()
+
+func _bell_tone(submerged: bool) -> AudioStreamWAV:
+	var stream := AudioStreamWAV.new()
+	stream.format = AudioStreamWAV.FORMAT_16_BITS
+	stream.mix_rate = 16000
+	var count := int(stream.mix_rate * (2.5 if submerged else 3.6))
+	var mix := PackedFloat32Array()
+	mix.resize(count)
+	# Hum, prime, slightly beating tierce, quint and nominal. Water damps
+	# the upper partials and softens the clapper strike on the same bell.
+	for partial: Vector3 in [Vector3(110, .27, 1.30), Vector3(221, .34, .98),
+			Vector3(264, .17, .82), Vector3(266.1, .075, .69),
+			Vector3(335, .15, .63), Vector3(446.5, .19, .44), Vector3(942, .12, .095)]:
+		var decay := partial.z
+		var gain := partial.y
+		if submerged:
+			decay *= .66
+			gain *= lerpf(1.0, .075, smoothstep(150.0, 465.0, partial.x))
+		var angle := TAU * partial.x * (.94 if submerged else 1.0) / stream.mix_rate
+		var damping := exp(-1.0 / (stream.mix_rate * decay))
+		var advance := 2.0 * damping * cos(angle)
+		var feedback := damping * damping
+		var previous := -gain * sin(angle) / damping
+		var current := 0.0
+		for i in count:
+			mix[i] += current
+			var next_value := advance * current - feedback * previous
+			previous = current
+			current = next_value
+	var samples := PackedByteArray()
+	samples.resize(count * 2)
+	var attack := stream.mix_rate * (.044 if submerged else .0045)
+	for i in count:
+		var envelope := smoothstep(0.0, attack, i) * smoothstep(0.0, 480.0, count - 1 - i)
+		samples.encode_s16(i * 2, roundi(clampf(mix[i] * envelope, -1.0, 1.0) * 28500.0))
+	stream.data = samples
+	return stream
 
 func cue(cue_name: String) -> void:
 	if _effects.is_empty():
