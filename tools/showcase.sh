@@ -49,21 +49,17 @@ export XDG_DATA_HOME="$scratch/data"
 export XDG_CONFIG_HOME="$scratch/config"
 export XDG_CACHE_HOME="$scratch/cache"
 export CINDERTRAIL_SHOWCASE_ISOLATED=1
-unset OPENAI_API_KEY CINDERTRAIL_SHOWCASE_VOICE_DIR CINDERTRAIL_SHOWCASE_ESPEAK
+export CINDERTRAIL_GUIDE_ONLINE=0
+export OPENAI_API_KEY=''
 run_args=(--path "$project" --script res://tools/qa/showcase.gd)
 if "$headless"; then
     run_args+=(--headless --fixed-fps 60)
     if (( ${#journey_args[@]} == 0 )); then
         journey_args+=(--once)
     fi
-elif "$voice"; then
-    speech=$(command -v espeak-ng || command -v espeak || true)
-    if [[ -n "$speech" ]]; then
-        export CINDERTRAIL_SHOWCASE_ESPEAK="$speech"
-        export CINDERTRAIL_SHOWCASE_VOICE_DIR="$scratch/voice"
-        mkdir -p -- "$CINDERTRAIL_SHOWCASE_VOICE_DIR"
-        "$godot_binary" --headless "${run_args[@]}" -- --prepare-voice
-    fi
+fi
+if ! "$voice"; then
+    journey_args+=(--silent-voice)
 fi
 
 "$godot_binary" "${run_args[@]}" -- "--out=$output" "${journey_args[@]}"

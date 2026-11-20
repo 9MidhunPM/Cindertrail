@@ -5,6 +5,7 @@ const CARD := preload("res://tools/qa/showcase_card.gd")
 const PROLOGUE := preload("res://scripts/ui/prologue_pages.gd")
 const FRONT := preload("res://scenes/ui/front_end.tscn")
 const ARTS := preload("res://scripts/game/art_achievements.gd").ARTS
+const VOICE_ROOT := "res://art/audio/showcase"
 const OPENING_LINE := "The morning has gone. One small sun is still warm."
 const GUARDIAN_LINE := "The crown still has a keeper. Step toward the lit shoulder and interrupt its pulse."
 const ENDING_LINE := "Set it down. Dawn knows the rest of the way."
@@ -25,6 +26,7 @@ var _cycles := 0
 var _last_core := 0
 var _next_art_frame := 0
 var _art_casts: Dictionary = {}
+var _spoken := true
 var _stopping := false
 
 func _run() -> void:
@@ -32,10 +34,6 @@ func _run() -> void:
 	if not OS.has_environment("CINDERTRAIL_SHOWCASE_ISOLATED"):
 		push_error("Start the showcase with tools/showcase.sh")
 		quit(2)
-		return
-	if OS.get_cmdline_user_args().has("--prepare-voice"):
-		_prepare_voice()
-		quit()
 		return
 	use_window = DisplayServer.get_name() != "headless"
 	for arg in OS.get_cmdline_user_args():
@@ -45,6 +43,8 @@ func _run() -> void:
 			_cycles = maxi(1, int(arg.trim_prefix("--cycles=")))
 		elif arg.begins_with("--out="):
 			output_dir = arg.trim_prefix("--out=")
+		elif arg == "--silent-voice":
+			_spoken = false
 	if output_dir.is_empty() or DirAccess.make_dir_recursive_absolute(output_dir) != OK:
 		push_error("The showcase needs a writable --out directory")
 		quit(2)
@@ -62,6 +62,10 @@ func _run() -> void:
 	set_meta(&"world_layout_version", CinderJourneyLayout.VERSION)
 	while not _stopping and (_cycles == 0 or _results.size() < _cycles):
 		await _play_journey()
+		if _stopping:
+			return
+		if failures.is_empty() and not measurements.get("finale_completed", false):
+			_check(false, "The journey stopped before the sunrise finale completed")
 		_results.append({
 			"journey": _results.size() + 1,
 			"passed": failures.is_empty(),
@@ -186,29 +190,19 @@ func _capture(_filename: String) -> void:
 func _say(headline: String, line: String, voice_name: String) -> void:
 	if not use_window:
 		return
-	_card.narrate(headline, line)
-	var voices := OS.get_environment("CINDERTRAIL_SHOWCASE_VOICE_DIR")
-	if voices.is_empty():
-		return
-	var path := voices.path_join(voice_name + ".wav")
-	if FileAccess.file_exists(path):
-		var speech := AudioStreamWAV.load_from_file(path)
+	var seconds := 5.0
+	if _spoken:
+		var path := VOICE_ROOT.path_join(voice_name + ".ogg")
+		var speech := load(path) as AudioStream if ResourceLoader.exists(path) else null
 		if speech != null:
 			_voice.stream = speech
 			_voice.play()
-
-func _prepare_voice() -> void:
-	var executable := OS.get_environment("CINDERTRAIL_SHOWCASE_ESPEAK")
-	var directory := OS.get_environment("CINDERTRAIL_SHOWCASE_VOICE_DIR")
-	if executable.is_empty() or directory.is_empty():
-		return
-	var lines := NARRATION.merged({&"arrival": OPENING_LINE, &"guardian": GUARDIAN_LINE, &"dawn": ENDING_LINE})
-	for id: StringName in lines:
-		var wav := directory.path_join(String(id) + ".wav")
-		OS.execute(executable, ["-v", "en-us", "-s", "143", "-p", "41", "-w", wav, lines[id]])
+			seconds = maxf(seconds, speech.get_length() + .25)
+	_card.narrate(headline, line, seconds)
 
 func _clear_journey() -> void:
 	_voice.stop()
+	_voice.stream = null
 	_card.clear()
 	current_scene = null
 	game.queue_free()
@@ -226,6 +220,8 @@ func _exit_showcase(code := 0) -> void:
 	if _stopping:
 		return
 	_stopping = true
+	_voice.stop()
+	_voice.stream = null
 	for action in ["move_left", "move_right", "move_forward", "move_back", "pack", "sprint", "walk"]:
 		Input.action_release(action)
 	_close.call_deferred(code)
