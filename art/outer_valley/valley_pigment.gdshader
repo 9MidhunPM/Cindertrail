@@ -43,10 +43,17 @@ void fragment() {
 	float broad = pigment(world_point.xz*.36 + world_point.y*.09);
 	float stroke = family == 2 ? mineral.g : (family == 1 ? brush.g : mineral.r);
 	if (moves_in_wind) { stroke = brush.r; }
-	vec3 paint = COLOR.rgb*(.65+.65*stroke)*(.88+.22*broad);
+	vec3 paint = COLOR.rgb*(.65+.65*stroke)*(.86+.25*broad);
 	float moss = smoothstep(.56,.82,mineral.b*.63+broad*.37) * smoothstep(.25,.88,up_normal.y);
-	paint=mix(paint,paint*vec3(.64,.92,.67),moss*(moves_in_wind ? .19 : .55));
+	paint=mix(paint,paint*vec3(.62,.98,.63),moss*(moves_in_wind ? .19 : .55));
+	float exposed = smoothstep(.56, .77, stroke);
+	float damp = smoothstep(.52,.83,mineral.b*.44+broad*.56) * smoothstep(.58,.96,up_normal.y);
+	if (family == 0 && !moves_in_wind) {
+		paint *= mix(vec3(1.), vec3(1.13,1.08,.95), exposed*.56);
+		paint *= mix(vec3(1.), vec3(.75,.84,.92), damp*.42);
+	}
 	ALBEDO = paint;
-	ROUGHNESS = .91;
-	SPECULAR = .18;
+	ROUGHNESS = (family == 0 && !moves_in_wind) ? mix(.91,.55,damp) :
+		(family == 2 ? mix(.95,.78,exposed) : .92);
+	SPECULAR = (family == 0 && !moves_in_wind) ? mix(.20,.38,damp) : .18;
 }

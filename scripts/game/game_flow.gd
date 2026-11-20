@@ -20,6 +20,7 @@ const OUTER_VALLEY := preload("res://scenes/world/outer_valley.tscn")
 const FRONTIER := preload("res://scripts/world/frontier.gd")
 const TRAIL_PACKS := preload("res://scripts/world/trail_encounters.gd")
 const BELL_ROAD := preload("res://scripts/world/drowned_bell_road.gd")
+const ROAM := preload("res://scripts/world/roaming_shrines.gd")
 const CACHE_MODEL := preload("res://art/models/supply_crate.glb")
 const PACK_SECONDS := 1.7
 const OPENING := Vector3(-3.0, 0.76, 15.0)
@@ -215,9 +216,7 @@ func _enter_journey() -> void:
 
 func _begin_journey() -> void:
 	var previous: Dictionary = get_tree().get_meta(&"last_valley", {}) if _checkpoint.is_empty() else _checkpoint
-	var next := JOURNEY_LAYOUT.generate(randi())
-	while next.matches_selection(previous):
-		next = JOURNEY_LAYOUT.generate(randi())
+	var next := JOURNEY_LAYOUT.generate(randi(), JOURNEY_LAYOUT.VERSION, previous)
 	if JourneyCheckpoint.write({}):
 		_checkpoint.clear()
 	else:
@@ -277,6 +276,7 @@ func _add_runtime(node: Node) -> void:
 
 func _build_journey(selected: JOURNEY_LAYOUT) -> void:
 	layout = selected
+	var roaming := layout.version >= 3
 	get_tree().set_meta(&"last_valley", layout.checkpoint_fields())
 	if grove_terrain != null:
 		grove_terrain.free()
@@ -284,17 +284,20 @@ func _build_journey(selected: JOURNEY_LAYOUT) -> void:
 	grove_terrain.randomized_layout = layout.version > 0
 	grove_terrain.clearing_variant = layout.clearing(&"flooded_grove")
 	_add_runtime(grove_terrain)
-	grove = grove_terrain.build_grove_site()
-	_add_runtime(grove)
-	sites.append(grove)
+	if not roaming:
+		grove = grove_terrain.build_grove_site()
+		_add_runtime(grove)
+		sites.append(grove)
 	bell_road = BELL_ROAD.new()
 	bell_road.name = "DrownedBellRoad"
 	grove_terrain.add_child(bell_road)
-	bell_road.configure(layout.journey_seed, bell_road.to_local(grove.anchor.global_position))
+	bell_road.configure(layout.journey_seed, bell_road.to_local(grove_terrain.ritual_point()))
 	bell_road.toll_requested.connect(soundscape.toll_bell)
 	bell_road.raised.connect(grove_terrain.release_herons)
 	var quarry := QUARRY_REGION.new()
 	var relay := RELAY_REGION.new()
+	quarry.build_site = not roaming
+	relay.build_site = not roaming
 	quarry.layout_id = layout.layout_id
 	quarry.randomized_layout = layout.version > 0
 	quarry.clearing_variant = layout.clearing(&"broken_quarry")
@@ -304,8 +307,9 @@ func _build_journey(selected: JOURNEY_LAYOUT) -> void:
 	districts.assign([grove_terrain, quarry, relay])
 	_add_runtime(quarry)
 	_add_runtime(relay)
-	sites.append(quarry.site)
-	sites.append(relay.site)
+	if not roaming:
+		sites.append(quarry.site)
+		sites.append(relay.site)
 	beacon = relay.beacon
 	summit = SUMMIT.new()
 	_add_runtime(summit)
@@ -327,6 +331,7 @@ func _build_journey(selected: JOURNEY_LAYOUT) -> void:
 	outer_valley.journey_layout = layout
 	outer_valley.layout_id = layout.layout_id
 	outer_valley.clearing_variants = layout.clearings
+	outer_valley.route_cache_found.connect(_add_wayside_cache)
 	_add_runtime(outer_valley)
 	sites.append_array(outer_valley.get_sites())
 	for index in outer_valley.caches.size():
@@ -337,11 +342,21 @@ func _build_journey(selected: JOURNEY_LAYOUT) -> void:
 	landmarks.configure(grove_terrain, quarry, relay, outer_valley)
 
 	frontier = FRONTIER.new()
+	frontier.build_site = not roaming
 	frontier.journey_seed = layout.journey_seed
 	frontier.randomized_layout = layout.version > 0
 	frontier.clearing_variant = layout.clearing(&"last_lantern_frontier")
 	_add_runtime(frontier)
-	sites.append(frontier.site)
+	if roaming:
+		sites.assign(ROAM.install(self, layout))
+		ROAM.apply_habitats(sites, grove_terrain, quarry, relay, frontier, outer_valley)
+		for site in sites:
+			if site.checkpoint_id == CinderCampLandmarks.GROVE:
+				grove = site
+				break
+		landmarks.set_roaming_sites(sites)
+	else:
+		sites.append(frontier.site)
 	outer_valley.seed_life(layout.journey_seed)
 	trail_packs = TRAIL_PACKS.new()
 	_add_runtime(trail_packs)
@@ -351,6 +366,10 @@ func _build_journey(selected: JOURNEY_LAYOUT) -> void:
 	_add_runtime(objective_route)
 	objective_route.bind(self)
 	hud.bind(self)
+
+func _add_wayside_cache(id: String, point: Vector3) -> void:
+	if not _claimed_caches.has(id):
+		_add_cache(point, 8, id)
 
 func _configure_recovery() -> void:
 	var anchors := PackedVector3Array([OPENING, beacon.global_position + Vector3.BACK * 1.6])
@@ -363,7 +382,8 @@ func _configure_recovery() -> void:
 		anchors.append(point)
 	for path in frontier.paths:
 		anchors.append_array(path)
-	player.footing_filter = func(at: Vector3) -> bool: return not grove.wet_depth_at(at)
+	player.footing_filter = func(at: Vector3) -> bool:
+		return not grove_terrain.wet_depth_at(at) and not grove.wet_depth_at(at)
 	player.configure_recovery(OPENING, anchors)
 
 func _add_district_caches(district: String, points: PackedVector3Array) -> void:
@@ -655,7 +675,8 @@ func _deploy(site: CinderSite) -> void:
 	director.show_site(site.view_position, site.view_target)
 	if site == grove:
 		grove_terrain.release_herons()
-	player.set_recovery_context(site.anchor.global_position)
+	var safe := site.recovery_point if layout.version >= 3 and site != summit.site else site.anchor.global_position
+	player.set_recovery_context(safe)
 	if battle != null:
 		battle.prepare(site, core)
 	_sync_controls()

@@ -73,6 +73,11 @@ func _run() -> void:
             output_dir = argument.trim_prefix("--out=")
         elif argument == "--record-transition":
             frame_recording = true
+    if route_case == "campaign-roaming":
+        set_meta(&"journey_seed", get_meta(&"journey_seed", 80))
+        set_meta(&"world_layout_version", CinderJourneyLayout.VERSION)
+        measurements["journey_seed"] = get_meta(&"journey_seed")
+        measurements["world_layout_version"] = CinderJourneyLayout.VERSION
     if output_dir.is_empty() or not output_dir.is_absolute_path():
         push_error("Supply --out=/absolute/path after Godot's -- separator.")
         quit(2)
@@ -136,6 +141,9 @@ func _run() -> void:
         "campaign-west", "campaign-south":
             await _campaign(route_case == "campaign-west")
             _check(measurements.has("journey_seconds"), "Campaign reaches the sunrise ending")
+        "campaign-roaming":
+            await _roaming_campaign()
+            _check(measurements.has("journey_seconds"), "Roaming campaign reaches the sunrise ending")
         "campaign-combinations":
             _campaign_combinations()
         "eastern-ascent":
@@ -606,6 +614,47 @@ func _campaign_combinations() -> void:
                     tested += 1
     measurements["combinations"] = tested
     _check(tested == 15, "Checked every four-camp combination")
+
+
+## Walk to the closest unspent 25-point shrine, defend, then carry the original sun to the summit.
+func _roaming_campaign() -> void:
+    var identity: int = game.core.get_instance_id()
+    var route_summary: Array[Dictionary] = []
+    if not await _collect_grove_supplies():
+        return
+    for visit in 4:
+        var next: CinderSite
+        var distance := INF
+        for site: CinderSite in game.sites:
+            if site.remaining_energy < 25:
+                continue
+            var reading: Dictionary = game.objective_route.direction_to(game.player.global_position, site.anchor.global_position)
+            if reading.distance >= 0 and reading.distance < distance:
+                distance = reading.distance
+                next = site
+        if not _check(next != null, "A full-size shrine has a route from the traveler"):
+            return
+        if not await _walk_to_objective(next.anchor.global_position, next.label):
+            return
+        if not await _campaign_defense(next, route_summary):
+            return
+    measurements["route"] = route_summary
+    if not _check(is_equal_approx(game.core.restoration, 100.0), "Four roaming defenses restore the sun"):
+        return
+    if not await _walk_to_objective(game.beacon.global_position, "Hilltop Beacon") or not await _fight_guardian():
+        return
+    game.interact()
+    if not await _wait_mode("Win", 180):
+        return
+    _check(game.core.get_instance_id() == identity and _core_count() == 1, "The original roaming core is delivered")
+    measurements["journey_seconds"] = physics_samples / 60.0
+
+
+func _walk_to_objective(goal: Vector3, label: String) -> bool:
+    var path: PackedVector3Array = game.objective_route._walk_route(game.player.global_position, goal)
+    if not _check(not path.is_empty(), "Walking route to " + label):
+        return false
+    return await _walk_route(Array(path), label)
 
 
 func _campaign(use_quarry: bool) -> void:

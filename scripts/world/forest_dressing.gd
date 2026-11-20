@@ -29,14 +29,17 @@ const GOLD := [Color("#b96534"), Color("#c8763a"), Color("#d58a41"), Color("#d59
 
 var _roads: Array = []
 var _excluded := PackedVector3Array()
+var _reserved_shrines := PackedVector3Array()
 var _rng := RandomNumberGenerator.new()
 var _bark: ShaderMaterial
 var _leaf: ShaderMaterial
 var _planted := PackedVector3Array()
 
-func build(roads: Array, labels: PackedStringArray, forbidden: PackedVector3Array, seed_value: int, settlements: Array) -> void:
-	_roads = roads
+func build(roads: Array, labels: PackedStringArray, forbidden: PackedVector3Array, seed_value: int,
+		settlements: Array, reserved_shrines := PackedVector3Array()) -> void:
+	_roads = roads.duplicate()
 	_excluded = forbidden
+	_reserved_shrines = reserved_shrines
 	_rng.seed = 73183 ^ seed_value
 	_bark = MESH.pigment(2)
 	_leaf = MESH.pigment(0, true)
@@ -50,6 +53,9 @@ func build(roads: Array, labels: PackedStringArray, forbidden: PackedVector3Arra
 	for town: Node3D in settlements:
 		_plant_town_skirt(town)
 	_roads = []
+
+func protect_walking_paths(paths: Array[PackedVector3Array]) -> void:
+	_roads.append_array(paths)
 
 func _plant_town_skirt(town: Node3D) -> void:
 	var border := Node3D.new()
@@ -65,7 +71,7 @@ func _plant_town_skirt(town: Node3D) -> void:
 			Vector2(-11.9, -.6), Vector2(11.1, 2.9), Vector2(-8.8, -18.4), Vector2(9.8, -20.1),
 			Vector2(-9.5, 11.4), Vector2(10.15, 12.8), Vector2(-14.65, -4.8), Vector2(14.8, -7.3)]:
 		var at := town.to_global(Vector3(local.x, 0, local.y))
-		if _distance_to_roads(at) < 4.55 or _has_neighbor(at, 3.12):
+		if _distance_to_roads(at) < 4.55 or _has_neighbor(at, 3.12) or _in_reserved_shrine(at):
 			continue
 		var ground := _ground(at)
 		if ground == Vector3.INF:
@@ -225,6 +231,12 @@ func _trunk_collider(solid: StaticBody3D, at: Vector3, height: float) -> void:
 func _protected(at: Vector3, minimum: float) -> bool:
 	for point in _excluded:
 		if _flat_distance(at, point) < minimum:
+			return true
+	return false
+
+func _in_reserved_shrine(at: Vector3) -> bool:
+	for center in _reserved_shrines:
+		if _flat_distance(at, center) < 17.0:
 			return true
 	return false
 

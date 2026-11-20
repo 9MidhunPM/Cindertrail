@@ -25,6 +25,10 @@ var intensity: float:
 var view_position: Vector3
 var view_target: Vector3
 var wet := false
+var parcel_id := ""
+var parcel_frame := Transform3D.IDENTITY
+var recovery_point := Vector3.ZERO
+var approach := PackedVector3Array()
 ## Canonical district center used by wildlife and terrain hazards, independent of the shrine pad.
 var habitat_frame := Transform3D.IDENTITY
 var _socket_rings: Array[MeshInstance3D] = []
@@ -87,6 +91,9 @@ func select_socket(index: int) -> void:
 func wet_depth_at(point: Vector3) -> bool:
 	if not wet:
 		return false
+	if not parcel_id.is_empty():
+		var ford := parcel_frame.affine_inverse() * point
+		return ford.x > -8.65 and ford.x < -4.75 and ford.z > -0.25 and ford.z < 3.65 and ford.y < 0.4
 	var local := habitat_frame.affine_inverse() * point
 	return local.y < -.53 and absf(local.x) < 19.0 and absf(local.z) < 19.0
 

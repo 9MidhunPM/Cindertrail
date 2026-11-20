@@ -101,6 +101,16 @@ func _pad() -> Vector3:
 func world_landmark() -> Vector3:
 	return to_global(BELL_POSITION + Vector3(_clearing.x, 0, _clearing.y))
 
+func habitat_transform() -> Transform3D:
+	return global_transform.translated_local(Vector3(0, .73, 0))
+
+func wet_depth_at(point: Vector3) -> bool:
+	var local := to_local(point)
+	return local.y < .2 and absf(local.x) < 19.0 and absf(local.z) < 19.0
+
+func ritual_point() -> Vector3:
+	return to_global(_pad())
+
 ## A submerged ruin and the two dry causeway stones its sunken road connects.
 ## These belong to the optional crossing, independently of the defense bell.
 func bell_road_sockets() -> Dictionary:

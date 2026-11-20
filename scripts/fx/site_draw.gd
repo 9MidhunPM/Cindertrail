@@ -64,8 +64,14 @@ func receive(site: CinderSite, focus: Vector3, amount: float, reduced_motion: bo
 		var far_side := (site.view_target - site.view_position).slide(Vector3.UP)
 		_sky_direction = far_side.normalized() if far_side.length_squared() > .01 else Vector3.FORWARD
 		_site_id = site.checkpoint_id
-		global_transform = site.habitat_frame
-		_build(to_local(focus))
+		var kit := site.get_node_or_null("RoamingShrineKit") as Node3D
+		var origins := PackedVector3Array()
+		if kit != null:
+			global_transform = kit.global_transform
+			origins = global_transform.affine_inverse() * (kit.energy_origins() as PackedVector3Array)
+		else:
+			global_transform = site.habitat_frame
+		_build(to_local(focus), origins)
 	if not visible:
 		_clock = 0.0
 		set_physics_process(true)
@@ -96,12 +102,15 @@ func _physics_process(_delta: float) -> void:
 	if Engine.get_physics_frames() != _last_draw_frame:
 		clear()
 
-func _build(focus: Vector3) -> void:
+func _build(focus: Vector3, origins: PackedVector3Array) -> void:
 	var theme: Array = STREAMS[_site_id]
 	_surface.set_shader_parameter("source_tint", theme[0])
 	for i in 3:
 		var source: Vector3 = theme[1+i*2]
 		var bend: Vector3 = theme[2+i*2]
+		if origins.size() == 3:
+			source = origins[i]
+			bend = source.lerp(focus, .30) + Vector3.UP * .29
 		var toward := (focus - source).slide(Vector3.UP).normalized()
 		var across := toward.cross(Vector3.UP)
 		var is_mirror := _site_id == &"sunwatch_observatory"

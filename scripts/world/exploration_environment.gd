@@ -10,10 +10,12 @@ const MARKS := [
 ]
 
 var _towns := {}
+var _forest: FOREST
 
-func build(junctions: Dictionary, town_variants: Dictionary, roads: Array, road_names: PackedStringArray, journey_seed: int) -> void:
+func build(junctions: Dictionary, town_variants: Dictionary, roads: Array, road_names: PackedStringArray,
+		journey_seed: int, reserved := PackedVector3Array()) -> void:
 	name = "ExplorationEnvironment"
-	var clearings := PackedVector3Array()
+	var clearings := reserved.duplicate()
 	for record: Array in MARKS:
 		var at: Vector3 = junctions[record[1]]
 		var edge := road_names.find(record[2])
@@ -27,10 +29,13 @@ func build(junctions: Dictionary, town_variants: Dictionary, roads: Array, road_
 	for key in ["west", "south", "east", "grove", "quarry", "relay", "quarry_gate", "relay_gate"]:
 		if junctions.has(key):
 			clearings.append(junctions[key])
-	var forest := FOREST.new()
-	forest.name = "ForestDressing"
-	add_child(forest)
-	forest.build(roads, road_names, clearings, journey_seed, _towns.values())
+	_forest = FOREST.new()
+	_forest.name = "ForestDressing"
+	add_child(_forest)
+	_forest.build(roads, road_names, clearings, journey_seed, _towns.values(), reserved)
+
+func protect_walking_paths(paths: Array[PackedVector3Array]) -> void:
+	_forest.protect_walking_paths(paths)
 
 func settlement_at(id: StringName) -> TOWN:
 	return _towns.get(id)

@@ -1,6 +1,9 @@
 class_name CinderOuterValley
 extends Node3D
 
+signal route_cache_found(id: String, point: Vector3)
+
+const WAYSIDE := preload("res://scripts/world/wayside_dressing.gd")
 const CLEARINGS := preload("res://scripts/world/outer_shrine_clearings.gd")
 const FORK_DATA := preload("res://data/outer_valley/trail_forks.json")
 const ENVIRONMENT := preload("res://scripts/world/exploration_environment.gd")
@@ -34,6 +37,7 @@ var layout_id := 0
 var clearing_variants: Dictionary = {}
 var journey_layout: CinderJourneyLayout
 var abandoned_towns: Node3D
+var wayside_dressing: WAYSIDE
 var active_forks: Dictionary = {}
 var town_side_paths: Dictionary = {}
 var _network := NETWORK.new()
@@ -99,10 +103,15 @@ func _ready() -> void:
 		_sign(route[0], route[1], _destination(trail[3]))
 		_sign(route[-1], route[-2], _destination(trail[1]))
 	_build_trail_network(pigment)
+	var shrine_parcels := PackedVector3Array()
+	if journey_layout != null and journey_layout.version >= 3:
+		for parcel: Dictionary in CinderJourneyLayout.parcel_definitions(layout_id):
+			shrine_parcels.append(_point(parcel.center))
 	if journey_layout != null and journey_layout.version >= 2:
 		abandoned_towns = ENVIRONMENT.new()
 		add_child(abandoned_towns)
-		abandoned_towns.build(junctions, journey_layout.town_variants, roads, road_names, journey_layout.journey_seed)
+		abandoned_towns.build(junctions, journey_layout.town_variants, roads, road_names, journey_layout.journey_seed,
+			shrine_parcels)
 	if journey_layout == null or journey_layout.version < 3:
 		for spec: Dictionary in LANDMARKS.data.sites:
 			_create_camp(spec)
@@ -122,6 +131,27 @@ func _ready() -> void:
 		add_child(winch)
 		winch.configure(entry.id, entry.name, (start + end) * .5, direction.normalized(), grade)
 		_winches.append(winch)
+	if journey_layout != null and journey_layout.version >= 3:
+		_dress_waysides(shrine_parcels)
+
+func _dress_waysides(shrine_parcels: PackedVector3Array) -> void:
+	var walking_paths: Array[PackedVector3Array] = []
+	for path: PackedVector3Array in town_side_paths.values():
+		walking_paths.append(path)
+	abandoned_towns.protect_walking_paths(walking_paths)
+	var reserved := shrine_parcels.duplicate()
+	for key in ["west", "south", "east", "grove", "quarry", "relay", "ruins", "terrace", "spring"]:
+		reserved.append(junctions[key])
+	for winch in _winches:
+		reserved.append(winch.handle)
+	await get_tree().physics_frame
+	if not is_inside_tree():
+		return
+	wayside_dressing = WAYSIDE.new()
+	wayside_dressing.name = "WaysideDressing"
+	wayside_dressing.cache_found.connect(func(id: String, point: Vector3) -> void: route_cache_found.emit(id, point))
+	add_child(wayside_dressing)
+	wayside_dressing.build(roads, road_names, reserved, walking_paths, caches, journey_layout.journey_seed)
 
 func _create_camp(definition: Dictionary) -> void:
 	var spec: CinderSiteSpec = SITE_DATA[definition.resource]

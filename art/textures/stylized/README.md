@@ -6,8 +6,8 @@ seeded NumPy/Pillow drawing in `tools/build_route_textures.py`. Run
 
 | Image | Size | Contents |
 | --- | --- | --- |
-| route_paint.png | 1024 × 1024 | Linear RGBA masks for fissured limestone, timber grain, lichen clusters, and beaten copper patina |
-| valley_brush.png | 1024 × 1024 | Linear RGBA masks for clustered two-tone leaves, chipped gravel, water caustics, and quarry haul marks |
+| route_paint.png | 2048 × 2048 | Linear RGBA masks for chipped limestone with fissure lips, porous timber grain, lichen clusters, and beaten copper patina |
+| valley_brush.png | 2048 × 2048 | Linear RGBA masks for veined leaf clusters, chipped gravel and soil, water caustics, and quarry haul marks |
 | workshop_trim.png | 2048 × 768 | Six sRGB strips with hammered copper, chased brass, timber, carved stone, twisted rope, and enamel |
 
 The Grove, upland, outer-valley, and frontier shaders project the family tiles in

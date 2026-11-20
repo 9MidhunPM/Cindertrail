@@ -25,6 +25,7 @@ const COPPER := Color("#bc652a")
 var site: CinderSite
 var layout_id := 0
 var randomized_layout := false
+var build_site := true
 var clearing_variant := 0
 var _pad := GROUND
 var caches := PackedVector3Array([Vector3(-36.0, 0.91, 5.76)])
@@ -62,18 +63,23 @@ func _ready() -> void:
 	_build_crane(Vector3(-50.0, 5.70, -7.65), 0.48, 0.8)
 	_loading_tracks()
 	_finish_geometry()
-	_configure_site()
+	if build_site:
+		_configure_site()
 	_relocate(CinderDistricts.offset("quarry", layout_id))
 
 ## Geometry is authored around the old origin; move it out along the valley.
 func _relocate(shift: Vector3) -> void:
 	position = shift
-	site.shift_world(shift)
+	if site != null:
+		site.shift_world(shift)
 	for i in caches.size():
 		caches[i] += shift
 
 func world_landmark() -> Vector3:
 	return landmark_position + position
+
+func habitat_transform() -> Transform3D:
+	return global_transform.translated_local(GROUND)
 
 func world_impact() -> Vector3:
 	return impact_position + position

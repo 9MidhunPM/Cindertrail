@@ -52,14 +52,14 @@ void fragment() {
  float edge_moss = smoothstep(.36,.70,carving.b*.62 + broad*.38) * joint;
  c = mix(c,c*vec3(.42,.66,.42),edge_moss*.60);
  c = mix(c,c*vec3(.67,.82,.91),joint*(.22+.23*wet_line));
- vec3 pale_chips = c*vec3(1.17,1.14,1.04);
+ vec3 pale_chips = c*vec3(1.25,1.18,1.06);
  c = mix(c,pale_chips,joint*smoothstep(.52,.65,carving.r)*(1.-edge_moss));
  c *= mix(1., .49+carving.g*1.16, wood);
  c *= mix(1., .67+brush.r*.76, foliage_type);
  c = mix(c, c*vec3(.78,1.07,1.12), foliage_type*(.25+.33*brush.r));
- c = mix(c, c*vec3(.48,.72,.50),stone*moss*(.36+.3*wet_line));
+ c = mix(c, c*vec3(.60,.92,.52),stone*moss*(.40+.24*wet_line));
  c = mix(c, c*vec3(.38,.64,.70),damp*.78);
- float wet_patches = .28*stone*smoothstep(.55,.82,carving.b*.36+broad*.64)*smoothstep(.6,.95,normal_w.y);
+ float wet_patches = .51*stone*smoothstep(.49,.79,carving.b*.48+broad*.52)*smoothstep(.6,.95,normal_w.y);
  damp = max(damp,wet_patches);
  c *= 1.-wet_patches*.27;
  float silt_line = (1.-smoothstep(.014,.075,abs(place.y-waterline-.088+(broad-.5)*.11)))*stone;

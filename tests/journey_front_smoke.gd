@@ -50,12 +50,18 @@ func _run() -> void:
 	await _frames(120)
 	_check(front.get("stage") == &"hidden" and game.hud.visible, "Comic skip enters the world")
 	_check(game.player.is_on_floor() and not JourneyCheckpoint.read().is_empty(), "First checkpoint is saved on safe ground")
-	var grove_cache: Node3D = game._caches[-1]
+	var grove_cache: Node3D
 	for cache: Node3D in game._caches:
-		if cache.global_position.distance_to(game.player.global_position) < grove_cache.global_position.distance_to(game.player.global_position):
+		if cache.get_meta(&"checkpoint_id") == "grove_approach":
 			grove_cache = cache
-	_place(grove_cache.global_position + Vector3.RIGHT)
-	await _frames(20)
+			break
+	_check(grove_cache != null, "The historic Grove supply cache remains in place")
+	if grove_cache == null:
+		quit(1)
+		return
+	_place(grove_cache.global_position)
+	# Re-establish the safe-footing window after placing the traveler at the cache.
+	await _frames(115)
 	game.interact()
 	game.grove.threat = 4
 	game.grove.remaining_energy -= 3.5
@@ -96,6 +102,7 @@ func _run() -> void:
 	await scene_changed
 	game = current_scene
 	await _press("ContinueJourney")
+	await _frames(4)
 	_check(game.core.restoration == 3.5 and game.hud.visible, "Continue resumes from the same checkpoint")
 	await _check_frontier()
 	var old_layout: Dictionary = game.layout.checkpoint_fields()
@@ -107,6 +114,9 @@ func _run() -> void:
 	await _press("SkipIntro")
 	await _frames(10)
 	_check(not game.layout.matches_selection(old_layout), "New Journey chooses a different route, town and clearing combination")
+	for site: CinderSite in game.sites:
+		_check(site.parcel_id != old_layout.roaming_placements[site.checkpoint_id].parcel,
+			"New Journey moves the " + site.label + " shrine to a different parcel")
 	quit(1 if failures else 0)
 
 func _check_frontier() -> void:
@@ -133,11 +143,15 @@ func _check_frontier() -> void:
 	_check(expedition.claimed_discoveries().size() == 1 and game.battle.scrap > loot_before,
 		"A frontier clue leads to a one-time supply reward")
 	var sun_id: int = game.core.get_instance_id()
-	_place(expedition.site.anchor.global_position + Vector3.BACK)
+	var lantern := _last_lantern()
+	if lantern == null:
+		_check(false, "Last Lantern has an active shrine")
+		return
+	_place(lantern.anchor.global_position + Vector3.BACK)
 	await _frames(6)
 	game.interact()
 	await _frames(85)
-	_check(game.active_site == expedition.site and game.start_wave(), "Last Lantern deploys and starts a defense")
+	_check(game.active_site == lantern and game.start_wave(), "Last Lantern deploys and starts a defense")
 	await _frames(146)
 	Input.action_press("pack")
 	await _frames(166)
@@ -159,11 +173,20 @@ func _check_frontier() -> void:
 	expedition = game.frontier
 	_check(expedition.journey_seed == seed_before and expedition.paths == paths and game.player.is_on_floor(),
 		"Continue reconstructs the same trail before placing the traveler")
-	_check(expedition.site.threat == 1 and expedition.site.remaining_energy < 10.0,
+	lantern = _last_lantern()
+	_check(lantern != null and lantern.threat == 1 and lantern.remaining_energy < 10.0,
 		"The optional camp keeps its depleted reserve and threat")
 	_check(expedition.claimed_discoveries().size() == 1 and expedition.hint_at(expedition.discovery_points()[0]).is_empty(),
 		"Collected frontier supplies stay collected after Continue")
 
+func _last_lantern() -> CinderSite:
+	for site: CinderSite in game.sites:
+		if site.checkpoint_id == &"last_lantern_frontier":
+			return site
+	push_error("Missing Last Lantern site")
+	return null
+
 func _place(point: Vector3) -> void:
 	game.player.global_position = point + Vector3.UP * 0.12
 	game.player.velocity = Vector3.ZERO
+	game.player.reset_physics_interpolation()

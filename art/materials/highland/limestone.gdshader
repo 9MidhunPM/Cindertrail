@@ -39,6 +39,8 @@ void fragment() {
 	vec3 c = base_tone * mix(0.86, 1.13, broad) * (.58 + .88 * streak);
 	c *= mix(vec3(1.0), mineral_tint, deposits);
 	c *= mix(vec3(1.0), vec3(0.73, 0.67, 0.62), seams * (1.0 - axis.y) * chalk * 0.26);
+	float flakes = smoothstep(.56,.79,pigment.r)*chalk;
+	c *= mix(vec3(1.),vec3(1.18,1.10,.97),flakes*.42);
 	float quarry = smoothstep(1.06,1.16,mineral_tint.r);
 	// Timber sleds leave paired scours across the quarry paving; cliff strata remain clean.
 	float hauling = brush.a*chalk*level*quarry*.31;
@@ -49,6 +51,6 @@ void fragment() {
 	c = mix(c,c*vec3(.55,1.11,1.05),tarnish*.74);
 	ALBEDO = c;
 	EMISSION = c * (vec3(0.19, 0.128, 0.071) * chalk * level + vec3(1.4) * lit_inlay);
-	ROUGHNESS = mix(0.93,.55,bronze*(1.-tarnish));
+	ROUGHNESS = mix(mix(.96,.80,pigment.r*chalk),.53,bronze*(1.-tarnish));
 	SPECULAR = 0.24;
 }

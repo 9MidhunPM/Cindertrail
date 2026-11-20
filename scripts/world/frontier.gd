@@ -33,6 +33,7 @@ const DISCOVERY_REWARDS := [12, 16, 12]
 
 var journey_seed: int
 var randomized_layout := false
+var build_site := true
 var clearing_variant := 0
 var _clearing := Transform3D(Basis.IDENTITY, CAMP)
 var site: CinderSite
@@ -76,7 +77,11 @@ func _ready() -> void:
 	_add_discovery(paths[1], first_kind, -1.0)
 	_add_discovery(paths[2], second_kind, 1.0)
 	_scenery.finish()
-	_build_site()
+	if build_site:
+		_build_site()
+
+func habitat_transform() -> Transform3D:
+	return _clearing.translated_local(Vector3.UP * .05)
 
 func _route(points: Array, side: float) -> PackedVector3Array:
 	var result := PackedVector3Array([FORK])

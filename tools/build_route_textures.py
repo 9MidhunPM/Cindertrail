@@ -9,7 +9,8 @@ import numpy as np
 from PIL import Image, ImageDraw
 
 OUTPUT = Path(__file__).resolve().parents[1] / "art/textures/stylized"
-SIZE = 1024
+SIZE = 2048
+SCALE = SIZE / 1024
 rng = np.random.default_rng(81355)
 axis = np.arange(SIZE, dtype=np.float32) / SIZE
 x, y = np.meshgrid(axis, axis)
@@ -62,13 +63,13 @@ def rock_faults():
         line = [point.copy()]
         for step in range(rng.integers(4, 12)):
             angle += rng.uniform(-.65, .65)
-            point = point + np.array([np.cos(angle), np.sin(angle)]) * rng.uniform(6, 23)
+            point = point + np.array([np.cos(angle), np.sin(angle)]) * rng.uniform(6, 25) * SCALE
             line.append(point.copy())
             if step % 3 == 2:
                 twig = angle + rng.choice([-1.0, 1.0])*.82
-                end = point + np.array([np.cos(twig), np.sin(twig)]) * rng.uniform(10, 33)
-                wrap(pen, [point, end], 158, 2)
-        wrap(pen, line, int(rng.uniform(180, 235)), int(rng.integers(2, 5)))
+                end = point + np.array([np.cos(twig), np.sin(twig)]) * rng.uniform(10, 33) * SCALE
+                wrap(pen, [point, end], 158, int(2 * SCALE))
+        wrap(pen, line, int(rng.uniform(180, 235)), int(rng.integers(2, 5) * SCALE))
     return normalized(im)
 
 
@@ -80,23 +81,24 @@ def leaves_and_gravel():
         cx, cy = rng.uniform(0, SIZE, 2)
         orientation = rng.uniform(-2.4, 2.4)
         for _ in range(rng.integers(6, 14)):
-            center = np.array([cx, cy]) + rng.normal(0, 32, 2)
+            center = np.array([cx, cy]) + rng.normal(0, 32 * SCALE, 2)
             angle = orientation + rng.uniform(-.9, .9)
-            reach = np.array([np.cos(angle), np.sin(angle)]) * rng.uniform(7, 19)
+            reach = np.array([np.cos(angle), np.sin(angle)]) * rng.uniform(7, 19) * SCALE
             width = np.array([-reach[1], reach[0]]) * rng.uniform(.29, .51)
             points = [center-reach, center+width, center+reach, center-width]
             shade = int(rng.uniform(93, 235))
             wrap(lp, points, shade)
             wrap(lp, [points[0], points[1], points[2]], max(40, shade-38))
+            wrap(lp, [points[0], points[2]], min(shade + 15, 247), int(SCALE))
     for _ in range(3300):
         cx, cy = rng.uniform(0, SIZE, 2)
-        reach = rng.uniform(1.5, 10)
+        reach = rng.uniform(1.5, 10) * SCALE
         wide = reach*rng.uniform(.32, .72)
         pts = [(cx-reach,cy+wide*.2),(cx-reach*.45,cy-wide),(cx+reach*.63,cy-wide*.65),
                (cx+reach,cy+wide*.24),(cx-reach*.16,cy+wide)]
         wrap(sp, pts, int(rng.uniform(94, 189)))
-        if reach > 4:
-            wrap(sp, pts[:3], 202, 1)
+        if reach > 4 * SCALE:
+            wrap(sp, pts[:3], 202, int(SCALE))
     return normalized(leaves), normalized(soil)
 
 
@@ -143,20 +145,28 @@ def main():
     grain = field(96, 103)
     cracks = rock_faults()
     vein = abs(np.sin(2*np.pi*(y*5+x+broad*.37)))
-    mineral = .41 + broad*.18 + (strokes-.5)*.13 + (grain-.5)*.09
-    mineral += .12*(1-ramp(.05,.23,vein)) + .10*np.roll(cracks, 2, axis=0) - cracks*.42
+    facets = ramp(.34, .67, field(22, 26) * .72 + broad * .28)
+    pits = ramp(.7, .9, field(132, 141)) * .065
+    mineral = .36 + broad*.19 + facets*.13 + (strokes-.5)*.15 + (grain-.5)*.095 - pits
+    lip = np.maximum(np.roll(cracks, int(3*SCALE), axis=0) - cracks, 0)
+    mineral += .10*(1-ramp(.05,.23,vein)) + .24*lip - cracks*.29
     waviness = field(6, 4)
-    split = abs(np.sin(2*np.pi*(x*12 + waviness*.78 + np.sin(y*2*np.pi)*.31)))
-    wood = .37 + .22*field(44,4) + .15*field(72,7) - .26*(1-ramp(.04,.27,split))
-    moss = ramp(.36,.7, broad*.32 + field(20,17)*.48 + grain*.20)
-    bronze = .21 + .59*ramp(.31,.72,field(11,10)*.58+field(32,36)*.25+grain*.17)
+    warp = x + waviness*.047 + np.sin(y*2*np.pi)*.019
+    split = abs(np.sin(2*np.pi*warp*14))
+    pores = field(160, 29)
+    honey = (1 + np.sin(2*np.pi*warp*46)) * .033
+    wood = .34 + .22*field(44,4) + .16*field(72,7) + honey - .25*(1-ramp(.04,.27,split))
+    wood -= ramp(.59,.87,pores)*.06
+    moss = ramp(.39,.72, broad*.31 + field(23,18)*.45 + grain*.17 + pores*.07)
+    bronze = .18 + .63*ramp(.31,.72,field(11,10)*.55+field(40,37)*.22+grain*.15+pores*.08)
     Image.merge("RGBA", tuple(channel(ch) for ch in (mineral,wood,moss,bronze))).save(OUTPUT/"route_paint.png")
     leaf, pebble = leaves_and_gravel()
     caustic = abs(np.sin(2*np.pi*(2*x+4*y+waviness*.67)) + np.sin(2*np.pi*(5*x-y+broad*.72))*.87)
     ripple = .76*(1-ramp(.025,.19,caustic)) + .20*(1-ramp(.06,.42,caustic))
     track = abs(np.sin(2*np.pi*(x*4 + .11*np.sin(2*np.pi*y) + field(6,7)*.07)))
     ruts = (1-ramp(.02,.14,track))*ramp(.36,.65,field(7,7))
-    organic = (leaf*.76+strokes*.24, pebble*.60+broad*.26+grain*.14, ripple, ruts)
+    soil_banks = field(12, 13)
+    organic = (leaf*.79+strokes*.21, pebble*.57+broad*.15+soil_banks*.20+grain*.08, ripple, ruts)
     Image.merge("RGBA", tuple(channel(ch) for ch in organic)).save(OUTPUT/"valley_brush.png")
     workshop_strip(wood, bronze, mineral)
 
