@@ -19,6 +19,10 @@ var _frame: Node3D
 var _sun: MeshInstance3D
 var _transfer_time: Tween
 var _openness := 0.0
+var _ring_gimbals: Array[Node3D] = []
+var _solar_time := 0.0
+var _light_pulse := 0.0
+var _fittings: Node3D
 var _frame_band: MeshInstance3D
 var _hinges: Array[MeshInstance3D] = []
 var _feet: Array[Node3D] = []
@@ -34,17 +38,27 @@ func _ready() -> void:
 	_show_form(form)
 
 func _process(delta: float) -> void:
+	_solar_time += delta
+	_light_pulse = move_toward(_light_pulse, 0.0, delta * 2.4)
 	_orbits.rotate_y(delta * (.47 if form == Form.DELIVERED else .2))
+	for i in _ring_gimbals.size():
+		var phase := _solar_time * (0.52 + 0.12 * i) + i * TAU / 3.0
+		_ring_gimbals[i].rotation.x = sin(phase) * (0.09 + _openness * 0.14)
+		_ring_gimbals[i].rotation.z = cos(phase * 0.82) * (0.06 + _openness * 0.10)
+	var pulse := 1.0 + 0.035 * sin(_solar_time * 2.4) + 0.31 * _light_pulse
+	_light.light_energy = lerpf(.66, 4.4, _openness) * pulse
 
 func damage(amount: float) -> void:
 	if health <= 0.0 or amount <= 0.0:
 		return
+	_light_pulse = 1.0
 	health = maxf(0.0, health - amount)
 	if health <= 0.0:
 		destroyed.emit()
 
 func repair(amount: float) -> void:
 	if health > 0.0 and amount > 0.0:
+		_light_pulse = 0.65
 		health = minf(100.0, health + amount)
 
 func transfer(anchor: Node3D, new_form: int, duration: float = 0.0) -> void:
@@ -75,6 +89,7 @@ func _show_form(new_form: int) -> void:
 	form = new_form
 	if _frame:
 		_frame.free()
+	_ring_gimbals.clear()
 	for ring in _orbits.get_children():
 		ring.free()
 	_frame = FRAMES[form].instantiate()
@@ -96,7 +111,11 @@ func _show_form(new_form: int) -> void:
 	_orbits.scale = Vector3.ONE
 	_orbits.position = center
 	for ring in _frame.find_children("Orbit_ring*", "MeshInstance3D", true, false):
-		ring.reparent(_orbits, true)
+		# The supplied rings have baked offsets. Pivot them about the miniature sun.
+		var gimbal := Node3D.new()
+		_orbits.add_child(gimbal)
+		ring.reparent(gimbal, true)
+		_ring_gimbals.append(gimbal)
 	_orbits.rotation.y = orbit_phase
 	_hinges.clear()
 	_feet.clear()
@@ -118,8 +137,11 @@ func _show_form(new_form: int) -> void:
 		_frame_band.mesh = belt
 		_frame_band.scale.y = 1.45
 		_frame.add_child(_frame_band)
+		_fittings = preload("res://art/models/folded_fittings.glb").instantiate()
+		_frame.add_child(_fittings)
 	else:
 		_frame_band = null
+		_fittings = null
 	_pose(_openness)
 
 func _pose(openness: float) -> void:
@@ -133,6 +155,9 @@ func _pose(openness: float) -> void:
 		_frame_band.position.y = center_y - .014
 		_frame_band.scale.x = lerpf(1.0, 1.2, openness)
 		_frame_band.scale.z = _frame_band.scale.x
+		_fittings.scale.y = lerpf(1.0, 0.07, smoothstep(0.12, 0.57, openness))
+		_fittings.position.y = center_y - CENTER_HEIGHT[0] * _fittings.scale.y
+		_fittings.visible = openness < 0.57
 	_focal.position.y = center_y
 	_orbits.position.y = center_y
 	var frame_radius := FOLDED_RADIUS if folded else OPEN_RADIUS

@@ -21,22 +21,27 @@ def mat(name, color, metallic=0):
     return value
 
 
-teal = mat('Petrol wool','164d51')
-fold = mat('Shadow fold','113a42')
-highlight = mat('Worn teal','286462')
+teal = mat('Petrol wool','327079')
+fold = mat('Shadow fold','244e5d')
+highlight = mat('Worn teal','498389')
 ochre = mat('Ochre lining','ca8835')
 leather = mat('Russet harness','66452e')
-glove = mat('Oiled leather','453a33')
+glove = mat('Oiled leather','584537')
 black = mat('Dark indigo','292c34')
 slate = mat('Shale gray','414049')
 brass = mat('Antique brass','c79349',.43)
 deep = mat('Inside hood','131d27')
 
 
-def pivot(name, loc):
+def pivot(name, loc, parent=None):
     o = bpy.data.objects.new(name,None)
     bpy.context.collection.objects.link(o)
-    o.location = loc
+    if parent is not None:
+        bpy.context.view_layer.update()
+        o.parent = parent
+        o.location = parent.matrix_world.inverted() @ Vector(loc)
+    else:
+        o.location = loc
     return o
 
 
@@ -103,37 +108,60 @@ def oval(name, profiles, material, parent=None, n=14, fabric=False):
     return o
 
 
+hips=pivot('Pelvis',(0,0,.84))
+body=pivot('UpperBody',(0,0,.94),hips)
+coat=pivot('CoatHem',(0,0,.94),hips)
 for side, tag in ((-1,'L'),(1,'R')):
     x=side*.124
-    leg=pivot('Leg'+tag,(x,0,.84))
-    tube('Pleated trouser',(x,0,.40),(x*1.12,0,.78),.094,.132,slate,leg,8)
-    ico('Knee fold',(x,.013,.41),(.109,.112,.133),slate,leg)
-    tube('Boot shaft',(x,-.008,.10),(x,0,.37),.081,.091,glove,leg)
-    ico('Toe',(x,.05,.082),(.094,.154,.082),glove,leg,2)
-    tube('Boot cuff',(x,0,.219),(x,0,.256),.089,.091,leather,leg,8)
-    ico('Boot clasp',(x, .085,.235),(.044,.01,.021),brass,leg)
-body=pivot('UpperBody',(0,0,.89))
-coat=pivot('CoatHem',(0,0,.94))
+    leg=pivot('Leg'+tag,(x,0,.84),hips)
+    knee=pivot('Knee'+tag,(x,0,.445),leg)
+    foot=pivot('Foot'+tag,(x,0,.09),knee)
+    tube('Pleated trouser',(x,0,.41),(x*1.08,0,.84),.096,.130,slate,leg,9)
+    ico('Knee fold',(x,.013,.443),(.109,.112,.112),slate,knee)
+    tube('Boot shaft',(x,-.008,.088),(x,0,.432),.081,.096,glove,knee,9)
+    ico('Toe',(x,.055,.079),(.094,.153,.081),glove,foot,2)
+    ico('Welt',(x,.052,.037),(.097,.155,.032),black,foot,2)
+    for z in (.17,.24,.32):
+        tube('Winding',(x,0,z),(x,0,z+.023),.089,.092,leather,knee,9)
+    ico('Boot clasp',(x, .084,.251),(.030,.016,.027),brass,knee)
 oval('Divided traveling coat',[(.51,.33,.226,-.055),(.77,.262,.178,-.022),(.998,.179,.135,0),(1.28,.204,.145,0)],teal,coat,16,True)
 # Unequal trailing rear panels with visible ochre undersides.
-for side in (-1,1):
-    x=side
-    tail_length = .16 if side < 0 else .02
-    pts=[(.04*x,-.138,.98),(.178*x,-.092,.98),(.282*x,-.24,.62),(.345*x,-.31,.46-tail_length),(.09*x,-.218,.62)]
-    poly('Tail lining',pts,[(0,1,2),(0,2,4),(4,2,3)],ochre,coat)
-    pts=[(a,b-.006,c+.045 if c<.64 else c) for a,b,c in pts]
-    poly('Cloak tail',pts,[(0,1,2),(0,2,4),(4,2,3)],teal,coat)
 for side,tag in ((-1,'L'),(1,'R')):
-    arm=pivot('Arm'+tag,(side*.217,0,1.31))
-    p=(side*.219,.006,1.31); elbow=(side*.278,-.006,1.095); wrist=(side*.301,.035,.901)
-    tube('Folded sleeve',elbow,p,.09,.104,slate,arm)
-    tube('Sleeve cuff',wrist,elbow,.063,.089,black,arm)
-    tube('Leather bracer',(wrist[0],.033,.917),(wrist[0],.026,.991),.062,.069,leather,arm)
-    ico('Mitten',(wrist[0],.045,.878),(.055,.059,.081),glove,arm)
+    x=side
+    panel=pivot('Tail'+tag,(.105*x,-.161,.965),coat)
+    tail_length = .14 if side < 0 else -.025
+    pts=[(.025*x,-.144,.99),(.191*x,-.098,.975),(.302*x,-.257,.64),(.39*x,-.345,.49-tail_length),(.086*x,-.241,.65)]
+    poly('Tail lining',pts,[(0,1,2),(0,2,4),(4,2,3)],ochre,panel)
+    pts=[(a,b-.009,c+.055 if c<.64 else c) for a,b,c in pts]
+    poly('Cloak tail',pts,[(0,1,2),(0,2,4),(4,2,3)],teal,panel)
+    # Narrow blade of faded ochre sewn along each weathered panel edge.
+    a,b=Vector(pts[2]),Vector(pts[3])
+    poly('Frayed gold hem',[a,b,(b.x*.8,b.y+.004,b.z+.06),(a.x*.94,a.y-.003,a.z+.016)],[(0,1,2,3)],ochre,panel)
+    arm=pivot('Arm'+tag,(side*.217,0,1.31),body)
+    shoulder=(side*.219,.006,1.31); elbow=(side*.282,-.018,1.085); wrist=(side*.304,.024,.90)
+    forearm=pivot('Elbow'+tag,elbow,arm)
+    tube('Folded undersleeve',elbow,shoulder,.087,.105,slate,arm,9)
+    tube('Sleeve cuff',wrist,elbow,.063,.085,black,forearm)
+    tube('Beveled vambrace',(wrist[0],.022,.915),(wrist[0],.002,1.05),.065,.079,leather,forearm,9)
+    tube('Cuff embroidery',(wrist[0],.021,.928),(wrist[0],.021,.936),.068,.068,brass,forearm,8)
+    ico('Mitten',(wrist[0],.047,.875),(.057,.061,.083),glove,forearm,2)
 oval('Shoulder cape',[(1.152,.36,.202,-.008),(1.248,.309,.188,-.009),(1.376,.211,.158,0),(1.435,.14,.116,0)],teal,body,14,True)
-oval('Gathered cowl',[(1.372,.159,.126,0),(1.419,.161,.116,0),(1.466,.117,.105,0),(1.499,.119,.102,0)],fold,body)
+# Overlapping bias-cut mantle gives the shoulders a broken silhouette.
+for side in [-1,1]:
+    x=side
+    mantle=[(.07*x,.143,1.40),(.20*x,.105,1.395),(.35*x,.068,1.235),
+            (.374*x,-.035,1.15),(.26*x,-.165,1.225),(.083*x,-.154,1.38)]
+    poly('Mantle bias panels',mantle,[(0,1,2),(0,2,5),(5,2,4),(4,2,3)],highlight,body)
+    tube('Worn mantle edge',mantle[2],mantle[3],.010,.006,ochre,body,4)
+oval('Gathered cowl',[(1.365,.183,.140,0),(1.419,.173,.130,0),(1.471,.145,.118,0),(1.512,.145,.113,0)],fold,body)
 oval('Travel belt',[(.995,.191,.145,0),(1.051,.187,.146,0)],leather,body)
 ico('Brass belt buckle',(0,.146,1.026),(.056,.013,.034),brass,body)
+# A broad bias-cut leather baldrick crosses the front of the cloak.
+strap = [(-.141,.102,1.37),(-.040,.177,1.27),(.064,.187,1.175),(.141,.12,1.067)]
+for a,b in zip(strap,strap[1:]):
+    x,y,z=a; xx,yy,zz=b
+    poly('Cross belt',[(x-.022,y+.011,z-.022),(x+.022,y+.011,z+.022),
+         (xx+.022,yy+.011,zz+.022),(xx-.022,yy+.011,zz-.022)],[(0,1,2,3)],leather,body)
 # Wrap two raised leather shoulder straps from front to back.
 for side in (-1,1):
     for a,b in [((side*.065,.151,1.245),(side*.18,.064,1.374)),((side*.18,.064,1.374),(side*.182,-.07,1.374)),((side*.182,-.07,1.374),(side*.082,-.163,1.15))]:
@@ -154,9 +182,9 @@ for i in range(13):
 # Hood opening follows a pentagonal arch around a recessed featureless face.
 # Rings progress from the deep back of the head towards the face opening.
 loops=[
- [(.019,-.219,1.685),(.094,-.178,1.725),(.119,-.194,1.589),(.092,-.19,1.50),(0,-.16,1.50)],
- [(0,-.068,1.818),(.147,-.088,1.738),(.183,-.102,1.597),(.177,-.112,1.486),(0,-.104,1.453)],
- [(0,.053,1.807),(.152,.055,1.731),(.170,.041,1.597),(.152,.025,1.476),(0,.053,1.449)],
+ [(.019,-.219,1.685),(.094,-.178,1.725),(.127,-.219,1.586),(.129,-.217,1.492),(0,-.16,1.50)],
+ [(0,-.068,1.818),(.147,-.088,1.738),(.183,-.102,1.597),(.20,-.127,1.486),(0,-.104,1.453)],
+ [(0,.053,1.807),(.152,.055,1.731),(.170,.041,1.597),(.170,.022,1.468),(0,.053,1.449)],
  [(0,.172,1.748),(.097,.147,1.684),(.137,.141,1.579),(.129,.137,1.519),(0,.158,1.473)]]
 vertices=[]
 for half in loops:
@@ -167,15 +195,22 @@ for k in range(3):
     for i in range(n):
         a=k*n+i;b=k*n+(i+1)%n
         faces.extend([(a,b,a+n),(b,b+n,a+n)])
-hood=poly('Angular open hood',vertices,faces,teal,body)
+head=pivot('Hood',(0,0,1.44),body)
+hood=poly('Angular open hood',vertices,faces,teal,head)
 hood.data.materials.append(highlight)
 hood.data.materials.append(fold)
 for i,p in enumerate(hood.data.polygons):
     p.material_index=1 if i%13==5 else 2 if i%11==2 else 0
 rim=vertices[-8:]
-poly('Recessed face',rim+[(0,.081,1.618)],[(i,(i+1)%8,8) for i in range(8)],deep,body)
+poly('Recessed face',rim+[(0,.081,1.618)],[(i,(i+1)%8,8) for i in range(8)],deep,head)
+# Double folds frame the ear and splay into the lower cowl.
+for side in [-1,1]:
+    x=side
+    pts=[(.162*x,-.076,1.705),(.183*x,.034,1.600),(.181*x,.020,1.478),
+         (.204*x,-.127,1.480),(.184*x,-.164,1.562)]
+    poly('Hood tuck',pts,[(0,1,4),(1,2,3),(1,3,4)],teal,head)
 for i in (0,1,6,7):
-    tube('Hood piping',rim[i],rim[(i+1)%8],.006,.006,ochre,body,5)
+    tube('Hood piping',rim[i],rim[(i+1)%8],.006,.006,ochre,head,5)
 # Garment and hood interiors can be viewed from below while orbiting.
 for m in materials.values():
     m.use_backface_culling=False
@@ -192,3 +227,45 @@ for joint in [o for o in bpy.context.scene.objects if o.type == 'EMPTY']:
     bpy.context.object.name = joint.name + 'Geometry'
 dest=Path(__file__).resolve().parents[2]/'art/models/traveler.glb'
 bpy.ops.export_scene.gltf(filepath=str(dest),export_format='GLB',export_yup=True)
+
+
+# The carry sheet shows a folded cage with fluted cheek straps and riveted
+# latches. This detachable metalwork augments the starter folded shrine.
+bpy.ops.object.select_all(action='SELECT')
+bpy.ops.object.delete(use_global=False)
+bronze = mat('Worked bronze','a1713d',.45)
+sun_brass = mat('Polished edges','d3a259',.42)
+dark_bronze = mat('Recessed plate','6f4c32',.37)
+for side in [-1,1]:
+    rings=[]
+    for i in range(17):
+        angle=-1.26+i*(2.52/16)
+        width=.021+.016*math.cos(angle)**2
+        # Two bowed metal bands fold close around the recessed miniature sun.
+        x=side*(.063*.36+.143*math.cos(angle))
+        y=-.335*math.cos(angle)
+        z=.55+.368*math.sin(angle)
+        rings.extend([(x-width,y,z),(x-width*.76,y-.012,z),
+                      (x+width*.76,y-.012,z),(x+width,y,z)])
+    faces=[]
+    for j in range(16):
+        for h in range(3):
+            k=4*j+h
+            faces.append((k,k+1,k+5,k+4))
+    cheek=poly('Bow stay',rings,faces,bronze)
+    cheek.data.materials.append(sun_brass)
+    for j,f in enumerate(cheek.data.polygons):
+        f.material_index=int(j%3==0)
+# Stamped escutcheon over the outermost buckle.
+for y,size,material in [(-.367,.093,bronze),(-.379,.062,sun_brass),(-.386,.037,dark_bronze)]:
+    poly('Buckle diamond',[(0,y,.55+size),(size*.82,y,.55),(0,y,.55-size),(-size*.82,y,.55)],[(0,1,2,3)],material)
+for i in range(12):
+    a=i*math.tau/12
+    ico('Rivet',(.343*math.sin(a),.343*math.cos(a),.55),(.015,.015,.015),sun_brass)
+for m in (bronze,sun_brass,dark_bronze):
+    m.use_backface_culling=False
+bpy.ops.object.select_all(action='SELECT')
+bpy.context.view_layer.objects.active=bpy.context.selected_objects[0]
+bpy.ops.object.join()
+bpy.context.object.name='FoldedFittings'
+bpy.ops.export_scene.gltf(filepath=str(dest.with_name('folded_fittings.glb')),export_format='GLB',export_yup=True)

@@ -32,6 +32,8 @@ func _physics_process(delta: float) -> void:
 	forward.y = 0.0
 	var direction := right.normalized() * input.x - forward.normalized() * input.y
 	var speed := 6.1 if Input.is_action_pressed("sprint") else 3.65
+	if Input.is_action_pressed("walk"):
+		speed = 2.05
 	velocity.x = move_toward(velocity.x, direction.x * speed, delta * 31.0)
 	velocity.z = move_toward(velocity.z, direction.z * speed, delta * 31.0)
 	velocity.y = maxf(-24.0, velocity.y - delta * 21.0)
