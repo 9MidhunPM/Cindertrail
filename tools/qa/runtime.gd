@@ -18,6 +18,18 @@ const BEACON_PATH := [
     Vector3(16.0, 4.8, -56.0), Vector3(20.0, 5.4, -62.0), Vector3(20.0, 7.3, -69.0),
     Vector3(19.0, 9.3, -77.0), Vector3(20.0, 11.0, -81.0), Vector3(20.0, 11.0, -83.0),
 ]
+const GROVE_SOUTH := [
+    Vector3(0.2, 0.7, 4.5), Vector3(-2.6, 0.7, 10.0), Vector3(-3.4, 0.7, 16.0),
+    Vector3(-1.0, 0.68, 24.7),
+]
+const QUARRY_SOUTH := [
+    Vector3(-45, 1.15, 0), Vector3(-39, 1.0, 2), Vector3(-36, 0.92, 2),
+    Vector3(-36, 0.92, 6.5),
+]
+const RELAY_FROM_EAST := [
+    Vector3(23.4, 4.40, -51.4), Vector3(19.4, 4.8, -52.45),
+    Vector3(16.7, 4.8, -53), Vector3(10, 4.8, -53),
+]
 
 var game: Variant
 var viewport: Viewport
@@ -83,6 +95,7 @@ func _run() -> void:
         fit.call()
         viewport = capture
 
+    set_meta(&"direct_journey", true)
     game = loaded.instantiate()
     viewport.add_child(game)
     if viewport == root:
@@ -104,8 +117,21 @@ func _run() -> void:
             await _window_input()
         "three-sites", "grove-relay":
             await _complete_run(route_case == "three-sites")
+        "campaign-west", "campaign-south":
+            await _campaign(route_case == "campaign-west")
+            _check(measurements.has("journey_seconds"), "Campaign reaches the sunrise ending")
+        "campaign-combinations":
+            _campaign_combinations()
+        "eastern-ascent":
+            _position_player(Vector3(28, 4.01, -51.4))
+            await _physics_frames(12)
+            game.core.restoration = 100.0
+            if await _walk_route(RELAY_FROM_EAST, "Relay eastern span"):
+                await _deliver(game.core.get_instance_id())
         "relay-profile":
             await _relay_profile()
+        "outer-profile":
+            await _outer_profile()
         "quarry":
             if _check(use_window, "Quarry capture requires a graphical display") and await _cross_grove():
                 await _quarry_frame()
@@ -218,7 +244,7 @@ func _relocation() -> void:
     var charged: float = game.core.restoration
     var depleted: float = grove.remaining_energy
     var health_before_pack: float = game.core.health
-    _check(charged > 0.0 and depleted < 45.0, "Defense restores the core and depletes the grove")
+    _check(charged > 0.0 and depleted < grove.spec.energy, "Defense restores the core and depletes the grove")
     if not await _pack():
         return
     var departure := _snapshot(grove)
@@ -395,21 +421,128 @@ func _complete_run(use_quarry: bool) -> void:
         visit["site"] = site.label
         route_summary.append(visit)
     measurements["route"] = route_summary
-    if not _check(is_equal_approx(game.core.restoration, 100.0), "Route restores the sun to 100%"):
+    if not _check(is_equal_approx(game.core.restoration, 25.0 * float(route.size())),
+        "Original camps contribute their complete reserves"):
         return
+    _check(game.core.restoration < 100.0, "Old two- and three-camp routes require another defense")
+    await _restart()
+
+
+func _campaign_combinations() -> void:
+    if not _check(game.sites.size() == 6, "Six camps loaded"):
+        return
+    var tested := 0
+    for a in range(6):
+        for b in range(a + 1, 6):
+            for c in range(b + 1, 6):
+                for d in range(c + 1, 6):
+                    game.core.restoration = 0.0
+                    for index: int in [a, b, c, d]:
+                        var camp: CinderSite = game.sites[index]
+                        camp.remaining_energy = camp.spec.energy
+                        game.active_site = camp
+                        game._extract(1000.0)
+                        _check(camp.remaining_energy == 0.0, camp.label + " has a finite reserve")
+                    _check(game.core.restoration == 100.0, "%d/%d/%d/%d reaches the beacon threshold" % [a, b, c, d])
+                    tested += 1
+    measurements["combinations"] = tested
+    _check(tested == 15, "Checked every four-camp combination")
+
+
+func _campaign(use_quarry: bool) -> void:
+    var identity: int = game.core.get_instance_id()
+    var route_summary: Array[Dictionary] = []
+    if not await _collect_grove_supplies() or not await _cross_grove():
+        return
+    if not await _campaign_defense(game.grove, route_summary):
+        return
+    var junction := "grove"
+    if use_quarry:
+        if not await _walk_route(QUARRY_PATH, "Grove to Quarry"):
+            return
+        if not await _campaign_defense(_find_site("Broken Quarry"), route_summary):
+            return
+        if not await _walk_route(QUARRY_SOUTH, "Quarry's southern gallery"):
+            return
+        junction = "quarry"
+    elif not await _walk_route(GROVE_SOUTH, "Grove's southern causeway"):
+        return
+    var destinations := PackedStringArray(["west", "east"] if use_quarry else ["west", "south", "east"])
+    var sites_by_junction := {"west": "Lanternwood", "south": "Sunken Aqueduct", "east": "Sunwatch Observatory"}
+    for next in destinations:
+        if not await _walk_outer(junction, next):
+            return
+        if not await _campaign_defense(_find_site(sites_by_junction[next]), route_summary):
+            return
+        junction = next
+    measurements["route"] = route_summary
+    if not _check(is_equal_approx(game.core.restoration, 100.0), "Four fought defenses restore the sun"):
+        return
+    if not await _walk_outer(junction, "relay") or not await _walk_route(RELAY_FROM_EAST, "Relay eastern span"):
+        return
+    if not await _deliver(identity):
+        return
+    measurements["journey_seconds"] = physics_samples / 60.0
+    _check(game.battle.enemies.is_empty(), "Victory ends pursuit and organized attacks")
+
+
+func _walk_outer(from: String, to: String) -> bool:
+    var steps: PackedVector3Array = game.outer_valley.route_between_nodes(from, to)
+    if not _check(steps.size() > 1, "Outer trail is open from %s to %s" % [from, to]):
+        return false
+    return await _walk_route(Array(steps), "%s to %s" % [from, to])
+
+
+func _outer_profile() -> void:
+    if not _check(use_window, "Outer profile requires the graphical renderer"):
+        return
+    var route: PackedVector3Array = game.outer_valley.route_between_nodes("grove", "cross")
+    if not _check(route.size() >= 3, "Pilgrims' Cross trail available"):
+        return
+    var offset := route[2] - route[1]
+    _position_player(route[1] + Vector3.UP * 0.18)
+    game.director.yaw = atan2(-offset.x, -offset.z)
+    game.player.visual.rotation.y = game.director.yaw
+    game.director.reset_pose()
+    await _physics_frames(24)
+    var start: Vector3 = game.player.global_position
+    Input.action_press("move_forward")
+    measurements["outer_crossing"] = await _profile(210, 10)
+    Input.action_release("move_forward")
+    _check(game.player.global_position.distance_to(start) > 2.0 and game.player.is_on_floor(),
+        "Player moves along the outer trail during the sample")
+    await _capture("outer-trail-profile.png")
+
+
+func _campaign_defense(site: CinderSite, route_summary: Array[Dictionary]) -> bool:
+    if site == null or not await _interact_at_pad():
+        return false
+    for index in site.sockets.size():
+        game.battle.place(index, 2 if index == 1 else 0)
+    if not game.start_wave() or not await _wait_mode("Defend", 90):
+        return false
+    if not await _defend_site(site, false) or not await _pack():
+        return false
+    var visit := _snapshot(site)
+    visit["site"] = site.label
+    route_summary.append(visit)
+    return true
+
+
+func _deliver(identity: int) -> bool:
     var beacon: Marker3D = game.get("beacon")
     if not _check(is_instance_valid(beacon), "Beacon anchor available"):
-        return
+        return false
     if not await _walk_route(BEACON_PATH, "Relay to hilltop beacon"):
-        return
+        return false
     game.interact()
     if not await _wait_mode("Win", 180):
-        return
+        return false
     _check(game.core.get_instance_id() == identity and _core_count() == 1, "The same core is delivered")
     if use_window:
         await _physics_frames(160)
         await _capture("beacon-sunrise.png")
-    await _restart()
+    return true
 
 
 func _relay_profile() -> void:
@@ -487,7 +620,7 @@ func _reset_capture() -> void:
 func _defend_site(site: Variant, last_site: bool) -> bool:
     # Repair, upgrade, and start subsequent waves through the same gameplay APIs used by the HUD.
     var capture_taken := false
-    var frame_budget := 22500
+    var frame_budget := 42000
     for frame in range(0, frame_budget, 30):
         if _mode() == "Lose":
             return _check(false, "Survived defenses at " + site.label)
@@ -549,7 +682,7 @@ func _restart() -> void:
     _check(_mode() == "Explore" and _core_count() == 1, "Restart returns to Explore with one core")
     _check(is_equal_approx(game.core.health, 100.0), "Restart resets core health")
     _check(is_zero_approx(game.core.restoration), "Restart resets restoration")
-    _check(is_equal_approx(game.grove.remaining_energy, 45.0) and game.grove.threat == 0, "Restart resets the grove")
+    _check(is_equal_approx(game.grove.remaining_energy, game.grove.spec.energy) and game.grove.threat == 0, "Restart resets the grove")
     _check(_enemy_count() == 0, "Restart clears enemies")
 
 

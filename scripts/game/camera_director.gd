@@ -9,6 +9,8 @@ var tactical := false
 var tactical_position := Vector3.ZERO
 var tactical_look := Vector3.ZERO
 var ending := false
+var mouse_sensitivity := 1.0
+var reduced_motion := false
 var _blend := 0.0
 var _view := Transform3D.IDENTITY
 
@@ -27,8 +29,8 @@ func reset_pose() -> void:
 
 func orbit(relative: Vector2) -> void:
 	if not tactical and not ending:
-		yaw -= relative.x * 0.0027
-		pitch = clampf(pitch - relative.y * 0.0027, -0.34, 0.82)
+		yaw -= relative.x * 0.0027 * mouse_sensitivity
+		pitch = clampf(pitch - relative.y * 0.0027 * mouse_sensitivity, -0.34, 0.82)
 
 func show_site(view_position: Vector3, view_target: Vector3) -> void:
 	tactical_position = view_position
@@ -53,7 +55,7 @@ func _physics_process(delta: float) -> void:
 			Transform3D(Basis.IDENTITY, tactical_position).looking_at(tactical_look), weight)
 	_view = _view.interpolate_with(target, 1.0 - exp(-14.0 * delta))
 	camera.global_transform = _view
-	camera.fov = lerpf(56.0, 46.0, weight)
+	camera.fov = 56.0 if reduced_motion else lerpf(56.0, 46.0, weight)
 
 func _explore_pose(check_collision: bool) -> Transform3D:
 	var heading := Basis(Vector3.UP, yaw) * Basis(Vector3.RIGHT, -pitch)

@@ -18,6 +18,7 @@ func _frames(count: int) -> void:
 		await physics_frame
 
 func _run() -> void:
+	set_meta(&"direct_journey", true)
 	change_scene_to_file("res://scenes/main.tscn")
 	await scene_changed
 	var game = current_scene

@@ -6,8 +6,10 @@ const GROVE := preload("res://data/sites/grove.tres")
 const TRAVELER := preload("res://scenes/player/traveler_visual.tscn")
 const SHRINE := preload("res://scenes/core/sun_core.tscn")
 const INTERFACE := preload("res://scenes/ui/hud.tscn")
+const FRONT_END := preload("res://scenes/ui/front_end.tscn")
 const QUARRY_REGION := preload("res://scripts/world/quarry.gd")
 const RELAY_REGION := preload("res://scripts/world/relay.gd")
+const OUTER_VALLEY := preload("res://scenes/world/outer_valley.tscn")
 const CACHE_MODEL := preload("res://art/models/supply_crate.glb")
 const PACK_SECONDS := 1.7
 const OPENING := Vector3(-3.0, 0.76, 15.0)
@@ -24,6 +26,7 @@ var soundscape: CinderSoundscape
 var battle: CinderBattle
 var hud: CinderHUD
 var grove: CinderSite
+var outer_valley: CinderOuterValley
 var sites: Array[CinderSite] = []
 var active_site: CinderSite
 var beacon: Marker3D
@@ -38,6 +41,14 @@ var _notice := ""
 var _notice_time := 0.0
 var _hud_clock := 0.0
 var _capture_mouse := true
+var _front_end: CinderFrontEnd
+var _checkpoint: Dictionary = {}
+var _claimed_caches := PackedStringArray()
+var _quiet_travel := 0.0
+var _checkpoint_timer := 0.0
+var _checkpoint_enabled := true
+var _front_active := false
+var _settings_open := false
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -66,14 +77,102 @@ func _ready() -> void:
 	core.destroyed.connect(_lose)
 	soundscape = CinderSoundscape.new()
 	_add_runtime(soundscape)
+	traveler.footfall.connect(soundscape.footfall)
 	battle = CinderBattle.new()
 	_add_runtime(battle)
 	battle.bind_carried_core(core)
 	battle.message.connect(_notify)
-	battle.sound.connect(soundscape.cue)
+	battle.sound.connect(_battle_sound)
 	hud = INTERFACE.instantiate() as CinderHUD
 	add_child(hud)
+	hud.action_requested.connect(_hud_action)
 	_add_cache(Vector3(-6.1, 0.72, 9.0), 16)
+	_checkpoint_enabled = not _direct_launch()
+	if _checkpoint_enabled:
+		_checkpoint = JourneyCheckpoint.read()
+		_front_end = FRONT_END.instantiate() as CinderFrontEnd
+		add_child(_front_end)
+		_front_end.begin_journey.connect(_begin_journey)
+		_front_end.continue_journey.connect(_continue_journey)
+		_front_end.quit_requested.connect(get_tree().quit)
+		_front_end.settings_closed.connect(_close_settings)
+		_front_end.preferences_changed.connect(_apply_preferences)
+		_apply_preferences()
+		var entry: StringName = get_tree().get_meta(&"journey_entry", &"title")
+		get_tree().remove_meta(&"journey_entry")
+		if entry == &"continue":
+			_continue_journey()
+		else:
+			_front_active = true
+			hud.hide()
+			player.set_physics_process(false)
+			if entry == &"new":
+				_front_end.show_menu(not _checkpoint.is_empty())
+				_front_end.request_new_journey()
+			else:
+				_front_end.show_menu(not _checkpoint.is_empty())
+	_sync_controls()
+	_render_hud()
+
+func _direct_launch() -> bool:
+	return OS.get_cmdline_user_args().has("--direct") or bool(get_tree().get_meta(&"direct_journey", false))
+
+func _apply_preferences() -> void:
+	director.mouse_sensitivity = _front_end.mouse_sensitivity
+	director.reduced_motion = _front_end.reduced_motion
+
+func _enter_journey() -> void:
+	_front_active = false
+	_front_end.hide_all()
+	player.set_physics_process(true)
+	hud.show()
+	director.reset_pose()
+	_sync_controls()
+	_render_hud()
+
+func _begin_journey() -> void:
+	if JourneyCheckpoint.write({}):
+		_checkpoint.clear()
+	else:
+		_notify("The new journey could not replace the last checkpoint")
+	_enter_journey()
+
+func _continue_journey() -> void:
+	if not _checkpoint.is_empty():
+		_restore_checkpoint()
+	_enter_journey()
+
+func _reload_for(entry: StringName) -> void:
+	get_tree().paused = false
+	get_tree().set_meta(&"journey_entry", entry)
+	get_tree().reload_current_scene()
+
+func _hud_action(action: StringName) -> void:
+	match action:
+		&"resume":
+			_set_paused(false)
+		&"settings":
+			if _front_end != null:
+				_settings_open = true
+				_render_hud()
+				_front_end.show_settings(true)
+		&"title":
+			_save_checkpoint()
+			_reload_for(&"title")
+		&"checkpoint":
+			_reload_for(&"continue")
+		&"restart":
+			restart()
+
+func _close_settings() -> void:
+	_settings_open = false
+	_render_hud()
+
+func _set_paused(value: bool) -> void:
+	if value:
+		_save_checkpoint()
+	_paused = value
+	get_tree().paused = value
 	_sync_controls()
 	_render_hud()
 
@@ -92,7 +191,7 @@ func _build_sites() -> void:
 		[PackedVector3Array([Vector3(-13, 0, -9), Vector3(-10, 0, -4), Vector3(-7, 0, -2),
 			Vector3(-4, 0.66, 0), center]),
 		PackedVector3Array([Vector3(14, 0, -9), Vector3(11, 0, -4), Vector3(7, 0, 1),
-			Vector3(4, 0.66, 0), center])], Vector3(10, 15, 19), Vector3(0, 0, -1))
+			Vector3(4, 0.66, 0), center])], Vector3(10, 12.3, 19.7), Vector3(0, 0.42, -1))
 	_add_runtime(grove)
 	sites.append(grove)
 	var quarry := QUARRY_REGION.new()
@@ -107,6 +206,12 @@ func _build_sites() -> void:
 	_waymark("Broken Quarry", Vector3(-4.1, 0.71, 2.25), Vector3.LEFT)
 	_waymark("Fallen Relay", Vector3(1.38, 0.71, -4.28), Vector3.FORWARD)
 	_waymark("Hilltop Beacon", Vector3(15.4, 4.80, -56.3), Vector3(1, 0, -1))
+	outer_valley = OUTER_VALLEY.instantiate() as CinderOuterValley
+	_add_runtime(outer_valley)
+	sites.append_array(outer_valley.get_sites())
+	for index in outer_valley.caches.size():
+		_add_cache(outer_valley.caches[index], 14, outer_valley.cache_ids[index])
+	_waymark("Pilgrims’ Cross", Vector3(-2.5, 0.72, 19.3), Vector3.BACK)
 
 func _waymark(label: String, point: Vector3, direction: Vector3) -> void:
 	var marker := CinderWaymark.new()
@@ -115,13 +220,12 @@ func _waymark(label: String, point: Vector3, direction: Vector3) -> void:
 	_add_runtime(marker)
 
 func _physics_process(delta: float) -> void:
-	if _paused:
+	if _paused or _front_active:
 		return
 	if mode == Mode.WIN or mode == Mode.LOSE:
 		_update_hud_clock(delta)
 		return
 	_notice_time = maxf(0.0, _notice_time - delta)
-	soundscape.step(delta, player.get_real_velocity().slide(Vector3.UP).length())
 	if mode == Mode.DEPLOY and director.settled():
 		mode = Mode.PREPARE
 		_sync_controls()
@@ -142,7 +246,16 @@ func _physics_process(delta: float) -> void:
 			_extract(delta)
 	if mode == Mode.PREPARE or mode == Mode.DEFEND:
 		_update_socket()
+	_update_checkpoint(delta)
 	_update_hud_clock(delta)
+
+func _battle_sound(cue: String) -> void:
+	if cue == "hit":
+		if core.form == SunCore.Form.CARRIED:
+			player.visual.gesture(&"hurt")
+		soundscape.cue("hurt")
+	else:
+		soundscape.cue(cue)
 
 func _update_hud_clock(delta: float) -> void:
 	_hud_clock += delta
@@ -151,6 +264,8 @@ func _update_hud_clock(delta: float) -> void:
 		_render_hud()
 
 func _unhandled_input(event: InputEvent) -> void:
+	if _front_active or _settings_open:
+		return
 	if event.is_action_pressed("toggle_hud") and hud != null:
 		hud.visible = not hud.visible
 		return
@@ -158,12 +273,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		if _selected != -1 and not _paused:
 			_selected = -1
 		elif mode != Mode.LOSE and mode != Mode.WIN:
-			_paused = not _paused
-			get_tree().paused = _paused
-			_sync_controls()
-			_render_hud()
+			_set_paused(not _paused)
 		return
-	if event.is_action_pressed("restart") and (mode == Mode.WIN or mode == Mode.LOSE or _paused):
+	if _direct_launch() and event.is_action_pressed("restart") and (mode == Mode.WIN or mode == Mode.LOSE or _paused):
 		restart()
 		return
 	if _paused or mode == Mode.WIN or mode == Mode.LOSE:
@@ -204,7 +316,8 @@ func _handle_click(event: InputEventMouseButton) -> void:
 				direction = origin.direction_to(pointed + Vector3.UP * 0.41)
 		else:
 			direction.y = clampf(direction.y, -0.12, 0.18)
-		battle.attack(origin, direction.normalized())
+		if battle.attack(origin, direction.normalized()):
+			player.visual.gesture(&"fire")
 
 func _pointer_ground(pointer: Vector2) -> Vector3:
 	var start := camera.project_ray_origin(pointer)
@@ -231,6 +344,8 @@ func interact() -> void:
 		if cache != null and battle != null:
 			var amount: int = cache.get_meta("scrap")
 			battle.scrap += amount
+			_claimed_caches.append(cache.get_meta(&"checkpoint_id"))
+			player.visual.gesture(&"collect")
 			soundscape.cue("collect")
 			_notify("Recovered %d scrap" % amount)
 			_caches.erase(cache)
@@ -239,6 +354,9 @@ func interact() -> void:
 		var site := _near_site()
 		if site != null:
 			_deploy(site)
+		elif outer_valley.try_open_shortcut(player.global_position):
+			soundscape.cue("collect")
+			_notify("Shortcut opened")
 	elif (mode == Mode.PREPARE or mode == Mode.DEFEND) and _near(active_site.anchor, 5.5):
 		if battle != null:
 			battle.repair()
@@ -246,6 +364,7 @@ func interact() -> void:
 func _deploy(site: CinderSite) -> void:
 	active_site = site
 	mode = Mode.DEPLOY
+	player.visual.gesture(&"deploy")
 	core.transfer(site.anchor, SunCore.Form.DEPLOYED, 0.91)
 	director.show_site(site.view_position, site.view_target)
 	player.recovery_point = site.anchor.global_position + Vector3(0, 0.1, 2)
@@ -268,7 +387,12 @@ func start_wave() -> bool:
 func _extract(delta: float) -> void:
 	var draw := minf(minf(active_site.remaining_energy, active_site.spec.rate * delta), 100.0 - core.restoration)
 	active_site.remaining_energy -= draw
+	if active_site.remaining_energy <= 0.001:
+		draw += active_site.remaining_energy
+		active_site.remaining_energy = 0.0
 	core.restoration += draw
+	if core.restoration >= 99.999:
+		core.restoration = 100.0
 	if core.restoration >= 99.999 or active_site.remaining_energy <= 0.001:
 		battle.hold()
 		mode = Mode.PREPARE if mode != Mode.PACK else Mode.PACK
@@ -290,6 +414,7 @@ func pack_step(delta: float) -> void:
 		mode = Mode.PACK
 		_selected = -1
 		_pack_elapsed = 0.0
+		player.visual.gesture(&"pack")
 		if battle != null:
 			battle.hold()
 		_sync_controls()
@@ -313,10 +438,10 @@ func _cancel_pack() -> void:
 
 func _sync_controls() -> void:
 	var traveling := mode == Mode.EXPLORE or mode == Mode.TRANSIT
-	player.move_enabled = traveling or mode == Mode.PREPARE or mode == Mode.DEFEND
+	player.move_enabled = not _front_active and not _paused and (traveling or mode == Mode.PREPARE or mode == Mode.DEFEND)
 	player.tactical = not traveling
 	if _capture_mouse:
-		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED if traveling and not _paused else Input.MOUSE_MODE_VISIBLE
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED if traveling and not _paused and not _front_active else Input.MOUSE_MODE_VISIBLE
 
 func _near(node: Node3D, radius: float) -> bool:
 	return node != null and player.global_position.distance_to(node.global_position) <= radius
@@ -333,10 +458,12 @@ func _near_cache() -> Node3D:
 			return cache
 	return null
 
-func _add_cache(point: Vector3, amount: int) -> void:
+func _add_cache(point: Vector3, amount: int, identifier := "") -> void:
 	var cache := CACHE_MODEL.instantiate() as Node3D
 	cache.position = point
 	cache.set_meta("scrap", amount)
+	cache.set_meta(&"checkpoint_id", identifier if not identifier.is_empty() else
+		"cache_%d_%d_%d" % [roundi(point.x * 10), roundi(point.y * 10), roundi(point.z * 10)])
 	_add_runtime(cache)
 	_caches.append(cache)
 
@@ -344,6 +471,9 @@ func _win() -> void:
 	mode = Mode.WIN
 	if battle != null:
 		battle.stop()
+	if _checkpoint_enabled and JourneyCheckpoint.write({}):
+		_checkpoint.clear()
+	player.visual.gesture(&"deliver")
 	core.transfer(beacon, SunCore.Form.DELIVERED, 1.25)
 	director.show_ending(beacon.global_position + Vector3(5.5, 2.55, 6.2),
 		beacon.global_position + Vector3(-0.35, 1.2, 0.26))
@@ -361,11 +491,72 @@ func _lose() -> void:
 	if battle != null:
 		battle.stop()
 	_sync_controls()
+	player.visual.gesture(&"hurt")
 	soundscape.cue("hurt")
 
 func restart() -> void:
-	get_tree().paused = false
-	get_tree().reload_current_scene()
+	_reload_for(&"new")
+
+func _safe_checkpoint() -> bool:
+	return (_checkpoint_enabled and not _front_active and not _transferring
+		and (mode == Mode.EXPLORE or mode == Mode.TRANSIT) and core.form == SunCore.Form.CARRIED
+		and battle.enemies.is_empty() and player.is_on_floor()
+		and not grove.wet_depth_at(player.global_position))
+
+func _update_checkpoint(delta: float) -> void:
+	if not _safe_checkpoint():
+		_quiet_travel = 0.0
+		return
+	_quiet_travel += delta
+	_checkpoint_timer += delta
+	if _quiet_travel < 1.5 or (_checkpoint_timer < 7.0 and not _checkpoint.is_empty()):
+		return
+	_save_checkpoint()
+
+func _save_checkpoint() -> void:
+	if not _safe_checkpoint() or _quiet_travel < 1.5:
+		return
+	_checkpoint_timer = 0.0
+	var records := {}
+	for site in sites:
+		records[site.checkpoint_id] = {"reserve": site.remaining_energy, "threat": site.threat}
+	var state := {
+		"position": player.global_position, "yaw": director.yaw, "pitch": director.pitch,
+		"facing": player.visual.rotation.y, "health": core.health, "restoration": core.restoration,
+		"scrap": battle.scrap, "inventory": battle.inventory.duplicate(true),
+		"sites": records, "claimed": _claimed_caches,
+		"shortcuts": outer_valley.unlocked_shortcut_ids(),
+	}
+	if state != _checkpoint and JourneyCheckpoint.write(state):
+		_checkpoint = state
+
+func _restore_checkpoint() -> void:
+	player.global_position = _checkpoint.get("position", OPENING) + Vector3.UP * 0.04
+	player.recovery_point = player.global_position
+	player.reset_physics_interpolation()
+	director.yaw = _checkpoint.get("yaw", director.yaw)
+	director.pitch = _checkpoint.get("pitch", director.pitch)
+	player.visual.rotation.y = _checkpoint.get("facing", 0.0)
+	core.health = clampf(_checkpoint.get("health", 100.0), 0.01, 100.0)
+	core.restoration = clampf(_checkpoint.get("restoration", 0.0), 0.0, 100.0)
+	battle.scrap = maxi(0, _checkpoint.get("scrap", 20))
+	battle.inventory.assign(_checkpoint.get("inventory", []))
+	for module in battle.inventory:
+		module.socket = -1
+	var records: Dictionary = _checkpoint.get("sites", {})
+	for site in sites:
+		var record: Dictionary = records.get(site.checkpoint_id, {})
+		site.remaining_energy = clampf(record.get("reserve", site.spec.energy), 0.0, site.spec.energy)
+		site.threat = maxi(0, record.get("threat", 0))
+	_claimed_caches = _checkpoint.get("claimed", PackedStringArray())
+	outer_valley.restore_shortcuts(_checkpoint.get("shortcuts", PackedStringArray()))
+	for index in range(_caches.size() - 1, -1, -1):
+		if _claimed_caches.has(_caches[index].get_meta(&"checkpoint_id")):
+			var cache := _caches.pop_at(index) as Node3D
+			cache.queue_free()
+	if core.restoration > 0.0:
+		mode = Mode.TRANSIT
+	_notify("Journey resumed")
 
 func _notify(message: String) -> void:
 	_notice = message
@@ -381,6 +572,9 @@ func _hint(nearest: CinderSite) -> String:
 			return "E   Recover supplies"
 		if nearest != null:
 			return "E   Unfold shrine at %s" % nearest.label
+		var shortcut := outer_valley.nearby_shortcut(player.global_position)
+		if not shortcut.is_empty():
+			return "E   Open " + shortcut
 		if core.restoration >= 99.999:
 			return "Follow the ridge beyond Fallen Relay to the beacon"
 		return "Follow the stone causeway to the shrine pad" if mode == Mode.EXPLORE else "Follow the trail markers to another ancient site"
@@ -392,8 +586,6 @@ func _hint(nearest: CinderSite) -> String:
 		if active_site.remaining_energy <= 0.001 or core.restoration >= 99.999:
 			return "Hold R   Pack the shrine"
 		return "Space   Start wave     •     E   Repair"
-	if mode == Mode.DEFEND:
-		return "Hold R   Pack     •     E   Repair     •     U   Upgrade tower"
 	return ""
 
 func _render_hud() -> void:
@@ -414,4 +606,6 @@ func _render_hud() -> void:
 		"pack_progress": clampf(_pack_elapsed / PACK_SECONDS, 0.0, 1.0),
 		"modules": battle.module_labels() if battle != null else PackedStringArray(),
 		"paused": _paused,
+		"settings_open": _settings_open, "checkpoint_available": not _checkpoint.is_empty(),
+		"checkpoint_hint": "The last safe trail checkpoint will be used." if not _safe_checkpoint() and not _checkpoint.is_empty() else "",
 	})

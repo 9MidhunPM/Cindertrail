@@ -3,7 +3,6 @@ extends Node
 
 var _effects: Dictionary = {}
 var _ambient: AudioStreamPlayer
-var _steps := 0.0
 var _foot := false
 
 func _ready() -> void:
@@ -45,15 +44,9 @@ func cue(cue_name: String) -> void:
 	effect.finished.connect(effect.queue_free)
 	effect.play()
 
-func step(delta: float, speed: float) -> void:
-	if speed < 0.4:
-		_steps = 0.0
-		return
-	_steps += speed * delta
-	if _steps > 1.06:
-		_steps = 0.0
-		_foot = not _foot
-		cue("footstep" if _foot else "footstep_alt")
+func footfall(_running: bool) -> void:
+	_foot = not _foot
+	cue("footstep" if _foot else "footstep_alt")
 
 func _stream(duration: float, tones: Array[float], grit: float, seed_value: int) -> AudioStreamWAV:
 	var output := AudioStreamWAV.new()

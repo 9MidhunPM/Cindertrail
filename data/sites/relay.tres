@@ -5,7 +5,8 @@
 [resource]
 script = ExtResource("1")
 label = "Fallen Relay"
-energy = 60.0
-rate = 0.24
+id = &"fallen_relay"
+energy = 25.0
+rate = 0.064
 intensity = 1.28
 lane_names = PackedStringArray("Western ridge", "North stair", "Eastern span")
