@@ -2,3 +2,5 @@
 build/
 evidence/
 __pycache__/
+.env
+.env.*
