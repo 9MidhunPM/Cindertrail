@@ -1,0 +1,204 @@
+extends Node3D
+## Dense pockets frame the trails. Forest trunks stay outside the road beds.
+
+const MESH := preload("res://scripts/world/environment_mesh.gd")
+const DEN := preload("res://scripts/world/trail_den.gd")
+const POCKETS := [
+	["Masons’ walk", .29, -1.0, .20],
+	["Masons’ walk", .29, 1.0, .25],
+	["Masons’ walk", .58, 1.0, .16],
+	["Western arcade", .40, -1.0, .37],
+	["High orchard", .25, 1.0, .86],
+	["High orchard", .60, -1.0, .71],
+	["Orchard spillway", .51, 1.0, .50],
+	["South wash", .42, 1.0, .12],
+	["Pilgrim stair", .49, -1.0, .23],
+	["Spice road", .38, 1.0, .37],
+	["Spice road", .38, -1.0, .24],
+	["Spice road", .68, -1.0, .48],
+	["Bellmakers’ cut", .63, -1.0, .45],
+	["Eastern escarpment", .29, 1.0, .22],
+	["Gallery road", .43, -1.0, .32],
+	["Tanners’ road", .19, 1.0, .17],
+	["Tanners’ road", .78, -1.0, .16],
+	["Quarry switchback", .52, 1.0, .61],
+	["Relay ascent", .37, 1.0, .24],
+]
+const COOL := [Color("#174e57"), Color("#225d63"), Color("#2c766c"), Color("#3b7c6f")]
+const GOLD := [Color("#b96534"), Color("#c8763a"), Color("#d58a41"), Color("#d59955")]
+
+var _roads: Array = []
+var _excluded := PackedVector3Array()
+var _rng := RandomNumberGenerator.new()
+var _bark: ShaderMaterial
+var _leaf: ShaderMaterial
+var _planted := PackedVector3Array()
+
+func build(roads: Array, labels: PackedStringArray, forbidden: PackedVector3Array, seed_value: int) -> void:
+	_roads = roads
+	_excluded = forbidden
+	_rng.seed = 73183 ^ seed_value
+	_bark = MESH.pigment(2)
+	_leaf = MESH.pigment(0, true)
+	await get_tree().physics_frame
+	if not is_inside_tree():
+		return
+	for record: Array in POCKETS:
+		var route := labels.find(record[0])
+		if route >= 0:
+			_plant_pocket(_roads[route], record[1], record[2], record[3])
+	_roads = []
+
+func _plant_pocket(path: PackedVector3Array, fraction: float, bank: float, autumn_ratio: float) -> void:
+	if path.size() < 2:
+		return
+	var edge := fraction * (path.size() - 1)
+	var segment := clampi(floori(edge), 0, path.size() - 2)
+	var direction := (path[segment + 1] - path[segment]).slide(Vector3.UP).normalized()
+	if direction.is_zero_approx():
+		return
+	var across := direction.cross(Vector3.UP) * bank
+	var center := path[segment].lerp(path[segment + 1], edge - segment)
+	var sector := Node3D.new()
+	sector.name = "ForestClump"
+	sector.position = center + across * 8.0
+	add_child(sector)
+	var wood := MESH.new()
+	var canopy := MESH.new()
+	var solid := StaticBody3D.new()
+	solid.name = "Trunks"
+	sector.add_child(solid)
+	for slot in 22:
+		var row := floorf(slot / 6.0)
+		var verge := 4.3 + row * 5.7 + _rng.randf_range(-.7, .62)
+		var along := (slot % 6 - 2.5) * 3.28 + _rng.randf_range(-1.2, 1.2)
+		var at := center + across * verge + direction * along
+		var distance := _distance_to_roads(at)
+		if distance < 4.05 or distance > 36.0 or _protected(at, 17.0) or _has_neighbor(at, 2.85):
+			continue
+		var ground := _ground(at)
+		if ground == Vector3.INF:
+			continue
+		var point := sector.to_local(ground) - Vector3.UP * .05
+		_planted.append(ground)
+		var height := _rng.randf_range(2.25, 4.55) if verge > 9.4 else _rng.randf_range(4.25, 6.65)
+		var warm := _rng.randf() < autumn_ratio
+		_tree(wood, canopy, point, height, warm, direction)
+		if distance < 10.0:
+			_trunk_collider(solid, point, height)
+		for i in 4:
+			var offset := (across * _rng.randf_range(-1.6, 2.6) + direction * _rng.randf_range(-1.65, 1.65))
+			if _distance_to_roads(ground + offset) < 2.32:
+				continue
+			var floor_at := _ground(ground + offset)
+			if floor_at != Vector3.INF:
+				_fern(canopy, sector.to_local(floor_at), _rng.randf_range(.48, 1.20), warm)
+		if slot % 5 == 1 and distance > 6.5:
+			var deadfall := point + direction * 1.1 + across * .36
+			wood.tapered(deadfall, deadfall + direction * 2.9 + Vector3.UP * .27, .20, .11, 6, Color("#654b3e"))
+	if solid.get_child_count() == 0:
+		solid.queue_free()
+	var floor_mesh := wood.mount(sector, "BarkAndDeadfall", _bark)
+	var leaf_mesh := canopy.mount(sector, "CanopyAndUnderstory", _leaf)
+	if floor_mesh == null and leaf_mesh == null:
+		sector.queue_free()
+		return
+	for view: MeshInstance3D in [floor_mesh, leaf_mesh]:
+		if view:
+			view.visibility_range_end = 107.0
+			view.visibility_range_end_margin = 15.0
+
+func _tree(wood: MESH, canopy: MESH, at: Vector3, height: float, warm: bool, toward: Vector3) -> void:
+	var radius := height * .051
+	var bark := Color("#614539").lerp(Color("#576059"), _rng.randf() * .72)
+	var fork := at - toward * _rng.randf_range(.18, .55) + Vector3.UP * height * .50
+	var apex := fork + Vector3.UP * height * .27 + Vector3.RIGHT * _rng.randf_range(-.54, .58)
+	wood.tapered(at, at + Vector3.UP * height * .16, radius * 1.2, radius * .81, 7, bark)
+	wood.tapered(at + Vector3.UP * height * .155, fork, radius * .84, radius * .49, 7, bark.lightened(.04))
+	wood.tapered(fork, apex, radius * .50, radius * .16, 6, bark.lightened(.06))
+	var leaf_set := GOLD if warm else COOL
+	var phase := _rng.randf() * TAU
+	for ray in 4:
+		var a := phase + TAU * ray / 4.0
+		var reach := Vector3(cos(a), 0.13, sin(a))
+		var crotch := fork.lerp(apex, .23 + .15 * ray)
+		var tip := crotch + reach * height * _rng.randf_range(.20, .29) + Vector3.UP * height * .19
+		wood.tapered(crotch, tip, radius * .35, radius * .087, 6, bark)
+		var twig := tip + reach.rotated(Vector3.UP, .54) * height * .20 + Vector3.UP * height * .045
+		wood.tapered(tip, twig, radius * .12, radius * .036, 5, bark.lightened(.09))
+		var paint: Color = leaf_set[ray]
+		canopy.facets(tip + Vector3.UP * .15, Vector3(.31, .132, .28) * height, 9, paint, a)
+		canopy.facets(twig, Vector3(.22, .102, .20) * height, 7, paint.lightened(.11), a - .62)
+		if ray % 2 == 1:
+			canopy.facets(crotch + Vector3.UP * height * .28, Vector3(.24, .113, .23) * height, 8, paint.lightened(.15), a)
+	for root in 4:
+		var a := phase + TAU * root / 4.0
+		var outward := Vector3(cos(a), 0, sin(a))
+		var heel := at + outward * radius * 2.1 + Vector3.UP * .13
+		wood.tapered(at + Vector3.UP * radius * 2.2, heel, radius * .59, radius * .41, 5, bark)
+		wood.tapered(heel, at + outward * radius * 5.2 - Vector3.UP * .077, radius * .41, radius * .081, 5, bark)
+
+func _fern(canopy: MESH, at: Vector3, size: float, warm: bool) -> void:
+	var tint := Color("#947048") if warm else Color("#4b8464")
+	for arm in 6:
+		var angle := TAU * arm / 6.0 + _rng.randf_range(-.26, .25)
+		var out := Vector3(cos(angle), 0, sin(angle))
+		var bend := at + Vector3.UP * size * .40 + out * size * .40
+		var tip := bend + out * size * .28 - Vector3.UP * size * .065
+		var spine := out.cross(Vector3.UP) * size
+		for row in 4:
+			var t := .22 + .19 * row
+			var node := at.lerp(bend, t) if row < 3 else bend
+			var width := .19 * (1.0 - t * .64)
+			for sign_side in [-1.0, 1.0]:
+				var leaf := node + spine * float(sign_side) * width
+				var end := node.lerp(tip, .32)
+				canopy.face(node, leaf, end, tint.lightened(t * .22), Vector3.UP)
+
+func _ground(at: Vector3) -> Vector3:
+	var state := get_world_3d().direct_space_state
+	var ray := PhysicsRayQueryParameters3D.create(at + Vector3.UP * 6.5, at - Vector3.UP * 10.0, 1)
+	var hit := state.intersect_ray(ray)
+	if hit.is_empty() or (hit.normal as Vector3).y < .75:
+		return Vector3.INF
+	var body := hit.collider as Node3D
+	if body != null and body.get_parent() is DEN:
+		return Vector3.INF
+	return hit.position
+
+func _trunk_collider(solid: StaticBody3D, at: Vector3, height: float) -> void:
+	var capsule := CylinderShape3D.new()
+	capsule.height = height * .62
+	capsule.radius = height * .053
+	var collider := CollisionShape3D.new()
+	collider.position = at + Vector3.UP * capsule.height * .50
+	collider.shape = capsule
+	solid.add_child(collider)
+
+func _protected(at: Vector3, minimum: float) -> bool:
+	for point in _excluded:
+		if _flat_distance(at, point) < minimum:
+			return true
+	return false
+
+func _has_neighbor(at: Vector3, minimum: float) -> bool:
+	for point in _planted:
+		if _flat_distance(at, point) < minimum:
+			return true
+	return false
+
+func _flat_distance(a: Vector3, b: Vector3) -> float:
+	return Vector2(a.x - b.x, a.z - b.z).length()
+
+func _distance_to_roads(at: Vector3) -> float:
+	var target := Vector2(at.x, at.z)
+	var closest := INF
+	for path: PackedVector3Array in _roads:
+		for i in range(1, path.size()):
+			var a := Vector2(path[i - 1].x, path[i - 1].z)
+			var b := Vector2(path[i].x, path[i].z)
+			if minf(a.distance_squared_to(target), b.distance_squared_to(target)) > 85.0 * 85.0:
+				continue
+			var point := Geometry2D.get_closest_point_to_segment(target, a, b)
+			closest = minf(closest, point.distance_squared_to(target))
+	return sqrt(closest)
