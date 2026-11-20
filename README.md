@@ -19,7 +19,9 @@ Press **H** to ask Mote, the moth companion, for a tip about your current object
 
 The six main camps share one continuous 3D world and all use the same protected sun. Each main camp has 25 points of restoration. Expect quick attacks and a short break after each cleared wave. Drain four main camps or combine partial reserves, then bring the sun to the hilltop beacon.
 
-**New Journey** combines one of three base valleys with independently selected trail forks, shrine clearings, and town blocks. The Grove approach is your starting point. Follow the moonlit trails through Western Arcade, Bellmakers’ Steps, and Mineral Ward. Each town has a side path with a supply cache. Continue and Retry rebuild your saved valley. Older journeys retain their original routes and positions.
+**New Journey** gives each of the seven shrines a different area of the valley and samples its exact position on solid ground. Look for new trail markers, ruined workshops, overlooks, and side caches along the way. The Grove approach is still your starting point. Continue and Retry restore the same positions and routes, and older journeys retain their original geography.
+
+The score changes as you explore, defend, flee, and face Vesper. Use **Settings** to adjust Music, Effects, and Ambience separately. [Soundtrack credits](art/audio/score/README.md)
 
 Fully draining a shrine raises the cap of all three defenses by one level and earns that shrine's traveler ability. Use **G** to cast and **Q** to cycle. Each ability has its own cooldown in the icon dock. The first time you learn an ability, it earns a permanent achievement. Individual tower upgrades still cost scrap. At 100% restoration the beacon opens. Press **T** at an unfinished shrine to keep earning its local reward.
 
@@ -36,7 +38,7 @@ Hold still to watch fish school beneath the Grove crossing, deer browse in Lante
 | Splinterback | Its crystal fan opens over a marked landing zone. Interrupt the wind-up or carry the sun out of the mark. |
 | Bell Warden | The bell opens around its chime and shields an ally. Strike the Warden to break the ward. |
 
-At full restoration, follow the compass to the ridge beyond Fallen Relay. Press **E** to unfold the shrine on its summit, place any carried modules, then press **T** to challenge the **Vesper Colossus**. Evade its charges and ground ring. Move to the lit shoulder and strike or spark twice while it braces, then attack the open chest. After it falls, approach the cradle and press **E** to deliver the sun and begin the painted finale. Press **Esc** or **Enter** to skip to sunrise. Folding the shrine lets you retreat and attempt the defense again. If the core falls, **Retry from checkpoint** returns to the pre-fight journey.
+At full restoration, follow the compass to the hilltop beacon. Press **E** to unfold the shrine on its summit, place any carried modules, then press **T** to challenge the **Vesper Colossus**. Evade its charges and ground ring. Move to the lit shoulder and strike or spark twice while it braces, then attack the open chest. After it falls, approach the cradle and press **E** to deliver the sun and begin the painted finale. Press **Esc** or **Enter** to skip to sunrise. Folding the shrine lets you retreat and attempt the defense again. If the core falls, **Retry from checkpoint** returns to the pre-fight journey.
 
 | Input | Action |
 | --- | --- |
@@ -57,7 +59,7 @@ At full restoration, follow the compass to the ridge beyond Fallen Relay. Press 
 
 Repairs spend scrap to restore shrine health. Energy drawn from a camp advances the journey toward sunrise.
 
-See the [Traveler’s Reckoning screenshots and verification](docs/TRAVELER_RECKONING_VERIFICATION.md), [moonlit valley screenshots](docs/MOONLIT_VALLEY_VERIFICATION.md), [repeatable QA commands](tools/qa/README.md), and the original [visual fieldbook](OPEN_ME.html).
+See the [roaming valley and score verification](docs/ROAMING_VALLEY_VERIFICATION.md), [Traveler’s Reckoning screenshots](docs/TRAVELER_RECKONING_VERIFICATION.md), [repeatable QA commands](tools/qa/README.md), and the original [visual fieldbook](OPEN_ME.html).
 
 ## Included
 

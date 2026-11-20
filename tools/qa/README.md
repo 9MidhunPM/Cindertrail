@@ -2,6 +2,8 @@
 
 Run these commands from the Cindertrail project root after importing the assets with `godot --headless --editor --import`.
 
+For automated capture and gameplay checks, set `OPENAI_API_KEY=''` and `CINDERTRAIL_GUIDE_ONLINE=0` in the shell. The showcase launcher applies both settings itself.
+
 ## Captures and profile
 
 ```bash
@@ -38,6 +40,13 @@ XDG_DATA_HOME="$(mktemp -d)" CINDERTRAIL_TEST_SAVE=1 godot --headless --fixed-fp
     --script tests/journey_front_smoke.gd
 ```
 
+The roaming seed sweep tests placement and live encounters. The headless showcase aligns the Sunwatch mirrors, follows the route on foot, earns 100 restoration at four camps, and delivers the original sun after defeating Vesper.
+
+```bash
+godot --headless --fixed-fps 60 --script tests/roaming_shrines.gd
+tools/showcase.sh --smoke --once --out="$PWD/evidence/roaming-shrines"
+```
+
 ## Beacon ending
 
 The finale smoke check runs a full 26-second presentation on the real summit, then exercises reduced motion, keyboard skip and immediate skip from a carried sun. The guardian check writes its late-game fixture into an isolated save and verifies Continue after interrupting the film.
@@ -55,3 +64,17 @@ mkdir -p evidence/beacon-finale
 godot --resolution 1280x720 --fixed-fps 24 --write-movie "$PWD/evidence/beacon-finale/sunrise.avi" \
     --script tests/beacon_finale_smoke.gd -- --film="$PWD/evidence/beacon-finale"
 ```
+
+## Record the adaptive score
+
+Godot Movie Maker captures the game mix directly. This runner records a seeded v3 opening, deployment, pressure during retreat, the guardian fight and the complete sunrise presentation. The filming setup positions the traveler at the Grove shrine and later at the summit with a fully restored core. The showcase earns that restoration on foot.
+
+```sh
+python3 tools/qa/record_score.py /tmp/score-verification
+ffmpeg -i /tmp/score-verification/score-journey.avi -c:v libx264 -crf 20 -pix_fmt yuv420p -c:a aac -b:a 192k /tmp/score-journey.mp4
+ffmpeg -i /tmp/score-verification/score-journey.avi -vn -c:a pcm_s16le /tmp/score-mix.wav
+```
+
+The JSON report records movie-frame numbers when gameplay and music change chapters. Use `--rehearse` with headless fixed-FPS to check the staging. To measure both v2 and v3 with the same real-time cameras and viewport, use `godot --script tools/qa/score_journey.gd -- --compare --out=/tmp/score-profile`.
+
+Record the three wayside footpaths and cache pickups with `python3 tools/qa/record_score.py /tmp/wayside-verification --wayside-tour`. The traveler walks each path, with a cut between road junctions. The tour records the regular exploration score and in-game effects.

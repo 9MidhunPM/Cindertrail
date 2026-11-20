@@ -127,12 +127,12 @@ func _check_frame(frame: Image, directory: String, index: int) -> bool:
 ## The same process, viewport, cache, camera transform relative to the local
 ## landmark, and staged cast across the original and generated valley.
 func _compare_rendering() -> void:
-	for version in [0, 1]:
+	for version in _comparison_versions():
 		set_meta(&"world_layout_version", version)
 		game = load(MAIN).instantiate()
 		viewport.add_child(game)
 		await _physics_frames(20)
-		var label := "legacy" if version == 0 else "remix"
+		var label := "legacy" if version == 0 else ("remix" if version == 1 else "layout_v%d" % version)
 		var scenes := {}
 		measurements[label] = scenes
 		game.hud.hide()
@@ -173,3 +173,6 @@ func _compare_rendering() -> void:
 		game.free()
 		game = null
 		await process_frame
+
+func _comparison_versions() -> Array:
+	return [0, 1]
