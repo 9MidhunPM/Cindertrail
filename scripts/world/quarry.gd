@@ -23,6 +23,18 @@ const COPPER := Color("#bc652a")
 
 var site: CinderSite
 var caches := PackedVector3Array([Vector3(-36.0, 0.91, 5.76)])
+const DROP_TIME := .42
+var landmark_position := Vector3(-59.6, 1.15, -2.35)
+var impact_position := Vector3(-62.21, 1.17, -.47)
+var _cradle_pivot: Node3D
+var _cradle: Node3D
+var _rope: MeshInstance3D
+var _target: MeshInstance3D
+var _dust: CPUParticles3D
+var _drop: Tween
+var _hoist_depth := 1.55
+var _drop_running := false
+var _sway_time := 0.0
 var _rng := RandomNumberGenerator.new()
 var _solid := StaticBody3D.new()
 var _surf := SurfaceTool.new()
@@ -37,8 +49,9 @@ func _ready() -> void:
 	_build_court()
 	_build_cut_faces()
 	_extraction_gallery()
-	_build_crane(Vector3(-60.0, 1.15, -4.75), -0.66, 1.16)
+	_build_crane(Vector3(-60.0, 1.15, -4.15), -.54, 1.16, true)
 	_build_crane(Vector3(-50.0, 5.70, -7.65), 0.48, 0.8)
+	_loading_tracks()
 	_finish_geometry()
 	_configure_site()
 
@@ -94,6 +107,22 @@ func _build_trail() -> void:
 	_asset(TREE, Vector3(-39.0, 1.0, 5.7), Vector3.ONE * 1.36, 1.6)
 	_lantern(Vector3(-40.1, 1.03, 3.62))
 	_lantern(Vector3(-45.5, 1.15, -2.55))
+	_quarry_railing()
+
+func _quarry_railing() -> void:
+	# Openings in the handrail keep both the alcove and plaza exits easy to read.
+	for p: Vector3 in [Vector3(-25.4, .69, 2.42), Vector3(-30.15, .74, 2.58),
+			Vector3(-40.75, 1.03, 3.7), Vector3(-44.50, 1.14, 3.15)]:
+		var direction := Vector3(-1, .025, .10)
+		var last := p
+		for bay in 3:
+			var next := p + direction * (bay + 1.0) * 1.17
+			_bar(last, last + Vector3.UP * .89, .18, TIMBER)
+			_bar(last + Vector3.UP * .70, next + Vector3.UP * .70, .105, TIMBER.lightened(.15))
+			_bar(last + Vector3.UP * .47, next + Vector3.UP * .47, .071, TIMBER.darkened(.16))
+			_bar(last + Vector3.UP * .65, last + Vector3.UP * .78, .21, Color("#ba935a"))
+			last = next
+		_bar(last, last + Vector3.UP * .89, .18, TIMBER)
 
 func _build_court() -> void:
 	_box_shape(Vector3(-53.75, .56, 0.03), Vector3(13.7, 1.18, 9.5))
@@ -221,6 +250,7 @@ func _extraction_gallery() -> void:
 	for i in 8:
 		var foot := Vector3(-54.67,1.27+i*.33,-4.93-i*.069)
 		_bar(foot,foot+Vector3.FORWARD*.46,.069,TIMBER)
+	_loading_awning(Vector3(-52.65, 3.81, -5.93))
 	_lantern(Vector3(-54.62,3.85,-5.43))
 	_lantern(Vector3(-60.52,1.15,-3.02))
 	# Timber cap and curved stone lintel at the mouth of the crawler lane.
@@ -271,7 +301,7 @@ func _sumac(base: Vector3, scale_factor: float) -> void:
 			_quad(start,start+dir*.18+width,start+dir*.43,start+dir*.18-width,color,Vector3.UP)
 			_quad(start,start+dir*.18+width,start+dir*.43,start+dir*.18-width,color.darkened(.16),Vector3.DOWN)
 
-func _build_crane(base: Vector3, rotation_y: float, scale_factor: float) -> void:
+func _build_crane(base: Vector3, rotation_y: float, scale_factor: float, working := false) -> void:
 	var transform_crane := Transform3D(Basis(Vector3.UP, rotation_y).scaled(Vector3.ONE * scale_factor), base)
 	var front := transform_crane * Vector3(0, 4.5, 3.7)
 	var rear := transform_crane * Vector3(0, 4.5, -1.52)
@@ -287,8 +317,11 @@ func _build_crane(base: Vector3, rotation_y: float, scale_factor: float) -> void
 			_rock(collar - Vector3.UP * .09, Vector3(.23, .18, .24) * scale_factor, BRONZE)
 	_bar(rear, front, .32 * scale_factor, TIMBER.lightened(.07))
 	_bar(rear + Vector3.UP * .24, front + Vector3.UP * .24, .07 * scale_factor, IRON)
-	_bar(front, front - Vector3.UP * (2.15 * scale_factor), .031 * scale_factor, IRON)
-	_rock(front - Vector3.UP * (2.58 * scale_factor), Vector3(.50, .45, .38) * scale_factor, LIMESTONE)
+	if working:
+		_install_ore_cradle(front)
+	else:
+		_bar(front, front - Vector3.UP * (2.15 * scale_factor), .031 * scale_factor, IRON)
+		_rock(front - Vector3.UP * (2.58 * scale_factor), Vector3(.50, .45, .38) * scale_factor, LIMESTONE)
 	_rock(rear - Vector3.UP * .71, Vector3(.43, .73, .48) * scale_factor, SEDIMENT)
 	_bar(transform_crane * Vector3(-.62, 2.75, -.26), transform_crane * Vector3(.61, 2.75, -.26), .12, BRONZE)
 	# Twin wheels, spoke bracing and anti-slip pawl on the ore winch.
@@ -312,6 +345,160 @@ func _build_crane(base: Vector3, rotation_y: float, scale_factor: float) -> void
 	_quad(pole, pole + Vector3.FORWARD * .35, hem + Vector3.FORWARD * .35, hem, COPPER, Vector3.RIGHT)
 	_quad(pole, pole + Vector3.FORWARD * .35, hem + Vector3.FORWARD * .35, hem, COPPER.darkened(.13), Vector3.LEFT)
 	_box_shape(base + Vector3.UP * .85, Vector3(1.15, 1.7, .83) * scale_factor)
+
+func _loading_tracks() -> void:
+	for row in 15:
+		var x := -67.0 + row * .43
+		_bar(Vector3(x, 1.167, -1.12), Vector3(x, 1.165, 1.05), .05, TIMBER.darkened(.30))
+	for side: float in [-.71, .71]:
+		for run in 4:
+			var x := -67.0 + run * 1.61
+			_bar(Vector3(x, 1.184, side), Vector3(x + 1.52, 1.182, side), .047, IRON.lightened(.22))
+	_lantern(landmark_position + Vector3(0, 0, -.34))
+	_slab(landmark_position + Vector3(0, .33, -.38), Vector2(.38, .40), .34, SEDIMENT)
+	_bar(landmark_position + Vector3(0, .31, -.38), landmark_position + Vector3(0, .95, -.02), .105, BRONZE)
+	_bar(landmark_position + Vector3(-.18, .94, -.02), landmark_position + Vector3(.18, .94, -.02), .105, COPPER)
+
+func _loading_awning(deck: Vector3) -> void:
+	var shore := deck + Vector3(0, 1.95, -.79)
+	var end := deck + Vector3(0, 1.57, 1.12)
+	for side: float in [-1., 1.]:
+		var offset := Vector3.RIGHT * side * 2.0
+		_bar(deck + offset + Vector3.FORWARD * .79, shore + offset, .13, TIMBER.darkened(.20))
+		_bar(deck + offset + Vector3.BACK * 1.12, end + offset, .15, TIMBER)
+		_bar(shore + offset, end + offset, .11, TIMBER)
+	_bar(shore + Vector3.LEFT * 2.15, shore + Vector3.RIGHT * 2.15, .09, TIMBER)
+	_bar(end + Vector3.LEFT * 2.15, end + Vector3.RIGHT * 2.15, .09, TIMBER)
+	var canvas := Color("#b77a50")
+	for strip in 12:
+		var offset := Vector3.RIGHT * (-2.15 + strip * .36)
+		var width := Vector3.RIGHT * .36
+		var dip := Vector3.DOWN * (.16 + .07 * sin(strip * 1.7))
+		var fold := shore.lerp(end, .46) + offset + dip
+		var pale := canvas.lerp(CHALK, .35 if strip % 3 == 0 else .13)
+		_quad(shore + offset, shore + offset + width, fold + width, fold, pale, Vector3.UP)
+		_quad(fold, fold + width, end + offset + width, end + offset, pale.darkened(.12), Vector3.UP)
+		_quad(end + offset, end + offset + width, end + offset + width + dip, end + offset + dip,
+			pale.darkened(.26), Vector3.BACK)
+
+func _install_ore_cradle(tip: Vector3) -> void:
+	impact_position = Vector3(tip.x, 1.17, tip.z)
+	_cradle_pivot = Node3D.new()
+	_cradle_pivot.name = "OreHoist"
+	_cradle_pivot.position = tip
+	add_child(_cradle_pivot)
+	var rope_mesh := CylinderMesh.new()
+	rope_mesh.top_radius = .035
+	rope_mesh.bottom_radius = .035
+	rope_mesh.radial_segments = 6
+	rope_mesh.rings = 1
+	rope_mesh.height = 1.0
+	_rope = _crane_part(_cradle_pivot, rope_mesh, Vector3.ZERO, IRON)
+	_cradle = Node3D.new()
+	_cradle.name = "OreCradle"
+	_cradle_pivot.add_child(_cradle)
+	_crane_box(_cradle, Vector3(1.28, .16, 1.04), Vector3(0, -.44, 0), TIMBER)
+	for side: float in [-1., 1.]:
+		_crane_box(_cradle, Vector3(.10, .43, 1.08), Vector3(side * .65, -.22, 0), BRONZE)
+		_crane_box(_cradle, Vector3(1.33, .10, .12), Vector3(0, -.23, side * .50), IRON)
+		for edge: float in [-1., 1.]:
+			var eye := Vector3(side * .63, .05, edge * .48)
+			_crane_box(_cradle, Vector3(.12, .59, .13), eye + Vector3.DOWN * .15, BRONZE)
+			var sling := _crane_box(_cradle, Vector3(.048, eye.length(), .048), eye * .5, BRONZE)
+			sling.quaternion = Quaternion(Vector3.UP, eye.normalized())
+	for i in 4:
+		var stone := PrismMesh.new()
+		stone.size = Vector3(.62, .36, .48)
+		var chunk := _crane_part(_cradle, stone, Vector3((i % 2 - .5) * .61, -.15, (floori(i / 2.) - .5) * .50),
+			LIMESTONE.lerp(CHALK, float(i) * .21))
+		chunk.rotation.y = i * .73
+	var mark := TorusMesh.new()
+	mark.inner_radius = 1.18
+	mark.outer_radius = 1.27
+	mark.rings = 24
+	mark.ring_segments = 6
+	_target = _crane_part(self, mark, impact_position + Vector3.UP * .055, Color("#e37631"), true)
+	_target.hide()
+	var dust_mesh := SphereMesh.new()
+	dust_mesh.radius = .16
+	dust_mesh.height = .26
+	dust_mesh.radial_segments = 5
+	dust_mesh.rings = 2
+	var dust_material := StandardMaterial3D.new()
+	dust_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	dust_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	dust_material.vertex_color_use_as_albedo = true
+	dust_mesh.material = dust_material
+	var color := Gradient.new()
+	color.colors = PackedColorArray([Color(1.0, .74, .46, .55), Color(.78, .58, .42, 0.0)])
+	_dust = CPUParticles3D.new()
+	_dust.position = impact_position + Vector3.UP * .15
+	_dust.mesh = dust_mesh
+	_dust.amount = 30
+	_dust.lifetime = .85
+	_dust.one_shot = true
+	_dust.emitting = false
+	_dust.explosiveness = .97
+	_dust.direction = Vector3.UP
+	_dust.spread = 68.0
+	_dust.initial_velocity_min = 1.0
+	_dust.initial_velocity_max = 3.6
+	_dust.gravity = Vector3(0, .45, .28)
+	_dust.color_ramp = color
+	add_child(_dust)
+	_set_cradle_depth(_hoist_depth)
+
+func _process(delta: float) -> void:
+	if _cradle_pivot == null or _drop_running:
+		return
+	_sway_time += delta
+	_cradle_pivot.rotation.x = sin(_sway_time * 1.7) * .075
+	_cradle_pivot.rotation.z = sin(_sway_time * 1.29 + .5) * .045
+	_cradle.rotation.y = sin(_sway_time * .91) * .13
+
+func release_crane() -> void:
+	if _drop_running:
+		return
+	_drop_running = true
+	_target.show()
+	_cradle_pivot.rotation = Vector3.ZERO
+	_drop = create_tween()
+	var lowest := _cradle_pivot.position.y - impact_position.y - .56
+	_drop.tween_method(_set_cradle_depth, _hoist_depth, lowest, DROP_TIME).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	_drop.tween_callback(_strike_crane)
+	_drop.tween_interval(.22)
+	_drop.tween_method(_set_cradle_depth, lowest, 1.55, 1.23).set_trans(Tween.TRANS_SINE)
+	_drop.tween_callback(func() -> void: _drop_running = false)
+
+func _strike_crane() -> void:
+	_target.hide()
+	_dust.restart()
+	_dust.emitting = true
+
+func _set_cradle_depth(depth: float) -> void:
+	_hoist_depth = depth
+	_cradle.position.y = -depth
+	_rope.position.y = -.5 * depth
+	_rope.scale.y = depth
+
+func _crane_box(parent: Node3D, size: Vector3, at: Vector3, tint: Color) -> MeshInstance3D:
+	var shape := BoxMesh.new()
+	shape.size = size
+	return _crane_part(parent, shape, at, tint)
+
+func _crane_part(parent: Node3D, shape: Mesh, at: Vector3, tint: Color, luminous := false) -> MeshInstance3D:
+	var part := MeshInstance3D.new()
+	var surface := StandardMaterial3D.new()
+	surface.albedo_color = tint
+	surface.roughness = .86
+	surface.emission_enabled = luminous
+	surface.emission = tint
+	surface.emission_energy_multiplier = .8
+	part.mesh = shape
+	part.material_override = surface
+	part.position = at
+	parent.add_child(part)
+	return part
 
 func _lantern(base: Vector3) -> void:
 	var top := base + Vector3.UP * 1.46
@@ -352,8 +539,8 @@ func _rocks_and_grass(center: Vector3, count: int) -> void:
 			var angle := _rng.randf() * TAU
 			var forward := Vector3(cos(angle), 0, sin(angle))
 			var side := forward.cross(Vector3.UP) * .025
-			var point := grass + Vector3.UP * _rng.randf_range(.13, .34) + forward * .10
-			var hue := Color("#806f44").lerp(Color("#b69a53"), _rng.randf())
+			var point := grass + Vector3.UP * _rng.randf_range(.20, .44) + forward * .14
+			var hue := Color("#926041").lerp(Color("#e9b75c"), _rng.randf())
 			_tri(grass - side, grass + side, point, hue, forward)
 			_tri(grass - side, grass + side, point, hue, -forward)
 
@@ -475,5 +662,7 @@ func _finish_geometry() -> void:
 	mesh.mesh = _surf.commit()
 	var material := ShaderMaterial.new()
 	material.shader = STONE_SHADER
+	material.set_shader_parameter("route_paint", preload("res://art/textures/stylized/route_paint.png"))
+	material.set_shader_parameter("mineral_tint", Vector3(1.17, 1.02, .78))
 	mesh.material_override = material
 	add_child(mesh)

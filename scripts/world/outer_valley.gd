@@ -7,6 +7,8 @@ const LANDMARKS := preload("res://data/outer_valley/landmarks.json")
 const PIGMENT := preload("res://art/outer_valley/valley_pigment.gdshader")
 const POOL := preload("res://art/materials/grove/shallows.gdshader")
 const WINCH := preload("res://scripts/world/valley_winch.gd")
+const DETAIL := preload("res://scripts/world/outer_camp_detail.gd")
+const ROUTE_PAINT := preload("res://art/textures/stylized/route_paint.png")
 const SITE_DATA := {
 	"lanternwood": preload("res://data/sites/lanternwood.tres"),
 	"sunken_aqueduct": preload("res://data/sites/sunken_aqueduct.tres"),
@@ -26,6 +28,8 @@ var caches := PackedVector3Array()
 var cache_ids := PackedStringArray()
 var junctions := {}
 var _winches: Array[Node3D] = []
+var _landmarks := {}
+var _camp_detail := DETAIL.new()
 
 func _ready() -> void:
 	name = "OuterValley"
@@ -33,15 +37,29 @@ func _ready() -> void:
 	add_child(land)
 	var pigment := ShaderMaterial.new()
 	pigment.shader = PIGMENT
+	pigment.set_shader_parameter("route_paint", ROUTE_PAINT)
+	var leaf_pigment := pigment.duplicate() as ShaderMaterial
+	leaf_pigment.set_shader_parameter("moves_in_wind", true)
 	var channel := ShaderMaterial.new()
 	channel.shader = POOL
 	for piece: MeshInstance3D in land.find_children("*", "MeshInstance3D", true, false):
 		if str(piece.name).begins_with("Water"):
 			piece.material_override = channel
+		elif str(piece.name).begins_with("Leaves"):
+			piece.material_override = leaf_pigment
 		elif not str(piece.name).begins_with("Lantern"):
 			piece.material_override = pigment
 	for key: String in TRAILS.data.nodes:
 		junctions[key] = _point(TRAILS.data.nodes[key])
+	var wood: Vector3 = junctions.west
+	var sluice: Vector3 = junctions.south
+	var summit: Vector3 = junctions.east
+	_landmarks[&"lanternwood"] = PackedVector3Array([wood + Vector3(5, 0, -4)])
+	_landmarks[&"sunken_aqueduct"] = PackedVector3Array([sluice + Vector3(6, 0, -5.5)])
+	_landmarks[&"sunwatch_observatory"] = PackedVector3Array([
+		summit + Vector3(-5.5, 0, 5), summit + Vector3(5.5, 0, 5)])
+	add_child(_camp_detail)
+	_camp_detail.setup(_landmarks, junctions)
 	for trail: Array in TRAILS.data.trails:
 		var route := PackedVector3Array([junctions[trail[1]]])
 		for coord: Array in trail[2]:
@@ -107,6 +125,22 @@ func _point(value: Array) -> Vector3:
 
 func get_sites() -> Array[CinderSite]:
 	return sites
+
+func landmark_positions(site_id: StringName) -> PackedVector3Array:
+	return _landmarks.get(site_id, PackedVector3Array())
+
+func observatory_cache_position() -> Vector3:
+	var summit: Vector3 = junctions.east
+	return summit + Vector3(0, .04, 7.65)
+
+func activate_landmark(site_id: StringName, stage: int = 0) -> void:
+	_camp_detail.activate(site_id, stage)
+
+func set_landmark_progress(site_id: StringName, steps: int) -> void:
+	_camp_detail.show_progress(site_id, steps)
+
+func seed_life(value: int) -> void:
+	_camp_detail.seed_life(value)
 
 func nearby_shortcut(at: Vector3) -> String:
 	for winch in _winches:

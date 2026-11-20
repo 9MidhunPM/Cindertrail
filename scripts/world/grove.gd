@@ -8,6 +8,9 @@ const PILLAR = preload("res://art/models/ruin_pillar.glb")
 const WATER = preload("res://art/materials/grove/shallows.gdshader")
 const PALETTE = preload("res://art/materials/grove/weathered_palette.gdshader")
 const FALL = preload("res://art/materials/grove/waterfall.gdshader")
+const WILDLIFE = preload("res://scripts/world/grove_wildlife.gd")
+const ROUTE_PAINT = preload("res://art/textures/stylized/route_paint.png")
+const BELL_POSITION := Vector3(-3.65, 0.72, 2.60)
 const CREAM = Color("#d6b584")
 const LIGHT = Color("#f4d8a5")
 const SHADE = Color("#827d73")
@@ -21,6 +24,10 @@ var templates := {}
 var points := PackedVector3Array()
 var normals := PackedVector3Array()
 var colors := PackedColorArray()
+var _wildlife: Node3D
+var _bell := Node3D.new()
+var _bell_wave: MeshInstance3D
+var _bell_tween: Tween
 
 func _ready() -> void:
 	rng.seed = 871202
@@ -40,7 +47,129 @@ func _ready() -> void:
 	_plantings()
 	_water_garden()
 	_ruin_gardens()
+	_exposed_roots()
+	_bell_shrine()
 	_finish_mesh()
+	_wildlife = WILDLIFE.new()
+	add_child(_wildlife)
+
+func release_herons() -> void:
+	_wildlife.lift_flock()
+
+func ring_bell() -> void:
+	if _bell_tween:
+		_bell_tween.kill()
+	_bell.rotation.x = -0.54
+	_bell_wave.scale = Vector3.ONE
+	_bell_wave.show()
+	var glow := _bell_wave.material_override as StandardMaterial3D
+	glow.albedo_color.a = 0.72
+	_bell_tween = create_tween().set_parallel()
+	_bell_tween.tween_property(_bell, "rotation:x", 0.0, 1.3).set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
+	_bell_tween.tween_property(_bell_wave, "scale", Vector3(9., 1., 9.), 0.85).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	_bell_tween.tween_property(glow, "albedo_color:a", 0.0, 0.85)
+	_bell_tween.tween_callback(_bell_wave.hide).set_delay(.85)
+
+func _exposed_roots() -> void:
+	for at: Vector3 in WILDLIFE.PERCHES:
+		_rock(at - Vector3.UP * .38, Vector3(.43, .38, .53), SHADE.lerp(MOSS, .32), 8)
+	# Alder roots follow the waterline around the old paving.
+	for pair in [
+		[Vector3(-8.4, .45, 15.7), Vector3(-4.77, .27, 13.43)],
+		[Vector3(-8.1, .68, 13.7), Vector3(-4.63, .25, 11.05)],
+		[Vector3(-8.1, .57, 13.7), Vector3(-6.15, .29, 16.47)],
+		[Vector3(-12.7, .80, 9.4), Vector3(-9.11, .25, 10.55)],
+		[Vector3(-10.4, .66, -15.), Vector3(-5.18, .27, -11.0)],
+		[Vector3(14.1, .49, 13.7), Vector3(7.8, .23, 12.05)],
+		[Vector3(14.1, .50, 13.7), Vector3(10.8, .25, 16.28)],
+		[Vector3(17., .70, -5.), Vector3(13.8, .25, -1.85)],
+	]:
+		var source: Vector3 = pair[0]
+		var tip: Vector3 = pair[1]
+		var side := (tip - source).cross(Vector3.UP).normalized()
+		var knot := source.lerp(tip, .37) + side * .41 + Vector3.UP * .26
+		var elbow := source.lerp(tip, .71) - side * .25 + Vector3.UP * .12
+		var wood := BARK.lerp(Color("#815639"), .32)
+		_limb(source, knot, .33, .20, wood, 7)
+		_limb(knot, elbow, .21, .12, wood, 7)
+		_limb(elbow, tip, .125, .045, wood, 6)
+		for fork in [-1.0, 1.0]:
+			var branch := elbow + side * float(fork) * .59 + (tip - elbow) * .35
+			var end := tip + side * float(fork) * .82
+			_limb(knot, branch, .106, .067, wood.lightened(.071), 6)
+			_limb(branch, end, .069, .032, wood, 6)
+		_fern(knot + Vector3.UP * .19, .77)
+		_grass(Vector2(tip.x, tip.z), tip.y, 13)
+		for i in 4:
+			var at := source.lerp(knot, .2 + .19 * i)
+			at += side * sin(i * 1.5) * .19 + Vector3.UP * .23
+			_rock(at, Vector3(.25, .085, .24), MOSS.darkened(.07), 6)
+
+func _bell_shrine() -> void:
+	var base := Vector2(BELL_POSITION.x, BELL_POSITION.z)
+	_disc(base, .56, .69, .81, SHADE, 9)
+	_disc(base, .49, .79, .89, CREAM, 9)
+	var crown := BELL_POSITION + Vector3.UP * 1.65
+	for hand in [-1.0, 1.0]:
+		var toe := BELL_POSITION + Vector3.RIGHT * float(hand) * .47
+		var joint := crown + Vector3.RIGHT * float(hand) * .34
+		_limb(toe, joint, .076, .06, BARK, 5)
+		_limb(toe + Vector3.BACK * .29, joint, .066, .055, BARK, 5)
+		_limb(joint, crown + Vector3.RIGHT * float(hand) * .08, .069, .064, Color("#ad8050"), 6)
+		for wrap in 3:
+			var inset := Vector3.DOWN * float(wrap) * .039
+			_limb(joint + inset, joint + inset + Vector3.DOWN * .028, .086, .086, Color("#cf9862"), 8)
+	_bell.name = "FloodedFordBell"
+	_bell.position = crown + Vector3.DOWN * .16
+	add_child(_bell)
+	var metal := StandardMaterial3D.new()
+	metal.albedo_color = Color("#c48647")
+	metal.metallic = .44
+	metal.roughness = .47
+	var copper := StandardMaterial3D.new()
+	copper.albedo_color = Color("#7e8a61")
+	copper.metallic = .43
+	copper.roughness = .61
+	var edge := StandardMaterial3D.new()
+	edge.albedo_color = Color("#f4bb69")
+	edge.metallic = .53
+	edge.roughness = .35
+	edge.emission_enabled = true
+	edge.emission = Color("#a85626")
+	edge.emission_energy_multiplier = .14
+	for segment in [
+		[.10, .16, .16, -.10, metal],
+		[.16, .20, .18, -.27, copper],
+		[.20, .30, .20, -.46, metal],
+		[.295, .32, .053, -.58, edge],
+		[.043, .049, .20, -.57, copper],
+	]:
+		var shape := CylinderMesh.new()
+		shape.top_radius = segment[0]
+		shape.bottom_radius = segment[1]
+		shape.height = segment[2]
+		shape.radial_segments = 14
+		var piece := MeshInstance3D.new()
+		piece.mesh = shape
+		piece.position.y = segment[3]
+		piece.material_override = segment[4]
+		_bell.add_child(piece)
+	_bell_wave = MeshInstance3D.new()
+	var wave := TorusMesh.new()
+	wave.inner_radius = .44
+	wave.outer_radius = .48
+	wave.rings = 32
+	wave.ring_segments = 5
+	var shimmer := StandardMaterial3D.new()
+	shimmer.albedo_color = Color(.62, .96, .82, .72)
+	shimmer.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	shimmer.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_bell_wave.mesh = wave
+	_bell_wave.position = BELL_POSITION + Vector3.UP * .06
+	_bell_wave.material_override = shimmer
+	_bell_wave.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(_bell_wave)
+	_bell_wave.hide()
 
 func _box_floor(p: Vector3, size: Vector3, yaw := 0.0, pitch := 0.0) -> void:
 	var collision := CollisionShape3D.new()
@@ -532,6 +661,7 @@ func _limb(a: Vector3,b: Vector3,r0: float,r1: float,col: Color,sides: int) -> v
 		var d:=right*cos(t)+up*sin(t)
 		var e:=right*cos(s)+up*sin(s)
 		var tint:=col.darkened(.11+.10*sin(t*2.0))
+		tint.a = .86
 		_face(a+d*r0,a+e*r0,b+e*r1,tint,d+e)
 		_face(a+d*r0,b+e*r1,b+d*r1,tint,d+e)
 
@@ -596,9 +726,18 @@ func _grass(p: Vector2, y: float, count: int) -> void:
 		var bend := base+Vector3.UP*h*.59+dir*h*.13
 		var w := rng.randf_range(.024,.051)
 		var color := REED.lerp(Color("#a89652"),rng.randf_range(.0,.60))
-		_tri(base-across*w,bend,base+across*w,color)
-		_tri(base+across*w,bend,tip,color.lightened(.07))
-		_tri(bend,base-across*w,tip,color.darkened(.06))
+		_reed_face(base-across*w, bend, base+across*w, color, Vector3(0, .52, 0))
+		_reed_face(base+across*w, bend, tip, color.lightened(.07), Vector3(0, .52, 1))
+		_reed_face(bend, base-across*w, tip, color.darkened(.06), Vector3(.52, 0, 1))
+
+func _reed_face(a: Vector3, b: Vector3, c: Vector3, tint: Color, weights: Vector3) -> void:
+	var normal := (c - a).cross(b - a).normalized()
+	points.append_array(PackedVector3Array([a, b, c]))
+	for amount in [weights.x, weights.y, weights.z]:
+		var shade := tint
+		shade.a = .44 - float(amount) * .32
+		normals.append(normal)
+		colors.append(shade)
 
 func _stone() -> Color:
 	return CREAM.lerp(LIGHT,rng.randf_range(-.27,.88)).lerp(SHADE,rng.randf_range(0,.19))
@@ -725,6 +864,7 @@ func _collect_mesh(node: Node, parent: Transform3D, output: Array) -> void:
 func _finish_mesh() -> void:
 	var mat := ShaderMaterial.new()
 	mat.shader = PALETTE
+	mat.set_shader_parameter("route_paint", ROUTE_PAINT)
 	var arrays := []
 	arrays.resize(Mesh.ARRAY_MAX)
 	arrays[Mesh.ARRAY_VERTEX] = points

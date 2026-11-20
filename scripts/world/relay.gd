@@ -3,6 +3,7 @@ extends Node3D
 
 const SITE_SPEC := preload("res://data/sites/relay.tres")
 const STONE_SHADER := preload("res://art/materials/highland/limestone.gdshader")
+const FLAG_SHADER := preload("res://art/materials/highland/relay_flag.gdshader")
 const CREAM := Color("#c7aa80")
 const HIGHLIGHT := Color("#e4cca0")
 const STONE_DARK := Color("#796e63")
@@ -28,6 +29,14 @@ const BEACON_TRAIL := [Vector3(16, 4.8, -56), Vector3(20, 5.4, -62),
 var site: CinderSite
 var beacon: Marker3D
 var caches := PackedVector3Array()
+var landmark_position := Vector3(13.65, 4.8, -55.10)
+var _generator_lamp: OmniLight3D
+var _wire_paths: Array[PackedVector3Array] = []
+var _wire_sparks: Array[MeshInstance3D] = []
+var _lane_flash: MeshInstance3D
+var _lane_flash_material: StandardMaterial3D
+var _charge_time := 0.0
+var _wire_time := 0.0
 
 var _rng := RandomNumberGenerator.new()
 var _visual := SurfaceTool.new()
@@ -83,6 +92,9 @@ func _ravine() -> void:
 			var d := grid[row + 1][column]
 			var ridge := clampf((a.y + 7.0) * .12, 0.0, 1.0)
 			var tint := bed.lerp(ledge, ridge).lightened(_rng.randf_range(-.10, .06))
+			var distance_to_runoff := absf(a.x + a.z * .43 + 9.0)
+			var runoff := (1.0 - smoothstep(0.5, 4.4, distance_to_runoff)) * smoothstep(25.0, 58.0, -a.z)
+			tint = tint.lerp(Color("#24596c"), runoff * .81)
 			_face(a, b, c, Vector3.UP, tint)
 			_face(a, c, d, Vector3.UP, tint.lightened(_rng.randf_range(-.07, .10)))
 	for tree in 31:
@@ -241,6 +253,17 @@ func _build_plateau() -> void:
 				polygon.append(CENTER + Vector3(cos(pair.y) * pair.x, .018 + _rng.randf_range(-.008, .008), sin(pair.y) * pair.x))
 			_plate(polygon, .075, _stone(), false)
 		previous = radius
+	for sector in 12:
+		var angle := TAU * sector / 12.0
+		var along := Vector3(cos(angle), 0.0, sin(angle))
+		var across := along.cross(Vector3.UP)
+		var hub := CENTER + Vector3.UP * .044
+		var accent := COPPER.lerp(STONE_DARK, .24 if sector % 3 == 0 else .65)
+		_quad(hub + along * 1.14 - across * .045, hub + along * 1.14 + across * .045,
+			hub + along * 4.82 + across * .023, hub + along * 4.82 - across * .023, Vector3.UP, accent)
+		if sector % 3 == 0:
+			_face(hub + along * 4.40 - across * .15, hub + along * 4.40 + across * .15,
+				hub + along * 4.89, Vector3.UP, accent)
 	_disc(CENTER + Vector3.UP * .031, 1.1, 14, .11, HIGHLIGHT, false)
 	_annular_floor(CENTER + Vector3.UP * .048, .82, 1.02, 18, COPPER)
 	for i in 22:
@@ -374,22 +397,117 @@ func _generator() -> void:
 	_beam(base + Vector3.UP * 1.4, base + Vector3.UP * 3.73, .15, IRON, 8)
 	_disc(base + Vector3.UP * 2.44, .31, 8, .27, COPPER, false)
 	_disc(base + Vector3.UP * 3.68, .54, 9, .46, BRONZE, false)
-	var lamp := OmniLight3D.new()
-	lamp.name = "RelayLamps"
-	lamp.position = base + Vector3(0, 1.3, 1.15)
-	lamp.light_color = Color("#f6aa5e")
-	lamp.light_energy = 2.2
-	lamp.omni_range = 6.2
-	add_child(lamp)
+	_generator_lamp = OmniLight3D.new()
+	_generator_lamp.name = "RelayLamps"
+	_generator_lamp.position = base + Vector3(0, 1.3, 1.15)
+	_generator_lamp.light_color = Color("#f6aa5e")
+	_generator_lamp.light_energy = 2.2
+	_generator_lamp.omni_range = 6.2
+	add_child(_generator_lamp)
 	var west := Vector3(5.5, 4.81, -60.8)
 	var east := Vector3(17.7, 4.62, -58.65)
 	_obelisk(west, 5.9, 1.15)
 	_obelisk(east, 6.7, 1.2)
-	_cable(west + Vector3(0, 5.74, 0), base + Vector3(0, 4.10, .02), 1.3)
-	_cable(base + Vector3(0, 4.10, .02), east + Vector3(0, 6.56, 0), 1.15)
+	var west_pin := west + Vector3(0, 5.74, 0)
+	var east_pin := east + Vector3(0, 6.56, 0)
+	var bus := base + Vector3(0, 4.10, .02)
+	_cable(west_pin, bus, 1.3, true)
+	_cable(east_pin, bus, 1.15, true)
+	_cable(west_pin + Vector3(-.38, .1, .15), bus + Vector3(-.36, -.31, .2), 1.71)
+	_cable(east_pin + Vector3(.36, .1, .15), bus + Vector3(.36, -.31, .2), 1.46)
+	_raise_flag(west_pin + Vector3(.15, -.42, .20), .2, 1.3)
+	_raise_flag(east_pin + Vector3(.15, -.51, .18), .5, 1.54)
+	_raise_flag(Vector3(18.05, 7.28, -61.16), .6, .74)
 	for post in [west, east]:
 		_grass(post + Vector3(.55, .05, -.34), 14)
 		_rock_column(post - Vector3.UP * .1, .86, post.y + 1.0, CLIFF, 1.15)
+	_relay_switch(base)
+
+func _raise_flag(at: Vector3, wind_heading: float, flag_size: float) -> void:
+	var flag := MeshInstance3D.new()
+	flag.name = "WindTornRelayFlag"
+	flag.position = at
+	flag.rotation.y = wind_heading
+	flag.scale = Vector3.ONE * flag_size
+	var fabric := QuadMesh.new()
+	fabric.size = Vector2(1.62, .66)
+	fabric.subdivide_width = 13
+	fabric.subdivide_depth = 4
+	fabric.center_offset = Vector3(.81, -.26, 0)
+	var material := ShaderMaterial.new()
+	material.shader = FLAG_SHADER
+	material.set_shader_parameter("wind_phase", at.x * .31)
+	flag.mesh = fabric
+	flag.material_override = material
+	flag.extra_cull_margin = 1.0
+	add_child(flag)
+
+func _relay_switch(base: Vector3) -> void:
+	var stand := landmark_position
+	_block(stand + Vector3.UP * .10, Vector3(.88, .20, .69), -.31, CREAM)
+	_block(stand + Vector3.UP * .46, Vector3(.42, .67, .38), -.31, IRON)
+	_disc(stand + Vector3.UP * .79, .33, 8, .17, COPPER, false)
+	var jewel := Color("#72c9b9")
+	jewel.a = .4
+	_disc(stand + Vector3.UP * .81, .19, 8, .024, jewel, false)
+	_beam(stand + Vector3(0, .74, 0), stand + Vector3(.20, 1.04, -.19), .061, BRONZE, 6)
+	_disc(stand + Vector3(.20, 1.07, -.19), .09, 8, .06, GOLD, false)
+	_beam(stand + Vector3(0, .075, -.26), Vector3(base.x, stand.y + .075, base.z), .046, COPPER, 6)
+	_lane_flash = MeshInstance3D.new()
+	_lane_flash.name = "RelayLaneDischarge"
+	_lane_flash.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_lane_flash_material = StandardMaterial3D.new()
+	_lane_flash_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_lane_flash_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_lane_flash_material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	_lane_flash.material_override = _lane_flash_material
+	add_child(_lane_flash)
+	_lane_flash.hide()
+
+func _process(delta: float) -> void:
+	if _generator_lamp == null:
+		return
+	_wire_time += delta
+	_charge_time = maxf(_charge_time - delta, 0.0)
+	var boost := _charge_time / 1.1
+	for wire in _wire_paths.size():
+		var travel := fposmod(_wire_time * (.46 + boost) + float(wire) * .35, 1.0)
+		var span := _wire_paths[wire]
+		var index := travel * (span.size() - 1)
+		var start := floori(index)
+		_wire_sparks[wire].position = span[start].lerp(span[start + 1], index - start)
+		_wire_sparks[wire].scale = Vector3.ONE * (1.0 + boost * 1.6)
+	_generator_lamp.light_energy = 1.85 + sin(_wire_time * 1.44) * .17 + boost * 2.8
+	if _lane_flash.visible:
+		var tint := Color("#80ebd6")
+		tint.a = .85 * boost * boost
+		_lane_flash_material.albedo_color = tint
+		if _charge_time <= 0.0:
+			_lane_flash.hide()
+
+func pulse_lane(lane_index: int) -> void:
+	if site == null or lane_index < 0 or lane_index >= site.lanes.size():
+		return
+	var lane := site.lanes[lane_index]
+	var trace := ImmediateMesh.new()
+	trace.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
+	for segment in range(1, lane.size()):
+		var a := lane[segment - 1] + Vector3.UP * .20
+		var b := lane[segment] + Vector3.UP * .20
+		var span := (b - a).cross(Vector3.UP).normalized()
+		var count := ceili(a.distance_to(b) / .57)
+		var last := a
+		for i in range(1, count + 1):
+			var t := float(i) / count
+			var point := a.lerp(b, t) + span * sin(float(i) * 2.4) * sin(t * PI) * .26
+			for vertex: Vector3 in [last - span * .09, point - span * .055, point + span * .055,
+					last - span * .09, point + span * .055, last + span * .09]:
+				trace.surface_add_vertex(vertex)
+			last = point
+	trace.surface_end()
+	_lane_flash.mesh = trace
+	_charge_time = 1.1
+	_lane_flash.show()
 
 func _beacon_summit() -> void:
 	var summit := PackedVector3Array()
@@ -442,6 +560,9 @@ func _obelisk(base: Vector3, height: float, width: float) -> void:
 		_block(point, Vector3(wide, reach - .014, wide), .12 + .035 * sin(i * 1.3), _stone(), true)
 		if i > 0 and i % 3 == 1:
 			_block(point + Vector3.UP * .19, Vector3(wide * 1.05, .086, wide * 1.05), .12, COPPER)
+		if i > 0:
+			var inlay := point + Vector3(wide * .13, 0.0, wide * .50)
+			_block(inlay, Vector3(wide * .08, reach * .88, .055), .12, BRONZE)
 	_block(base + Vector3.UP * (height + .16), Vector3(width * .98, .19, width * .84), .12, HIGHLIGHT)
 	_block(base + Vector3.UP * (height + .31), Vector3(width * .54, .27, width * .50), .12, GOLD)
 
@@ -450,6 +571,8 @@ func _finish_terrain() -> void:
 	geometry.name = "MasonryAndRidge"
 	var material := ShaderMaterial.new()
 	material.shader = STONE_SHADER
+	material.set_shader_parameter("route_paint", preload("res://art/textures/stylized/route_paint.png"))
+	material.set_shader_parameter("mineral_tint", Vector3(1.04, 1.05, 1.12))
 	geometry.mesh = _visual.commit()
 	geometry.material_override = material
 	add_child(geometry)
@@ -549,13 +672,30 @@ func _arch(center: Vector3, radius: float, width: float, depth: float, color: Co
 		_quad(inner_a - front, outer_a - front, outer_a + front, inner_a + front, first.cross(Vector3.BACK), tint.darkened(.12))
 		_quad(inner_b - front, outer_b - front, outer_b + front, inner_b + front, last.cross(Vector3.FORWARD), tint.darkened(.12))
 
-func _cable(begin: Vector3, end: Vector3, sag: float) -> void:
+func _cable(begin: Vector3, end: Vector3, sag: float, powered := false) -> void:
 	var last := begin
+	var curve := PackedVector3Array([begin])
 	for i in range(1, 16):
 		var t := float(i) / 15.0
 		var point := begin.lerp(end, t) + Vector3.DOWN * sin(t * PI) * sag
-		_beam(last, point, .047, BRONZE, 5)
+		_beam(last, point, .058 if powered else .034, COPPER if powered else BRONZE, 5)
+		curve.append(point)
 		last = point
+	if powered:
+		_wire_paths.append(curve)
+		var spark := MeshInstance3D.new()
+		var bead := SphereMesh.new()
+		bead.radius = .14
+		bead.height = .21
+		bead.radial_segments = 6
+		bead.rings = 3
+		spark.name = "TravelingPylonLight"
+		spark.mesh = bead
+		spark.material_override = preload("res://art/materials/sun_amber.tres")
+		spark.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		spark.position = begin
+		add_child(spark)
+		_wire_sparks.append(spark)
 
 func _beam(a: Vector3, b: Vector3, radius: float, color: Color, sides: int) -> void:
 	var forward := a.direction_to(b)
@@ -576,7 +716,7 @@ func _grass(point: Vector3, blades: int) -> void:
 		var base := point + side * _rng.randf_range(.01, .22)
 		var bend := side.rotated(Vector3.UP, 1.11)
 		var peak := base + (Vector3.UP + bend * .52) * _rng.randf_range(.11, .42)
-		var tint := GRASS.lerp(GOLD, _rng.randf_range(.18, .70))
+		var tint := GRASS.lerp(Color("#e9ad45"), _rng.randf_range(.18, .84))
 		var left := base - side * .025
 		var right := base + side * .025
 		_face(left, right, peak, bend, tint)

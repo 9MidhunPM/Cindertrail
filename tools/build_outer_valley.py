@@ -60,7 +60,12 @@ def terrain_colors(vertices):
         ds.append(surface(x[i:i+chunksize],z[i:i+chunksize])[1])
     d=np.concatenate(ds)
     moss=(np.sin(x*.092+z*.074)+np.cos(z*.101-x*.048)+2)*.25
-    soil=pal("#476759")*(1-moss[:,None])+pal("#73836d")*moss[:,None]
+    soil=pal("#305653")*(1-moss[:,None])+pal("#637554")*moss[:,None]
+    for origin, low, high in zip(SITES, ["#203c3f","#426761","#3e4859"],
+                                 ["#4c6547","#627e68","#6e7882"]):
+        weight=(1-np.clip(np.hypot(x-origin[0],z-origin[2])/54,0,1))[:,None]
+        local=pal(low)*(1-moss[:,None])+pal(high)*moss[:,None]
+        soil=soil*(1-weight)+local*weight
     # An earth verge drifts into the moss in either direction from the flags.
     wear=(1-np.clip((d-1.3)/3.6,0,1))**1.55
     return soil*(1-wear[:,None])+pal("#a59477")*wear[:,None]
@@ -283,8 +288,26 @@ def roads():
                     foot=mid+side*rng.choice([-1,1])*rng.uniform(2.8,4.5)
                     foot[1]=surface(foot[0],foot[2])[0]
                     ellipsoid(foot,(.72,.48,.67),"#898470",6)
-    # Camp courts are paved in broken concentric fan courses.
+    # Shape the visible courts independently while keeping their surveyed bed elevations.
     for si,s in enumerate(SITES):
+        if si < 2:
+            size = 1.35 if si == 0 else 1.65
+            for row in range(-5,6):
+                for col in range(-5,6):
+                    if si==0 and (abs(row)+abs(col)>7 or ((row+col)%5==0 and abs(row)+abs(col)>4)):
+                        continue
+                    if si==1 and (abs(row)>2 and abs(col)>2):
+                        continue
+                    x,z=col*size,row*size
+                    p=s+np.array([x,.015,z])
+                    corners=[p+np.array([dx*size*rng.uniform(.42,.47),0,dz*size*rng.uniform(.42,.47)])
+                             for dx,dz in [(-1,-1),(1,-1),(1,1),(-1,1)]]
+                    shades=["#716852","#87846c","#857954","#586554"] if si==0 else STONE
+                    panel(*corners,pal(rng.choice(shades)),"Detail",UP)
+            if si==1:
+                for dx,dz in [(-11,0),(1,-9),(4,-12)]:
+                    block(s+np.array([dx,-.20,dz]),(4.7,.19,2.05) if dx<0 else (2.65,.19,4.6),pal(STONE[2]),group="Deck")
+            continue
         for ring in range(6):
             r0=ring*1.30+.02;r1=(ring+1)*1.30-.03
             count=7+ring*4; offset=(ring%2)*.45
@@ -293,13 +316,9 @@ def roads():
                     continue
                 aa,bb=(i+offset+.012)*math.tau/count,(i+offset+.985)*math.tau/count
                 pts=[s+np.array([math.cos(a)*r,.015,math.sin(a)*r]) for a,r in [(aa,r0),(aa,r1),(bb,r1),(bb,r0)]]
-                shade=rng.choice(STONE)
-                if si==0 and ring>2 and i%4==0:shade="#98a080"
-                if si==2 and ring in (1,4) and i%3==0:shade="#b59b70"
+                shade=rng.choice(["#243750","#374459","#3e5065","#49596f"])
+                if ring in (1,4) and i%3==0:shade="#b08a60"
                 panel(*pts,pal(shade,rng.uniform(.94,1.04)),"Detail",UP)
-        if si==1:
-            for dx,dz in [(-11,0),(1,-9),(4,-12)]:
-                block(s+np.array([dx,-.20,dz]),(4.7,.19,2.05) if dx<0 else (2.65,.19,4.6),pal(STONE[2]),group="Deck")
 
 def vegetation():
     trees=[]
@@ -314,7 +333,7 @@ def vegetation():
             tree(p,rng.uniform(.73,1.65),rng.random()<(.32 if x<-45 else .13))
         else:
             ellipsoid(p,np.array([2.1,1.57,1.65])*rng.uniform(.9,1.75),"#737877",7)
-    for points in ROADS.values():
+    for name,points in ROADS.items():
         for a,b in zip(points[:-1],points[1:]):
             axis=(b-a)/np.linalg.norm(b-a);side=np.cross(UP,axis)
             for _ in range(math.ceil(np.linalg.norm(b-a)/3.)):
@@ -327,7 +346,14 @@ def vegetation():
                     tangent=np.cross(UP,n)
                     base=mid+n*rng.uniform(0,.27)
                     tip=base+UP*rng.uniform(.23,.69)+n*rng.uniform(.08,.38)
-                    triangle(base-tangent*.057,base+tangent*.057,tip,pal(rng.choice(["#9b9859","#8a9e6a","#bc975a"])),"Leaves",n)
+                    shades=["#ba9a55","#b98b4c","#dfad61"]
+                    if name in ("High orchard","Western arcade","Masons’ walk"):
+                        shades=["#618255","#a69b52","#ab6e38"]
+                    elif name in ("Pilgrim stair","Tanners’ road","Spice road"):
+                        shades=["#3e8d73","#76a17a","#a4ab65"]
+                    triangle(base-tangent*.057,base+tangent*.057,tip,pal(rng.choice(shades)),"Leaves",n)
+                if rng.random()<.62:
+                    fern(mid,.38+rng.random()*.9,rng.choice(["#527b56","#72924f","#b19450"]))
     # Denser grove flanks create a roof over paths without covering the tactical court.
     s=SITES[0]
     for i in range(15):
@@ -338,17 +364,51 @@ def vegetation():
         p[1]=h
         tree(p,rng.uniform(1.64,2.38),i%4==0)
 
+def fern(base,scale,shade):
+    """Alternating pointed pinnae make the leaf silhouette read from ground level."""
+    for leaf in range(5):
+        angle = leaf*math.tau/5+rng.uniform(-.22,.22)
+        axis=X*math.cos(angle)+Z*math.sin(angle)
+        side=np.cross(UP,axis)
+        for i in range(1,6):
+            t=i/6
+            p=base+scale*(axis*t+UP*math.sin(t*2.2)*.63)
+            next_point=base+scale*(axis*(t+.15)+UP*math.sin((t+.15)*2.2)*.63)
+            width=scale*math.sin(math.pi*t)*.22
+            for sign in (-1,1):
+                tip=p+side*sign*width+axis*.09*scale
+                triangle(p,tip,next_point,pal(shade,rng.uniform(.83,1.13)),"Leaves",UP)
+
 def landmarks():
     wood,sluice,summit=SITES
-    # High canopied gate and strung copper lamps distinguish the woodland camp.
-    for pos in [(-8,-10),(0,-12),(8,-10)]:
-        p=wood+np.array([pos[0],-.08,pos[1]])
-        arch(p,X,5.1,5.0,.92)
-        for side in (-1,1):
-            lantern(p+X*side*3,1.15)
+    # Four grand trunks and splayed buttress roots frame the woodland canopy.
+    for dx,dz,scale in [(-12,-11,2.8),(-2,-14,3.15),(11,-9,2.6),(14,2,2.16),(-12,10,1.98)]:
+        p=wood+np.array([dx,-.12,dz])
+        tree(p,scale,dx>10)
+        for i in range(8):
+            a=i*math.tau/8+rng.uniform(-.17,.17)
+            axis=X*math.cos(a)+Z*math.sin(a)
+            tip=p+axis*rng.uniform(2.2,4.7)
+            mid=p+axis*1.6+UP*rng.uniform(.16,.39)
+            beam(p+UP*rng.uniform(.42,.73),mid,.54,.23,pal(ROOTS),6)
+            beam(mid,tip,.23,.03,pal(ROOTS,.9),6)
+        for i in range(11):
+            fern(p+X*rng.uniform(-2.5,2.5)+Z*rng.uniform(-2.5,2.5),rng.uniform(.75,1.45),rng.choice(TEAL))
     for dx,dz in [(-8,4),(-7,8),(5,-7),(7,2),(-2,-6)]:
         lantern(wood+X*dx+Z*dz,1.12)
-    arch(wood+np.array([-14,0,1.5]),Z,5.,4.8,1.7)
+    arch(wood+np.array([-14,0,1.5]),Z,5.,4.8,1.25)
+    left=wood+X*-11+Z*-10+UP*5.8
+    right=wood+X*10+Z*-8+UP*5.2
+    for i in range(18):
+        t= i/18
+        u=(i+1)/18
+        a=left*(1-t)+right*t-UP*math.sin(t*math.pi)*1.5
+        b=left*(1-u)+right*u-UP*math.sin(u*math.pi)*1.5
+        beam(a,b,.035,.035,pal(ROOTS),5)
+        if i%3==1:
+            beam(a,a-UP*.42,.030,.030,pal(BRASS),5)
+            block(a-UP*.54,(.14,.19,.14),pal("#ffc277"),group="Lantern")
+            block(a-UP*.75,(.21,.065,.21),pal(ROOTS))
     # The intact upper watercourse reads as one silhouette across five stacked bays.
     for i in range(5):
         p=sluice+np.array([(i-2)*7.7,0,-18.5])
@@ -370,13 +430,27 @@ def landmarks():
         for j in range(rng.randrange(3,7)):
             p=p-UP*.29+X*rng.uniform(-.18,.18)
             ellipsoid(p,(.26,.15,.19),rng.choice(TEAL),5)
-    # Carved sluice arms support the near flood channels. Staggered buttresses
-    # frame the objective while keeping the near tactical camera sightline low.
+    # Side towers hold the sluice doors and anchor the long, stepped channels.
     for dx,dz in [(-12,-7),(-6,-10),(6,-11),(10,-3),(-13,5)]:
         p=sluice+X*dx+Z*dz
         block(p+UP*.45,(.81,.45,.81),pal(STONE[3]))
         block(p+UP*1.55,(.62,.70,.64),pal(STONE[1]))
         block(p+UP*2.31,(.83,.12,.80),pal(STONE[0]))
+    for start,end in [((-15,-5),(-5,-5)),((6.65,-13),(6.65,-4))]:
+        a=sluice+X*start[0]+Z*start[1]
+        b=sluice+X*end[0]+Z*end[1]
+        axis=(b-a)/np.linalg.norm(b-a)
+        side=np.cross(UP,axis)
+        for i in range(8):
+            p=a+(b-a)*i/8
+            for sign in (-1,1):
+                ledge=p+side*1.02*sign-UP*.48
+                block(ledge,(.84,.28,.28),pal(rng.choice(STONE),.81),(axis,UP,side),"Detail")
+                if i%2==0:
+                    fern(ledge+UP*.3,1.02,rng.choice(TEAL))
+        for i in range(3):
+            point=a+axis*i*.84
+            block(point-UP*(.14+i*.13),(1.12,.24,.48),pal(STONE[3]),(side,UP,axis),"Detail")
     # Astrolabe and sighting pylons: the rings surround an empty sightline.
     hub=summit+np.array([6,3.90,-10])
     for i in range(5):
@@ -395,6 +469,26 @@ def landmarks():
             w=1-j*.078
             block(p+UP*(.46+h*(j+.5)/8),(w,h*.061,w),pal(rng.choice(STONE)))
         block(p+UP*(h+.48),(.71,.16,.71),pal(BRASS))
+    # Interrupted copper vault wraps the astrolabe; open ribs leave views to the ridge.
+    dome=summit+X*6-Z*10+UP*3.65
+    for i in range(13):
+        az=i*math.tau/13
+        radial=X*math.cos(az)+Z*math.sin(az)
+        next_az=(i+1)*math.tau/13
+        neighbor=X*math.cos(next_az)+Z*math.sin(next_az)
+        for j in range(7 if i%4 else 4):
+            low=j*math.pi/16
+            high=(j+1)*math.pi/16
+            a=dome+5.65*(radial*math.cos(low)+UP*math.sin(low))
+            b=dome+5.65*(radial*math.cos(high)+UP*math.sin(high))
+            beam(a,b,.095,.068,pal(BRASS),6)
+            if i in (5,6,8,9) and j<5:
+                c=dome+5.65*(neighbor*math.cos(high)+UP*math.sin(high))
+                d=dome+5.65*(neighbor*math.cos(low)+UP*math.sin(low))
+                panel(a,b,c,d,pal(rng.choice(["#4d8173","#6e8c72","#a0774d"])),out=UP+radial)
+        if i%2==0:
+            foot=dome+radial*5.65
+            beam(foot-UP*3.62,foot,.45,.29,pal(STONE[1]),7)
     # A copper compass rose anchors the observatory. Long needles share a
     # recessed circle, and are readable from the defense angle.
     for i in range(16):
@@ -509,6 +603,10 @@ def water():
             p[1]=s[1]-.45
             if surface(p[0]+1,p[2]+1)[0]>=p[1]:continue
             panel(p,p+X*2,p+X*2+Z*2,p+Z*2,pal("#4ca6a2"),"Water",UP)
+    for dx,dz,wide,long in [(-10,-5,6,1.54),(6.65,-8.5,1.54,8.2)]:
+        p=s+X*dx+Z*dz-UP*.33
+        panel(p-X*wide*.5-Z*long*.5,p+X*wide*.5-Z*long*.5,
+              p+X*wide*.5+Z*long*.5,p-X*wide*.5+Z*long*.5,pal("#5fc7b6"),"Water",UP)
 
 def gltf():
     scene={"asset":{"version":"2.0","generator":"Cindertrail authored valley baker"},
