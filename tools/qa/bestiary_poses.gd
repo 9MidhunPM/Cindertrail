@@ -114,6 +114,7 @@ func _stage() -> void:
 	camp = CinderSite.new()
 	stage.add_child(camp)
 	camp.configure(preload("res://data/sites/grove.tres"), Vector3.ZERO, PackedVector3Array(), [], Vector3.ZERO, Vector3.ZERO)
+	camp.habitat_frame.origin.y = .73
 	camera = Camera3D.new()
 	stage.add_child(camera)
 	camera.projection = Camera3D.PROJECTION_ORTHOGONAL

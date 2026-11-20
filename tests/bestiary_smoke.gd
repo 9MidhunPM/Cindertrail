@@ -53,6 +53,8 @@ func _run() -> void:
 	stage.add_child(grove)
 	var lanes: Array[PackedVector3Array] = [PackedVector3Array([Vector3(0,0,10), Vector3.ZERO])]
 	grove.configure(preload("res://data/sites/grove.tres"), Vector3.ZERO, PackedVector3Array([Vector3(0,0,6)]), lanes, Vector3.ZERO, Vector3.ZERO)
+	# The skimmer runs below the raised island, at the Grove's shallow-water level.
+	grove.habitat_frame.origin.y = .73
 	grove.wet = true
 	var skimmer := _member(SKIMMER, 13.0)
 	await _frames(25)
