@@ -142,7 +142,26 @@ func _read_prologue() -> void:
 func _campaign_defense(site: CinderSite, route_summary: Array[Dictionary]) -> bool:
 	var id := site.checkpoint_id
 	_say(site.label, NARRATION.get(id, "The sun can take the light here if we hold the ground."), String(id))
+	if id == CinderCampLandmarks.SUNWATCH and not await _prepare_observatory(site):
+		return false
 	return await super._campaign_defense(site, route_summary)
+
+func _prepare_observatory(site: CinderSite) -> bool:
+	for handle: Vector3 in game.landmarks.handle_positions_for(site):
+		if not await _walk_to(handle):
+			return false
+		game.interact()
+	if not _check(game.landmarks.checkpoint_progress().get(CinderCampLandmarks.SUNWATCH, 0) == 2,
+			"Aligned both Sunwatch mirrors on foot"):
+		return false
+	for cache: Node3D in game._caches:
+		if cache.get_meta(&"checkpoint_id") == game.MIRROR_CACHE_ID:
+			var scrap: int = game.battle.scrap
+			if not await _walk_to(cache.global_position):
+				return false
+			game.interact()
+			return _check(game.battle.scrap > scrap, "Collected the Sunwatch mirror recess")
+	return _check(false, "Found the Sunwatch mirror recess")
 
 func _assist_target() -> void:
 	_cast_ready_art()
