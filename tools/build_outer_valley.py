@@ -23,6 +23,28 @@ MARKS = json.loads((DATA / "landmarks.json").read_text())
 NODES = {k: np.array(v, float) for k, v in TRAILS["nodes"].items()}
 ROADS = {name: np.array([NODES[a], *pts, NODES[b]]) for name, a, pts, b in TRAILS["trails"]}
 SITES = [NODES[s["node"]] for s in MARKS["sites"]]
+OFFSETS = {k: np.array(v, float) for k, v in TRAILS.get("districts", {}).items()}
+QX, QZ = OFFSETS.get("quarry", np.zeros(3))[[0, 2]]
+RX, RZ = OFFSETS.get("relay", np.zeros(3))[[0, 2]]
+ALL_POINTS = np.concatenate(list(ROADS.values()))
+LO = ALL_POINTS.min(axis=0) - 48
+HI = ALL_POINTS.max(axis=0) + 48
+
+
+def in_district(x, z, grow=0.0):
+    """Hand-built districts own these cells; only their exit beds join the valley."""
+    if -27 - grow < x < 26 + grow and -27 - grow < z < 24.5 + grow:
+        if grow == 0 and ((abs(x + 1) < 6 and z >= 22.3) or (abs(z - 1) < 5 and x < -22.5)
+                          or (abs(x) < 5 and z < -22.5)):
+            return False
+        return True
+    lx, lz = x - QX, z - QZ
+    if -79 - grow < lx < -24.5 + grow and -25 - grow < lz < 9 + grow:
+        return grow > 0 or not (abs(lx + 36) < 4 and lz >= 5.5)
+    lx, lz = x - RX, z - RZ
+    if -25 - grow < lx < 34 + grow and -113 - grow < lz < -24.5 + grow:
+        return grow > 0 or not (lx > 25 and abs(lz + 51.4) < 7)
+    return False
 rng = random.Random(346701)
 UP = np.array([0., 1., 0.])
 X = np.array([1., 0., 0.])
@@ -216,7 +238,7 @@ def lantern(p,scale=1):
 
 def terrain():
     step=3.
-    xs,zs=np.meshgrid(np.arange(-204,220,step),np.arange(-109,246,step))
+    xs,zs=np.meshgrid(np.arange(math.floor(LO[0]),math.ceil(HI[0]),step),np.arange(math.floor(LO[2]),math.ceil(HI[2]),step))
     y,d=surface(xs,zs)
     y=np.round(y,2)
     p=np.stack((xs,y,zs),axis=-1)
@@ -225,10 +247,7 @@ def terrain():
         for j in range(xs.shape[1]-1):
             x,z=xs[k,j]+step*.5,zs[k,j]+step*.5
             # Preserve the three original districts, exposing only the joining exit beds.
-            if z<27.5 and x>-25 and x<27 and z<24.5: continue
-            if z<25 and x<26 and x>-27 and (z<22.3 or abs(x+1)>6.):continue
-            if x<=-27 and z<9 and (abs(x+36)>4 or z<5.5):continue
-            if x>25 and x<43 and z<-24 and (abs(z+51.4)>7 and x<34):continue
+            if in_district(x,z): continue
             if d[k,j]>43:continue
             filled.add((k,j))
             pts=[p[k,j],p[k,j+1],p[k+1,j+1],p[k+1,j]]
@@ -242,7 +261,7 @@ def terrain():
         ring=[p[k,j],p[k,j+1],p[k+1,j+1],p[k+1,j]]
         center=sum(ring)*.25
         # The original Grove, Relay and Quarry close these inner seams.
-        if abs(center[0]) < 79 and center[2] < 29:continue
+        if in_district(center[0],center[2],6.0):continue
         for i,(kk,jj) in enumerate([(-1,0),(0,1),(1,0),(0,-1)]):
             if (k+kk,j+jj) in filled:continue
             a,b=ring[i],ring[(i+1)%4]
@@ -271,6 +290,7 @@ def roads():
                 if any(np.linalg.norm((mid-c)[[0,2]])<6 for c,_,_ in GATES):continue
                 if any(np.linalg.norm((mid-s)[[0,2]])<10 for s in SITES):continue
                 if name=="Grove causeway" and mid[2]<26.0:continue
+                if in_district(mid[0],mid[2]):continue
                 # Three broken paving bands with interlocking joints and narrow seams.
                 for k in range(3):
                     if rng.random()<.14:continue
@@ -322,10 +342,10 @@ def roads():
 
 def vegetation():
     trees=[]
-    for _ in range(1950):
-        x,z=rng.uniform(-192,209),rng.uniform(-97,231)
+    for _ in range(3400):
+        x,z=rng.uniform(LO[0]+12,HI[0]-12),rng.uniform(LO[2]+12,HI[2]-12)
         h,d=surface(x,z)
-        if d<5.6 or d>35 or (z<27 and -72<x<36):continue
+        if d<5.6 or d>35 or in_district(x,z,8.0):continue
         if any(math.hypot(x-s[0],z-s[2])<19 for s in SITES):continue
         if any(math.hypot(x-a,z-b)<7.4 for a,b in trees):continue
         p=np.array([x,h,z]); trees.append((x,z))

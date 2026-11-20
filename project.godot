@@ -109,6 +109,11 @@ melee={
 "events": [Object(InputEventKey,"physical_keycode":70)]
 }
 
+map={
+"deadzone": 0.2,
+"events": [Object(InputEventKey,"physical_keycode":77)]
+}
+
 toggle_hud={
 "deadzone": 0.2,
 "events": [Object(InputEventKey,"physical_keycode":4194345)]

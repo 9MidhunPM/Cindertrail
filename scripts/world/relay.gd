@@ -63,6 +63,7 @@ func _ready() -> void:
 	_supply_overlook()
 	_generator()
 	_beacon_summit()
+	_guardian_terrace()
 	_finish_terrain()
 	site = CinderSite.new()
 	site.name = "FallenRelaySite"
@@ -72,6 +73,17 @@ func _ready() -> void:
 			Vector3(14.3, 4.82, -50.0), Vector3(6.4, 4.82, -49.7)]),
 		[PackedVector3Array(WEST), PackedVector3Array(NORTH), PackedVector3Array(EAST)],
 		Vector3(17.5, 16.9, -30.0), Vector3(10, 4.05, -54.4))
+	_relocate(CinderDistricts.offset("relay"))
+
+## Geometry is authored around the old origin; move it out along the valley.
+func _relocate(shift: Vector3) -> void:
+	position = shift
+	site.shift_world(shift)
+	for i in caches.size():
+		caches[i] += shift
+
+func world_landmark() -> Vector3:
+	return landmark_position + position
 
 func _ravine() -> void:
 	# Fill beneath the exposed bridge piers with a descending, non-walkable ravine.
@@ -494,8 +506,8 @@ func pulse_lane(lane_index: int) -> void:
 	var trace := ImmediateMesh.new()
 	trace.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
 	for segment in range(1, lane.size()):
-		var a := lane[segment - 1] + Vector3.UP * .20
-		var b := lane[segment] + Vector3.UP * .20
+		var a := lane[segment - 1] - position + Vector3.UP * .20
+		var b := lane[segment] - position + Vector3.UP * .20
 		var span := (b - a).cross(Vector3.UP).normalized()
 		var count := ceili(a.distance_to(b) / .57)
 		var last := a
@@ -550,6 +562,44 @@ func _beacon_summit() -> void:
 	beacon.name = "BeaconCradle"
 	beacon.position = SUMMIT + Vector3.UP * .08
 	add_child(beacon)
+
+## The crown behind the cradle carries the guardian lane and both socket balconies.
+func _guardian_terrace() -> void:
+	var center := SUMMIT + Vector3(0, -0.055, -3.5)
+	var rim := PackedVector3Array()
+	for corner: Vector2 in [Vector2(-7.8, -1.7), Vector2(-6.1,-4.1), Vector2(-1.8,-4.9),
+			Vector2(4.9,-4.6), Vector2(7.3,-2.6), Vector2(7.6,0.2), Vector2(5.3,2.4),
+			Vector2(2.6,3.4), Vector2(-3.1,3.2), Vector2(-7.4,1.1)]:
+		rim.append(center + Vector3(corner.x, 0, corner.y))
+	_plate(rim, 2.6, STONE_DARK, true)
+	for i in rim.size():
+		var a := rim[i]
+		var b := rim[(i + 1) % rim.size()]
+		_rock_column(a - Vector3.UP * 1.5, 1.32, 5.8, CLIFF, 1.2)
+		_beam(a + Vector3.UP * .04, b + Vector3.UP * .04, .085, COPPER, 5)
+	# Individual cream flags leave dark mortar seams and a clear dark lane edge.
+	for row in range(-2, 2):
+		for col in range(-4, 5):
+			var point := center + Vector3(col * 1.42 + .28 * (row & 1), .021, row * 1.28)
+			if point.distance_to(center) > 6.0:
+				continue
+			_block(point, Vector3(1.37,.057,1.23), sin(col*5.0+row)*.023,
+				CREAM.darkened(.08 + .025 * posmod(row + col, 4)))
+	# Broken radial inlay points to the shrine across the fractured crown.
+	var dial := center + Vector3.UP * .058
+	_annular_floor(dial, 1.17, 1.25, 24, COPPER)
+	_annular_floor(dial, 2.51, 2.56, 32, STONE_DARK)
+	for i in 12:
+		var ray := Vector3(cos(TAU * i/12.0), 0, sin(TAU * i/12.0))
+		var tip := dial + ray * (1.95 if i % 3 == 0 else 1.56)
+		var foot := dial + ray * 1.29
+		var wide := ray.cross(Vector3.UP) * .08
+		_face(foot - wide, foot + wide, tip, Vector3.UP, COPPER.lightened(.1))
+	for side: float in [-1.0, 1.0]:
+		var plinth := center + Vector3(side * 6.1, .02, -2.3)
+		_disc(plinth, .74, 8, .19, COPPER, false)
+		_obelisk(plinth, 1.64 + .32 * side, .49)
+		_grass(plinth + Vector3(side * .48, .0, -.22), 19)
 
 func _obelisk(base: Vector3, height: float, width: float) -> void:
 	_block(base + Vector3.UP * .12, Vector3(width * 1.39, .24, width * 1.39), .12, CREAM, true)

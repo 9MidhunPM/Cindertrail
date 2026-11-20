@@ -51,6 +51,16 @@ func configure(data: CinderSiteSpec, center: Vector3, positions: PackedVector3Ar
 		_socket_rings.append(socket_ring)
 		_ring(marker, 0.48, 0.72, 0.035, BRONZE)
 
+## Move world-space data (attack lanes and the tactical camera) with a relocated parent.
+func shift_world(shift: Vector3) -> void:
+	for i in lanes.size():
+		var lane := lanes[i]
+		for j in lane.size():
+			lane[j] += shift
+		lanes[i] = lane
+	view_position += shift
+	view_target += shift
+
 func select_socket(index: int) -> void:
 	for i in _socket_rings.size():
 		_socket_rings[i].material_override = _selection if i == index else BRASS

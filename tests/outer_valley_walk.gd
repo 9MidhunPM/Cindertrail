@@ -70,10 +70,16 @@ func _run() -> void:
 			measured += distance
 		print("Reverse " if reverse else "Forward ", valley.road_names[index], "  ", snappedf(distance,.1), " m")
 	# Cross all three seams from inside the original districts.
+	var q := CinderDistricts.offset("quarry")
+	var r := CinderDistricts.offset("relay")
 	var entrances: Array[PackedVector3Array] = [
 		PackedVector3Array([Vector3(-1,.68,19), Vector3(-1,.68,24.7), Vector3(-1,.90,32)]),
-		PackedVector3Array([Vector3(-36,.92,2), Vector3(-36,.92,6.5), Vector3(-35,1,12)]),
-		PackedVector3Array([Vector3(23.4,4.4,-51.4), Vector3(28,3.88,-51.4), Vector3(35,4,-51)]),
+		PackedVector3Array([Vector3(-36,.92,2) + q, Vector3(-36,.92,6.5) + q, Vector3(-185,1,13)]),
+		PackedVector3Array([Vector3(23.4,4.4,-51.4) + r, Vector3(28,3.88,-51.4) + r, Vector3(75,4,-201)]),
+		PackedVector3Array([Vector3(-15,.7,1), Vector3(-24.5,.68,1), Vector3(-32,.8,0)]),
+		PackedVector3Array([Vector3(0,.7,-19), Vector3(0,.68,-24.5), Vector3(1,.8,-33)]),
+		PackedVector3Array([Vector3(-166,.95,1.5), Vector3(-174,.68,1), Vector3(-28,.68,1) + q, Vector3(-39,1.0,2) + q]),
+		PackedVector3Array([Vector3(40,.8,-166), Vector3(40,.68,-174), Vector3(0,.68,-27) + r, Vector3(4,1.6,-34) + r]),
 	]
 	for seam in entrances:
 		pawn.position = seam[0] + Vector3.UP * .32

@@ -19,6 +19,8 @@ const DESTINATIONS := {
 	"west": "Lanternwood", "south": "Sunken Aqueduct", "east": "Sunwatch Observatory",
 	"cross": "Pilgrims’ Cross", "ruins": "Western Arcade", "terrace": "Bellmakers’ Terrace",
 	"saddle": "Orchard Pass", "spring": "Mineral Spring",
+	"grove_west": "Flooded Grove", "grove_north": "Flooded Grove",
+	"quarry_gate": "Broken Quarry", "relay_gate": "Fallen Relay",
 }
 
 var sites: Array[CinderSite] = []

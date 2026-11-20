@@ -28,8 +28,8 @@ func configure(grove: CinderGrove, quarry: CinderQuarry, relay: CinderRelay,
 	_relay = relay
 	_outer = outer
 	_positions[GROVE] = PackedVector3Array([CinderGrove.BELL_POSITION])
-	_positions[QUARRY] = PackedVector3Array([quarry.landmark_position])
-	_positions[RELAY] = PackedVector3Array([relay.landmark_position])
+	_positions[QUARRY] = PackedVector3Array([quarry.world_landmark()])
+	_positions[RELAY] = PackedVector3Array([relay.world_landmark()])
 	for area in [LANTERNWOOD, AQUEDUCT, SUNWATCH]:
 		_positions[area] = outer.landmark_positions(area)
 	_prompt.font_size = 34
@@ -178,7 +178,7 @@ func _hit_lane(site: CinderSite, battle: CinderBattle, lane: int, damage: float)
 
 func _ore_impact(site: CinderSite, battle: CinderBattle) -> void:
 	for enemy: CinderEnemy in battle.enemies.duplicate():
-		if _on_camp(enemy, site) and CinderEnemy.flat_distance(enemy.global_position, _quarry.impact_position) < 5.0:
+		if _on_camp(enemy, site) and CinderEnemy.flat_distance(enemy.global_position, _quarry.world_impact()) < 5.0:
 			battle.landmark_hit(enemy, 52.0)
 
 func _aim_lane(site: CinderSite, aim: Vector3) -> int:

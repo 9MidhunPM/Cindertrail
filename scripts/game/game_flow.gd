@@ -2,6 +2,7 @@ extends Node3D
 
 enum Mode { EXPLORE, DEPLOY, PREPARE, DEFEND, PACK, TRANSIT, WIN, LOSE }
 
+const SUMMIT := preload("res://scripts/world/beacon_guardian.gd")
 const GROVE := preload("res://data/sites/grove.tres")
 const TRAVELER := preload("res://scenes/player/traveler_visual.tscn")
 const SHRINE := preload("res://scenes/core/sun_core.tscn")
@@ -39,6 +40,7 @@ var landmarks: CinderCampLandmarks
 var sites: Array[CinderSite] = []
 var active_site: CinderSite
 var beacon: Marker3D
+var summit: SUMMIT
 var _caches: Array[Node3D] = []
 var _selected := -1
 var _hovered := -1
@@ -58,6 +60,10 @@ var _checkpoint_timer := 0.0
 var _checkpoint_enabled := true
 var _front_active := false
 var _settings_open := false
+var _map_open := false
+var _journey_seconds := 0.0
+var _defeated := 0
+var _left_site: CinderSite
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -126,8 +132,14 @@ func _ready() -> void:
 				_front_end.request_new_journey()
 			else:
 				_front_end.show_menu(not _checkpoint.is_empty())
+	battle.damaged.connect(_count_defeat)
+	hud.bind(self)
 	_sync_controls()
 	_render_hud()
+
+func _count_defeat(_point: Vector3, _amount: float, _source: StringName, fatal: bool) -> void:
+	if fatal:
+		_defeated += 1
 
 func _direct_launch() -> bool:
 	return OS.get_cmdline_user_args().has("--direct") or bool(get_tree().get_meta(&"direct_journey", false))
@@ -218,11 +230,16 @@ func _build_sites() -> void:
 	sites.append(quarry.site)
 	sites.append(relay.site)
 	beacon = relay.beacon
+	summit = SUMMIT.new()
+	_add_runtime(summit)
+	summit.build(beacon)
+	summit.cleared_crown.connect(_guardian_fell)
+	summit.sighted.connect(_guardian_sighting)
 	for point in quarry.caches + relay.caches:
 		_add_cache(point, 20)
 	_waymark("Broken Quarry", Vector3(-4.1, 0.71, 2.25), Vector3.LEFT)
 	_waymark("Fallen Relay", Vector3(1.38, 0.71, -4.28), Vector3.FORWARD)
-	_waymark("Hilltop Beacon", Vector3(15.4, 4.80, -56.3), Vector3(1, 0, -1))
+	_waymark("Hilltop Beacon", Vector3(15.4, 4.80, -56.3) + CinderDistricts.offset("relay"), Vector3(1, 0, -1))
 	outer_valley = OUTER_VALLEY.instantiate() as CinderOuterValley
 	_add_runtime(outer_valley)
 	sites.append_array(outer_valley.get_sites())
@@ -245,6 +262,8 @@ func _open_frontier(journey_seed: int) -> void:
 	trail_packs = TRAIL_PACKS.new()
 	_add_runtime(trail_packs)
 	trail_packs.configure(journey_seed, outer_valley, frontier, battle)
+	if hud != null:
+		hud.bind(self)
 
 func _reveal_mirror_cache(point: Vector3) -> void:
 	if not _claimed_caches.has(MIRROR_CACHE_ID):
@@ -257,20 +276,23 @@ func _waymark(label: String, point: Vector3, direction: Vector3) -> void:
 	_add_runtime(marker)
 
 func _physics_process(delta: float) -> void:
-	if _paused or _front_active:
+	if _paused or _front_active or _map_open:
 		return
 	if mode == Mode.WIN or mode == Mode.LOSE:
 		_update_hud_clock(delta)
 		return
 	if trail_packs != null:
 		trail_packs.observe(delta, player.global_position, mode == Mode.EXPLORE or mode == Mode.TRANSIT)
+	summit.watch(core.restoration, player.global_position, active_site, camera, delta)
 	_notice_time = maxf(0.0, _notice_time - delta)
+	_journey_seconds += delta
 	if mode == Mode.DEPLOY and director.settled():
 		mode = Mode.PREPARE
 		_sync_controls()
 	if mode == Mode.PACK:
 		if _transferring and director.settled():
 			_transferring = false
+			_left_site = active_site
 			active_site = null
 			mode = Mode.TRANSIT
 			_sync_controls()
@@ -280,7 +302,7 @@ func _physics_process(delta: float) -> void:
 		player.recovery_point = player.global_position
 	if _can_pack() and Input.is_action_pressed("pack"):
 		pack_step(delta)
-	if battle != null and active_site != null and not _transferring:
+	if battle != null and active_site != null and active_site != summit.site and not _transferring:
 		if (mode == Mode.DEFEND or (mode == Mode.PACK and _pack_source == Mode.DEFEND)) and battle.active_wave:
 			_extract(delta)
 	if mode == Mode.PREPARE or mode == Mode.DEFEND:
@@ -304,6 +326,16 @@ func _update_hud_clock(delta: float) -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if _front_active or _settings_open:
+		return
+	if event.is_action_pressed("map") and not _paused and mode != Mode.WIN and mode != Mode.LOSE:
+		_map_open = not _map_open
+		get_tree().paused = _map_open
+		_render_hud()
+		return
+	if _map_open and event.is_action_pressed("cancel"):
+		_map_open = false
+		get_tree().paused = false
+		_render_hud()
 		return
 	if event.is_action_pressed("toggle_hud") and hud != null:
 		hud.visible = not hud.visible
@@ -399,7 +431,12 @@ func _update_socket(pointer := Vector2.INF) -> void:
 func interact() -> void:
 	if mode == Mode.EXPLORE or mode == Mode.TRANSIT:
 		if _near(beacon, 2.6) and core.restoration >= 99.999:
-			_win()
+			if summit.cleared:
+				_win()
+			else:
+				_save_checkpoint(true)
+				summit.site.show()
+				_deploy(summit.site)
 			return
 		var cache := _near_cache()
 		if cache != null and battle != null:
@@ -426,6 +463,12 @@ func interact() -> void:
 			soundscape.cue("collect")
 			_notify("Shortcut opened")
 	elif mode == Mode.PREPARE or mode == Mode.DEFEND:
+		if active_site == summit.site:
+			if summit.cleared and _near(beacon, 3.4):
+				_win()
+			elif _near(active_site.anchor, 5.5):
+				battle.repair()
+			return
 		var action := landmarks.defend(active_site, player.global_position, _landmark_aim(), battle) if mode == Mode.DEFEND else ""
 		if not action.is_empty():
 			_notify(action)
@@ -465,6 +508,12 @@ func _deploy(site: CinderSite) -> void:
 
 func start_wave() -> bool:
 	if mode != Mode.PREPARE or battle == null:
+		return false
+	if active_site == summit.site:
+		if summit.begin(battle):
+			mode = Mode.DEFEND
+			_notify("Vesper Colossus  •  break its pulse with blade or spark")
+			return true
 		return false
 	if active_site.remaining_energy <= 0.001 or core.restoration >= 99.999:
 		_notify("Pack the shrine and continue your journey")
@@ -515,6 +564,8 @@ func pack_step(delta: float) -> void:
 	if _pack_elapsed < PACK_SECONDS:
 		return
 	_transferring = true
+	if active_site == summit.site:
+		summit.retreat()
 	if battle != null:
 		battle.recall()
 	active_site.select_socket(-1)
@@ -525,7 +576,7 @@ func pack_step(delta: float) -> void:
 func _cancel_pack() -> void:
 	mode = _pack_source
 	_pack_elapsed = 0.0
-	if battle != null and active_site.remaining_energy > 0.001 and core.restoration < 99.999:
+	if battle != null and (active_site == summit.site or (active_site.remaining_energy > 0.001 and core.restoration < 99.999)):
 		battle.resume()
 	_sync_controls()
 
@@ -559,6 +610,22 @@ func _add_cache(point: Vector3, amount: int, identifier := "") -> void:
 		"cache_%d_%d_%d" % [roundi(point.x * 10), roundi(point.y * 10), roundi(point.z * 10)])
 	_add_runtime(cache)
 	_caches.append(cache)
+
+func _guardian_sighting(message: String) -> void:
+	_notify(message)
+	soundscape.cue("vesper_call")
+
+func _guardian_fell() -> void:
+	# The core remains vulnerable during the pack channel. A killing blow can
+	# coincide with packing, and the player may still choose to finish folding.
+	if mode == Mode.PACK:
+		_pack_source = Mode.PREPARE
+	else:
+		mode = Mode.PREPARE
+	_notify("The guardian yields. Bring the sun to the beacon cradle.")
+	if _checkpoint_enabled:
+		_store_checkpoint(beacon.global_position + Vector3(0, .15, 1.6))
+	_sync_controls()
 
 func _win() -> void:
 	mode = Mode.WIN
@@ -606,18 +673,26 @@ func _update_checkpoint(delta: float) -> void:
 		return
 	_save_checkpoint()
 
-func _save_checkpoint() -> void:
-	if not _safe_checkpoint() or _quiet_travel < 1.5:
+func _save_checkpoint(beacon_arrival := false) -> void:
+	if not _checkpoint_enabled:
 		return
+	if beacon_arrival:
+		# Retry at the gate with the inventory and health carried up the ridge.
+		_store_checkpoint(beacon.global_position + Vector3(0, .15, 1.6))
+	elif _safe_checkpoint() and _quiet_travel >= 1.5:
+		_store_checkpoint(player.global_position)
+
+func _store_checkpoint(safe_position: Vector3) -> void:
 	_checkpoint_timer = 0.0
 	var records := {}
 	for site in sites:
 		records[site.checkpoint_id] = {"reserve": site.remaining_energy, "threat": site.threat}
 	var state := {
-		"position": player.global_position, "yaw": director.yaw, "pitch": director.pitch,
+		"position": safe_position, "yaw": director.yaw, "pitch": director.pitch,
 		"facing": player.visual.rotation.y, "health": core.health, "restoration": core.restoration,
 		"scrap": battle.scrap, "inventory": battle.inventory.duplicate(true),
 		"sites": records, "claimed": _claimed_caches,
+		"guardian_cleared": summit.cleared, "guardian_sighted": summit.halfway_seen,
 		"shortcuts": outer_valley.unlocked_shortcut_ids(),
 		"landmarks": landmarks.checkpoint_progress(),
 		"journey_seed": frontier.journey_seed, "frontier_version": CinderFrontier.LAYOUT_VERSION,
@@ -629,7 +704,13 @@ func _save_checkpoint() -> void:
 		_checkpoint = state
 
 func _restore_checkpoint() -> void:
-	player.global_position = _checkpoint.get("position", OPENING) + Vector3.UP * 0.04
+	var saved_position: Vector3 = _checkpoint.get("position", OPENING)
+	# The original version-1 hilltop was subsequently moved with the Relay district.
+	if not _checkpoint.has("guardian_cleared") and float(_checkpoint.get("restoration", 0.0)) >= 99.999:
+		var old_gate := CinderRelay.SUMMIT + Vector3.UP * .08
+		if saved_position.distance_to(old_gate) < 6.0:
+			saved_position += beacon.global_position - old_gate
+	player.global_position = saved_position + Vector3.UP * 0.04
 	player.recovery_point = player.global_position
 	player.reset_physics_interpolation()
 	director.yaw = _checkpoint.get("yaw", director.yaw)
@@ -646,6 +727,8 @@ func _restore_checkpoint() -> void:
 		var record: Dictionary = records.get(site.checkpoint_id, {})
 		site.remaining_energy = clampf(record.get("reserve", site.spec.energy), 0.0, site.spec.energy)
 		site.threat = maxi(0, record.get("threat", 0))
+	summit.cleared = bool(_checkpoint.get("guardian_cleared", false))
+	summit.halfway_seen = bool(_checkpoint.get("guardian_sighted", false))
 	_claimed_caches = _checkpoint.get("claimed", PackedStringArray())
 	outer_valley.restore_shortcuts(_checkpoint.get("shortcuts", PackedStringArray()))
 	var saved_frontier := int(_checkpoint.get("frontier_version", CinderFrontier.LAYOUT_VERSION))
@@ -675,7 +758,7 @@ func _hint(nearest: CinderSite) -> String:
 	if mode == Mode.EXPLORE or mode == Mode.TRANSIT:
 		if _near(beacon, 2.6):
 			if core.restoration >= 99.999:
-				return "E   Deliver the sun"
+				return "E   Deliver the sun" if summit.cleared else "E   Unfold the shrine for the final defense"
 			return "Restore the sun before lighting the beacon"
 		if _near_cache() != null:
 			return "E   Recover supplies"
@@ -698,6 +781,8 @@ func _hint(nearest: CinderSite) -> String:
 		return "Unfolding shrine"
 	if mode == Mode.PACK:
 		return "Folding shrine" if _transferring else "Hold R   Keep folding"
+	if active_site == summit.site and (mode == Mode.PREPARE or mode == Mode.DEFEND):
+		return summit.hint()
 	if mode == Mode.PREPARE:
 		if active_site.remaining_energy <= 0.001 or core.restoration >= 99.999:
 			return "Hold R   Pack the shrine"
@@ -712,13 +797,15 @@ func _render_hud() -> void:
 	var local_site := active_site if active_site != null else _near_site()
 	hud.render({
 		"health": core.health, "restoration": core.restoration,
+		"at_summit": active_site == summit.site,
+		"guardian_health": summit.health_percent(), "guardian_phase": summit.phase_name(),
 		"scrap": battle.scrap if battle != null else 0,
 		"mode": str(Mode.keys()[mode]).capitalize(),
 		"site": local_site.label if local_site != null else "",
 		"energy": local_site.remaining_energy if local_site != null else 0.0,
 		"site_energy_max": local_site.spec.energy if local_site != null else 0.0,
 		"threat": local_site.threat if local_site != null else 0,
-		"forecast": battle.forecast() if battle != null and active_site != null else "",
+		"forecast": summit.hint() if active_site == summit.site else (battle.forecast() if battle != null and active_site != null else ""),
 		"hint": _hint(local_site), "status": _notice if _notice_time > 0.0 else "",
 		"selected": _selected, "socket": _hovered,
 		"pack_progress": clampf(_pack_elapsed / PACK_SECONDS, 0.0, 1.0),
@@ -726,4 +813,116 @@ func _render_hud() -> void:
 		"paused": _paused,
 		"settings_open": _settings_open, "checkpoint_available": not _checkpoint.is_empty(),
 		"checkpoint_hint": "The last safe trail checkpoint will be used." if not _safe_checkpoint() and not _checkpoint.is_empty() else "",
-	})
+	}.merged(_interface_state()))
+
+## Objective, wave, shop and hover details for the interface.
+func _interface_state() -> Dictionary:
+	var state := {"map_open": _map_open}
+	var goal := _objective()
+	state["objective"] = goal.text
+	state["objective_point"] = goal.point
+	state["objective_distance"] = player.global_position.distance_to(goal.point) if goal.point != Vector3.INF else -1.0
+	if battle == null:
+		return state
+	var prices := []
+	var owned := []
+	var summaries := []
+	for kind in CinderBattle.MODULES.size():
+		var stats: CinderModuleStats = CinderBattle.MODULES[kind]
+		prices.append(stats.price)
+		var level := 0
+		for module in battle.inventory:
+			if module.kind == kind and module.socket == -1:
+				level = maxi(level, module.level)
+		owned.append(level)
+		summaries.append("%s  Range %.1f m." % [stats.summary, stats.reach])
+	state["prices"] = prices
+	state["owned"] = owned
+	state["summaries"] = summaries
+	if active_site != null:
+		var remaining := battle.remaining_spawns
+		for enemy in battle.enemies:
+			if not enemy.pursuing:
+				remaining += 1
+		state["wave"] = active_site.threat
+		state["wave_active"] = battle.active_wave
+		state["wave_left"] = remaining
+		state["wave_total"] = battle.total_in_wave
+		state["engaged"] = battle.engaged
+		state["next_wave"] = battle.intermission if battle.engaged and not battle.active_wave else -1.0
+		state["breather"] = CinderBattle.WAVES.breather
+		_socket_state(state)
+	else:
+		state["region"] = _region_name()
+	state["summary"] = "%d creatures defeated  ·  %d:%02d on the trail  ·  sun %d%%" % [
+		_defeated, int(_journey_seconds) / 60, int(_journey_seconds) % 60, floori(core.restoration)]
+	return state
+
+func _socket_state(state: Dictionary) -> void:
+	if _hovered < 0 or _hovered >= active_site.sockets.size() or (mode != Mode.PREPARE and mode != Mode.DEFEND):
+		return
+	state["socket_point"] = active_site.sockets[_hovered].global_position
+	state["socket_ok"] = true
+	if battle.towers.has(_hovered):
+		var tower: CinderInstalledModule = battle.towers[_hovered]
+		var cost := battle.upgrade_cost(_hovered)
+		if cost < 0:
+			state["socket_text"] = "%s  ·  Lv %d  ·  fully upgraded" % [CinderHUD.MODULES[tower.kind], tower.level]
+		else:
+			state["socket_ok"] = battle.scrap >= cost
+			state["socket_text"] = "%s  ·  Lv %d   [U] upgrade for %d scrap" % [CinderHUD.MODULES[tower.kind], tower.level, cost]
+	elif _selected >= 0:
+		var stats: CinderModuleStats = CinderBattle.MODULES[_selected]
+		var free := battle.module_labels()[_selected].begins_with("packed")
+		state["socket_ok"] = free or battle.scrap >= stats.price
+		state["socket_text"] = ("Click to place %s (owned)" % CinderHUD.MODULES[_selected]) if free else (
+			"Click to build %s  ·  %d scrap" % [CinderHUD.MODULES[_selected], stats.price] if state.socket_ok
+			else "Need %d more scrap" % (stats.price - battle.scrap))
+	else:
+		state["socket_text"] = "Empty socket  ·  press 1, 2 or 3 to choose a tower"
+
+func _region_name() -> String:
+	var best := "The valley"
+	var closest := 70.0
+	for site in sites:
+		var distance := player.global_position.distance_to(site.anchor.global_position)
+		if distance < closest:
+			closest = distance
+			best = "Near " + site.label
+	return best
+
+## The single most useful next step, with a world point for the map.
+func _objective() -> Dictionary:
+	if active_site == summit.site and (mode == Mode.PREPARE or mode == Mode.DEFEND):
+		if summit.cleared:
+			return {"text": "Bring the sun to the beacon cradle", "point": beacon.global_position}
+		return {"text": "Break the Colossus's pulse and strike its open chest" if mode == Mode.DEFEND
+			else "Place modules and press Space to challenge the guardian", "point": Vector3.INF}
+	match mode:
+		Mode.WIN, Mode.LOSE:
+			return {"text": "", "point": Vector3.INF}
+		Mode.DEPLOY, Mode.PACK:
+			return {"text": "Unfolding the shrine" if mode == Mode.DEPLOY else "Hold R to fold the shrine",
+				"point": Vector3.INF}
+		Mode.PREPARE:
+			if active_site.remaining_energy <= 0.001 or core.restoration >= 99.999:
+				return {"text": "This camp is spent  ·  hold R to pack up and move on", "point": Vector3.INF}
+			return {"text": "Build towers, then press Space to start drawing energy", "point": Vector3.INF}
+		Mode.DEFEND:
+			return {"text": "Defend the shrine while it drinks %s's energy" % active_site.label, "point": Vector3.INF}
+	if core.restoration >= 99.999 and beacon != null:
+		return {"text": "Carry the restored sun to the Hilltop Beacon", "point": beacon.global_position}
+	var target: CinderSite
+	var best := INF
+	for site in sites:
+		if site.remaining_energy <= 0.001:
+			continue
+		var distance := player.global_position.distance_to(site.anchor.global_position)
+		if site == _left_site:
+			distance += 100000.0
+		if distance < best:
+			best = distance
+			target = site
+	if target == null:
+		return {"text": "Every camp is spent", "point": Vector3.INF}
+	return {"text": "Unfold the shrine at %s" % target.label, "point": target.anchor.global_position}

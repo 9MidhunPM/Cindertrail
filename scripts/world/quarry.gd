@@ -55,6 +55,20 @@ func _ready() -> void:
 	_loading_tracks()
 	_finish_geometry()
 	_configure_site()
+	_relocate(CinderDistricts.offset("quarry"))
+
+## Geometry is authored around the old origin; move it out along the valley.
+func _relocate(shift: Vector3) -> void:
+	position = shift
+	site.shift_world(shift)
+	for i in caches.size():
+		caches[i] += shift
+
+func world_landmark() -> Vector3:
+	return landmark_position + position
+
+func world_impact() -> Vector3:
+	return impact_position + position
 
 func _configure_site() -> void:
 	site = CinderSite.new()
