@@ -1,8 +1,9 @@
 extends Node3D
-## Each recovered art has its own cooldown. A brief recovery separates consecutive casts.
+## Ready arts can follow one another immediately. A committed blade or dash can hold one follow-up.
 signal achievement_unlocked(title: String)
+signal cast_rejected(reason: String)
+signal cast_succeeded(site: StringName)
 const PROFILE := preload("res://scripts/game/art_achievements.gd")
-const CAST_RECOVERY := 0.28
 const SWORD_BUFFER := 0.20
 const SPEC := preload("res://scripts/game/traveler_art_spec.gd")
 const FX := preload("res://scripts/fx/traveler_art_effect.gd")
@@ -16,7 +17,7 @@ var reduced_motion := false
 var _owned: Array[StringName] = []
 var _selected: SPEC
 var _cooldowns := {}
-var _cast_lock := 0.0
+var _last_failure := ""
 var _queued_site: StringName
 var _queued_aim: Vector3
 var _queued_ground: Vector3
@@ -68,8 +69,17 @@ func selected_id() -> StringName:
 func remaining_seconds() -> float:
 	return float(_cooldowns.get(selected_id(), 0.0))
 
+## Older checkpoint writers still query the retired shared timer.
 func cast_lock() -> float:
-	return _cast_lock
+	return 0.0
+
+func failure_reason() -> String:
+	return _last_failure
+
+func _reject(reason: String) -> bool:
+	_last_failure = reason
+	cast_rejected.emit(reason)
+	return false
 
 func cooldowns() -> Dictionary:
 	return _cooldowns.duplicate()
@@ -96,7 +106,7 @@ func _learn(spec: SPEC) -> void:
 	if _selected == null:
 		_selected = spec
 
-func restore(earned, equipped: StringName, remaining: Variant = {}, lock_seconds := 0.0) -> void:
+func restore(earned, equipped: StringName, remaining: Variant = {}, _legacy_cast_lock := 0.0) -> void:
 	# Checkpoints carry mastery and recovery; in-flight attacks and protective wards end.
 	cancel_buffer()
 	_dash_hit.clear()
@@ -126,7 +136,7 @@ func restore(earned, equipped: StringName, remaining: Variant = {}, lock_seconds
 		profile.record(learned)
 	if _owned.has(equipped):
 		_selected = _definition(equipped)
-	_cast_lock = _safe_timer(lock_seconds, CAST_RECOVERY) if _selected else 0.0
+	_last_failure = ""
 
 func _safe_timer(value: Variant, maximum: float) -> float:
 	if (value is int or value is float) and is_finite(float(value)):
@@ -141,6 +151,7 @@ func cycle() -> bool:
 	for offset in range(1, ARTS.size()):
 		var next := ARTS[(index + offset) % ARTS.size()]
 		if _owned.has(next.site):
+			_last_failure = ""
 			_selected = next
 			return true
 	return false
@@ -152,7 +163,7 @@ func hud_state() -> Dictionary:
 		slots.append({"id": spec.site, "name": spec.title, "key": "G" if selected else "",
 			"selected": selected, "owned": _owned.has(spec.site), "description": spec.description,
 			"cooldown": float(_cooldowns.get(spec.site, 0.0)), "cooldown_max": spec.cooldown, "icon": spec.icon})
-	var state := {"ability_slots": slots, "ability_cast_lock": _cast_lock}
+	var state := {"ability_slots": slots}
 	if _selected:
 		state.merge({"ability_name": _selected.title, "ability_id": _selected.site,
 			"ability_cooldown": remaining_seconds(), "ability_description": _selected.description, "ability_count": _owned.size()})
@@ -162,18 +173,27 @@ func _can_use() -> bool:
 	return _available and _selected != null and is_instance_valid(_player) and _player.move_enabled and is_instance_valid(_battle) and not _battle.halted and is_instance_valid(_core) and _core.health > 0.0 and not get_tree().paused
 
 func cast(aim_direction: Vector3, ground := Vector3.INF) -> bool:
-	if not _can_use() or remaining_seconds() > 0.0 or _player.is_dashing() or _player.is_staggered():
-		return false
-	if _player.visual.can_cast_art() and _cast_lock <= 0.0:
-		cancel_buffer()
+	_last_failure = ""
+	if _selected == null:
+		return _reject("Draw all the light from a shrine to learn its art.")
+	if not _can_use():
+		return _reject("Arts are unavailable while travel and defense controls are locked.")
+	if remaining_seconds() > 0.0:
+		return _reject("%s is ready in %.1f s." % [_selected.title, ceilf(remaining_seconds() * 10.0) / 10.0])
+	if _player.is_staggered():
+		return _reject("Recover your footing before casting.")
+	if _queued_site != &"":
+		return _reject("%s is already queued." % _selected.title)
+	if not _player.is_dashing() and _player.visual.can_cast_art():
 		return _cast_now(aim_direction, ground)
-	if _player.visual.art_buffer_window() and _queued_site == &"":
-		_queued_site = selected_id()
-		_queued_aim = aim_direction
-		_queued_ground = ground
-		_buffer_left = SWORD_BUFFER
-		return true
-	return false
+	if not _player.is_dashing() and not _player.visual.art_buffer_window():
+		return _reject("Finish the sword stroke or release its charge to cast.")
+	_queued_site = selected_id()
+	_queued_aim = aim_direction
+	_queued_ground = ground
+	# Include one tick for the traveler to leave its movement or animation state.
+	_buffer_left = (SLUICE.duration if _player.is_dashing() else SWORD_BUFFER) + 1.0 / Engine.physics_ticks_per_second
+	return true
 
 func _cast_now(aim_direction: Vector3, ground: Vector3) -> bool:
 	var aim := aim_direction.slide(Vector3.UP).normalized()
@@ -190,12 +210,13 @@ func _cast_now(aim_direction: Vector3, ground: Vector3) -> bool:
 		&"last_lantern_frontier": accepted = _wick(aim)
 	if accepted:
 		_cooldowns[_selected.site] = _selected.cooldown
-		_cast_lock = CAST_RECOVERY
+		_last_failure = ""
 		_player.visual.gesture(_selected.site)
 		if _selected.site != &"lanternwood":
 			var facing := _dash_dir if _selected == SLUICE else aim
 			_player.visual.rotation.y = atan2(-facing.x, -facing.z)
 		_battle.sound.emit(_cast_sound())
+		cast_succeeded.emit(_selected.site)
 	return accepted
 
 func _cast_sound() -> String:
@@ -210,19 +231,22 @@ func _cast_sound() -> String:
 func _physics_process(delta: float) -> void:
 	if not is_instance_valid(_battle) or _battle.halted:
 		return
-	_cast_lock = maxf(0.0, _cast_lock - delta)
 	for id in _owned:
 		_cooldowns[id] = maxf(0.0, float(_cooldowns[id]) - delta)
 	if _queued_site != &"":
-		if not _can_use() or _queued_site != selected_id() or _player.is_dashing() or _player.is_staggered():
+		if not _can_use() or _queued_site != selected_id():
 			cancel_buffer()
-		elif _player.visual.can_cast_art() and _cast_lock <= 0.0 and remaining_seconds() <= 0.0:
+		elif _player.is_staggered():
+			cancel_buffer()
+			_reject("The stagger interrupted your queued art.")
+		elif not _player.is_dashing() and _player.visual.can_cast_art() and remaining_seconds() <= 0.0:
 			cancel_buffer()
 			_cast_now(_queued_aim, _queued_ground)
 		else:
 			_buffer_left -= delta
 			if _buffer_left <= 0.0:
 				cancel_buffer()
+				_reject("Your next movement interrupted the queued art.")
 	if _snare_time > 0.0:
 		_snare_time = maxf(0.0, _snare_time-delta)
 		_snare_sample -= delta
@@ -272,10 +296,10 @@ func _snare(aim: Vector3, ground: Vector3) -> bool:
 		chosen = base + toward
 	var floor_hit := _hit_floor(chosen,2.0,3.0)
 	if floor_hit.is_empty() or floor_hit.normal.y < .58:
-		return false
+		return _reject("Aim Reed Snare at level ground.")
 	_snare_point = floor_hit.position + Vector3.UP * .045
 	if not _visible_line(_source(), _snare_point + Vector3.UP * .25):
-		return false
+		return _reject("The reeds need a clear line to the ground.")
 	_snare_time = _selected.duration
 	FX.glyph(self,_selected.site,_snare_point,_selected.radius,_selected.tint,_snare_time,reduced_motion)
 	_snare_tick()
@@ -300,14 +324,15 @@ func _fault(aim: Vector3) -> bool:
 		e.shove(aim * 8.0,_selected.duration)
 		_battle.ability_hit(e,_selected.power)
 		count += 1
-	if count > 0:
-		FX.glyph(self,_selected.site,origin + Vector3.UP * .07,_selected.reach,_selected.tint,_selected.duration,reduced_motion,aim)
-	return count > 0
+	if count == 0:
+		return _reject("Face a visible foe within %d m to strike with Faultline." % _selected.reach)
+	FX.glyph(self,_selected.site,origin + Vector3.UP * .07,_selected.reach,_selected.tint,_selected.duration,reduced_motion,aim)
+	return true
 
 func _spark(aim: Vector3, ground: Vector3) -> bool:
 	var enemy := _target(aim,ground,_selected.reach)
 	if not enemy:
-		return false
+		return _reject("Aim %s at a visible foe within %d m." % [_selected.title, _selected.reach])
 	var struck := {}
 	var points := PackedVector3Array([_source()])
 	var damage := _selected.power
@@ -342,7 +367,7 @@ func _ward() -> bool:
 func _mark(aim: Vector3, ground: Vector3) -> bool:
 	var enemy := _target(aim,ground,_selected.reach)
 	if not enemy:
-		return false
+		return _reject("Aim %s at a visible foe within %d m." % [_selected.title, _selected.reach])
 	enemy.set_lensmark(_selected.duration, _selected.charges, _selected.power)
 	FX.glyph(self,_selected.site,enemy.body_center(),.3,_selected.tint,_selected.duration,reduced_motion,aim,enemy)
 	return true
@@ -354,7 +379,7 @@ func _dash(aim: Vector3) -> bool:
 		var back := _player.camera.global_basis.z.slide(Vector3.UP).normalized()
 		aim = (right*input.x + back*input.y).normalized()
 	if not _player.begin_swept_dash(aim, _selected.reach, _selected.duration, &"sluice"):
-		return false
+		return _reject("Sluice Step needs clear footing ahead.")
 	_dash_dir = aim
 	_dash_hit.clear()
 	FX.glyph(self,_selected.site,_player.global_position+Vector3.UP*.065,_selected.reach,_selected.tint,.35,reduced_motion,aim)
@@ -379,7 +404,7 @@ func _wick(aim: Vector3) -> bool:
 	var hit := get_world_3d().direct_space_state.intersect_ray(PhysicsRayQueryParameters3D.create(_wick_origin,goal,1))
 	_wick_end = hit.position - aim*.08 if not hit.is_empty() else goal
 	if _wick_end.distance_to(_wick_origin) < .45:
-		return false
+		return _reject("Give the returning crescent a clear path.")
 	_wick_pos = _wick_origin
 	_wick_age = 0.0
 	_wick_home = false

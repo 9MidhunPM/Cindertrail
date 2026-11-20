@@ -4,6 +4,8 @@ const ARTS := preload("res://scripts/game/traveler_arts.gd")
 const ALL := [&"flooded_grove",&"broken_quarry",&"fallen_relay",&"lanternwood",&"sunken_aqueduct",&"sunwatch_observatory",&"last_lantern_frontier"]
 var failures := 0
 var awards: Array[String] = []
+var launched: Array[StringName] = []
+var rejections: Array[String] = []
 var stage := Node3D.new()
 var arts := ARTS.new()
 var hero := CinderPlayer.new()
@@ -62,6 +64,8 @@ func _run() -> void:
 	stage.add_child(arts)
 	arts.profile = ARTS.PROFILE.new("user://arts-test-%d-%d.cfg" % [OS.get_process_id(), Time.get_ticks_usec()])
 	arts.achievement_unlocked.connect(func(title: String): awards.append(title))
+	arts.cast_succeeded.connect(func(id: StringName): launched.append(id))
+	arts.cast_rejected.connect(func(reason: String): rejections.append(reason))
 	arts.configure(hero,battle,core)
 	await _frames(5)
 	_expect(not arts.cast(Vector3.FORWARD) and arts.hud_state().ability_slots.size() == 7 and not arts.hud_state().has("ability_name"), "A new traveler has no ability")
@@ -74,18 +78,24 @@ func _run() -> void:
 	var witness := _foe(-4.0,7.0)
 	_expect(arts.cast(Vector3.FORWARD,Vector3(0,0,-4)), "Reed Snare lands on traversable ground")
 	var retained := arts.remaining_seconds()
-	_expect(arts.cycle() and arts.selected_id() == ALL[1] and not arts.cast(Vector3.FORWARD), "Q switches during the short cast lock")
 	core.position = Vector3(0,0,-10)
 	foe.advance(core,1.0/60.0,1.0)
 	witness.advance(core,1.0/60.0,1.0)
 	_expect(foe.velocity.slide(Vector3.UP).length() < witness.velocity.slide(Vector3.UP).length()*.55, "Only the enemy inside the reeds slows")
-	await _frames(19)
-	_expect(arts.cast(Vector3.FORWARD) and arts.cooldowns()[ALL[0]] > 6.0, "A second art chains while the first is still cooling down")
+	_expect(arts.cycle() and arts.selected_id() == ALL[1] and arts.cast(Vector3.FORWARD)
+		and arts.cooldowns()[ALL[0]] == retained and foe.health == 10.0,
+		"Q/G lands another ready art in the same frame with no shared timer")
+	_expect(not arts.cast(Vector3.FORWARD) and arts.failure_reason().contains("Faultline is ready in 7.0 s")
+		and rejections.back() == arts.failure_reason(), "Repeating a cooling art reports its own remaining time")
+	arts.unlock(ALL[3])
+	_expect(arts.cycle() and arts.cast(Vector3.FORWARD) and core.ward_strength == 16.0
+		and launched == [ALL[0],ALL[1],ALL[3]] and arts.failure_reason().is_empty(),
+		"A third distinct art resolves immediately and emits a launch for each successful cast")
 	var saved := arts.cooldowns()
-	arts.restore(ALL,ALL[0],saved,arts.cast_lock())
-	_expect(is_equal_approx(arts.remaining_seconds(),saved[ALL[0]]) and is_equal_approx(arts.cast_lock(),arts.CAST_RECOVERY), "New checkpoints restore independent timers and the short lock")
+	arts.restore(ALL,ALL[0],saved,.28)
+	_expect(is_equal_approx(arts.remaining_seconds(),saved[ALL[0]]) and arts.cooldowns()[ALL[3]] == 12.0, "New checkpoints restore independent timers for multiple same-frame casts")
 	arts.restore(ALL,ALL[1],retained)
-	_expect(arts.cooldowns()[ALL[4]] == 4.0 and arts.cooldowns()[ALL[3]] == retained and awards.size() == 2,
+	_expect(arts.cooldowns()[ALL[4]] == 4.0 and arts.cooldowns()[ALL[3]] == retained and awards.size() == 3,
 		"Legacy shared recovery migrates to each learned art and silently imports the remaining shrine achievements")
 	var rows: Array = ARTS.PROFILE.new(arts.profile.path).rows()
 	_expect(rows.size() == 7 and rows.all(func(row: Dictionary): return row.earned and row.icon is Texture2D), "A new profile reader sees seven persistent illustrated achievements")
@@ -120,8 +130,17 @@ func _run() -> void:
 	var wall := _box(Vector3(0,1,-2.0),Vector3(2,2,.22))
 	await _frames(2)
 	_expect(arts.cast(Vector3.FORWARD), "Sluice Step starts a swept movement")
-	await _frames(17)
-	_expect(hero.position.z < -.6 and hero.position.z > -1.9 and foe.knock.length() > 0, "Sluice Step pushes a brushed enemy and stops before a solid wall")
+	arts.cycle()
+	arts.cycle()
+	var casts_before := launched.size()
+	_expect(arts.selected_id() == ALL[6] and arts.cast(Vector3.RIGHT)
+		and casts_before == launched.size(), "A ready art waits in the hand while Sluice Step moves the traveler")
+	await _frames(3)
+	var brushed_enemy := foe.knock.length() > 0.0
+	await _frames(14)
+	_expect(arts.remaining_seconds() > 6.5 and launched.size() == casts_before + 1 and launched.back() == ALL[6],
+		"The crescent leaves the hand once after the physical dash ends")
+	_expect(hero.position.z < -.6 and hero.position.z > -1.9 and brushed_enemy, "Sluice Step pushes a brushed enemy and stops before a solid wall")
 	wall.free()
 	_setup_art(ALL[5])
 	foe = _foe(-1.6)
@@ -144,6 +163,7 @@ func _run() -> void:
 	wall = _box(Vector3(0,1,-1.5),Vector3(3,2,.3))
 	await _frames(2)
 	_expect(not arts.cast(Vector3.FORWARD) and arts.remaining_seconds() == 0.0, "Blocked targets consume no cooldown")
+	_expect(arts.failure_reason().contains("visible foe") and arts.failure_reason().contains("18 m"), "A missed Lensmark gives its aim and range requirements")
 	arts.restore(ALL,ALL[3],0.0)
 	arts.cast(Vector3.FORWARD)
 	arts.restore(ALL,ALL[3],17.5)
@@ -165,6 +185,19 @@ func _run() -> void:
 	await _frames(12)
 	arts.set_available(true)
 	_expect(core.ward_strength == 0.0 and arts.remaining_seconds() == 0.0, "Disabling controls cancels a buffered cast without spending its cooldown")
+	_setup_art(ALL[5])
+	foe = _foe(-3.0)
+	hero.visual.attack(0)
+	await _frames(22)
+	_expect(arts.cast(Vector3.FORWARD), "A final sword recovery can hold a targeted cast")
+	battle.enemies.erase(foe)
+	foe.free()
+	await _frames(12)
+	_expect(arts.remaining_seconds() == 0.0 and rejections.back().contains("visible foe"),
+		"A target lost during sword recovery reports the failed follow-up and leaves the art ready")
+	arts.restore([ALL[5], ALL[0], ALL[2]], ALL[5], {}, .28)
+	_expect(arts.cycle() and arts.selected_id() == ALL[0] and arts.cycle() and arts.selected_id() == ALL[2],
+		"Q follows the visible dock order even when shrines were learned in a different order")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(arts.profile.path))
 	stage.queue_free()
 	await _frames(2)
