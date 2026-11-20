@@ -1,12 +1,12 @@
-"""Cindertrail editable low-poly starter asset builder (Blender 4.3+).
+"""Build Cindertrail game assets and the optional editable starter library (Blender 4.3+).
 
 Run from the package root:
-  blender --background --python scripts/build_blender_assets.py -- --output art/models --render
+  blender --background --python scripts/build_blender_assets.py -- --output art/models
   blender --background --python scripts/build_blender_assets.py -- --assets bolt_turret mortar
+  blender --background --python scripts/build_blender_assets.py -- --starter-library --render --output /tmp/cindertrail-starter
 
-Produces static GLB assets with embedded material colours and an editable .blend
-library. These are authored starter models, not meshes extracted from concept art.
-The crawler/brute are unrigged. Use them for look development before animation.
+The playable creature GLBs use the bestiary's articulated node hierarchies.
+The optional starter library retains the simpler crawler and brute studies.
 """
 from pathlib import Path
 from math import sin, cos, pi
@@ -19,6 +19,10 @@ import bpy
 from mathutils import Vector, Euler
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from hero import build_bestiary
+
+MODEL_OUTPUT = ROOT / "art/models"
 COLORS = json.loads((ROOT / "art/materials/palette.json").read_text())["colors"]
 COLORS["brute_armor"] = {"srgb": [.26, .225, .31]}
 COLORS["crawler_armor"] = {"srgb": [.15, .225, .265]}
@@ -510,47 +514,57 @@ def look_at(obj, point):
 
 def main():
     parser=argparse.ArgumentParser()
-    parser.add_argument("--output", default=str(ROOT/"art/models"))
-    parser.add_argument("--render",action="store_true")
-    parser.add_argument("--assets", nargs="+", choices=BUILDERS,
-                        help="Export selected assets and preserve the full editable library.")
+    names = dict.fromkeys((*BUILDERS, *build_bestiary.PALETTES))
+    parser.add_argument("--output", type=Path)
+    parser.add_argument("--starter-library", action="store_true",
+                        help="Save the editable starter Blender library in a separate output directory.")
+    parser.add_argument("--render", action="store_true", help="Render a preview of the starter library.")
+    parser.add_argument("--assets", nargs="+", choices=names, help="Export selected playable assets.")
     argv=sys.argv[sys.argv.index("--")+1:] if "--" in sys.argv else []
     args=parser.parse_args(argv)
-    if args.assets and args.render:
-        parser.error("--render requires the complete asset library.")
-    out=Path(args.output).resolve();out.mkdir(parents=True,exist_ok=True)
+    if args.render and not args.starter_library:
+        parser.error("--render requires --starter-library.")
+    if args.starter_library and (args.assets or args.output is None):
+        parser.error("--starter-library requires a separate --output and builds the full preview.")
+    out = (args.output or MODEL_OUTPUT).resolve()
+    if args.starter_library and out.is_relative_to(MODEL_OUTPUT):
+        parser.error("Choose a starter library output outside the runtime models directory.")
+    out.mkdir(parents=True, exist_ok=True)
     bpy.ops.object.select_all(action="SELECT");bpy.ops.object.delete(use_global=False)
-    manifest_path = out / "models_manifest.json"
-    manifest = {}
-    if args.assets and manifest_path.exists():
-        for entry in json.loads(manifest_path.read_text())["assets"]:
-            manifest[entry["file"]] = entry
-    selected = args.assets or BUILDERS
-    for index,name in enumerate(selected):
+    selected = args.assets or names
+    records = []
+    preview_names = BUILDERS if args.starter_library else []
+    prop_names = [name for name in selected if name not in build_bestiary.PALETTES]
+    for index, name in enumerate(preview_names or prop_names):
         CURRENT.clear()
         BUILDERS[name]()
         root=bpy.data.objects.new(name,None);bpy.context.collection.objects.link(root)
         for o in CURRENT:
             o.parent=root
+        if args.starter_library:
+            col,row=index%5,index//5
+            root.location=((col-2)*3.5,(row-1)*4,0)
+            text_obj(name,(root.location.x,root.location.y-1.15,.05))
+            continue
         bpy.ops.object.select_all(action="DESELECT")
         root.select_set(True)
         for o in CURRENT:o.select_set(True)
         bpy.context.view_layer.objects.active=root
-        bpy.ops.export_scene.gltf(filepath=str(out/(name+".glb")),export_format="GLB",use_selection=True,
+        path = out / (name + ".glb")
+        bpy.ops.export_scene.gltf(filepath=str(path),export_format="GLB",use_selection=True,
                                   export_apply=True,export_yup=True,export_animations=False)
-        filename = name + ".glb"
-        manifest[filename] = {"file":filename,"static":True,"rigged":False,
-                              "vertices":sum(len(o.data.vertices) for o in CURRENT if o.type=="MESH")}
-        col,row=index%5,index//5
-        root.location=((col-2)*3.5,(row-1)*4,0)
-        if not args.assets:
-            text_obj(name,(root.location.x,root.location.y-1.15,.05))
-    manifest_path.write_text(json.dumps({"generator":"build_blender_assets.py","units":"meters",
-                                         "up_axis_in_glb":"Y","assets":list(manifest.values())},indent=2)+"\n")
-    print("CINDERTRAIL_ASSETS_COMPLETE " + str(len(selected)))
-    if args.assets:
+        records.append({"file": path.name, "static": True, "rigged": False,
+                        "vertices": build_bestiary.glb_vertex_count(path)})
+    if not args.starter_library:
+        creatures = [name for name in selected if name in build_bestiary.PALETTES]
+        records.extend(build_bestiary.export_assets(out, creatures))
+        build_bestiary.update_manifest(out, records)
+        print("CINDERTRAIL_ASSETS_COMPLETE " + str(len(records)))
         return
-    # Real 3D preview of the delivered starter assets, not an AI image.
+    save_starter_library(out, args.render)
+
+
+def save_starter_library(output, render):
     CURRENT.clear();cube("Preview_floor",(0,0,-.20),(19,14,.25),"cloth_shadow",.05)
     for loc,energy,color,size in [((-5,-7,10),1800,(1.0,.78,.48),8),((7,4,9),2300,(.45,.75,1.0),7)]:
         bpy.ops.object.light_add(type="AREA",location=loc)
@@ -562,11 +576,9 @@ def main():
     scene.render.engine="CYCLES";scene.cycles.samples=40;scene.cycles.use_denoising=False
     scene.render.resolution_x=1600;scene.render.resolution_y=1050;scene.render.resolution_percentage=100
     scene.view_settings.view_transform="AgX"
-    source=ROOT/"art/source"
-    source.mkdir(parents=True,exist_ok=True)
-    (source/".gdignore").touch()
-    bpy.ops.wm.save_as_mainfile(filepath=str(source/"cindertrail_starter_library.blend"))
-    if args.render:
-        scene.render.filepath=str(ROOT/"art/materials/starter_asset_preview.png")
+    (output / ".gdignore").touch()
+    bpy.ops.wm.save_as_mainfile(filepath=str(output / "cindertrail_starter_library.blend"))
+    if render:
+        scene.render.filepath=str(output / "starter_asset_preview.png")
         bpy.ops.render.render(write_still=True)
 if __name__=="__main__":main()

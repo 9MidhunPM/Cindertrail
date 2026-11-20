@@ -8,9 +8,9 @@ Start by matching a single exploration frame (`art/concept/14_grove_crossing.png
 
 ## Files already included
 
-The material kit contains twenty named Godot colour/material resources, a technical palette atlas, vertex-colour and atlas materials, a simple water shader, a radial slowing-field shader and an editable Blender generator. `art/models/` contains static exported starter GLBs and an editable `.blend` library in `art/source/` when the generation step has run. Read `models_manifest.json` for actual asset names/counts and vertex counts.
+The material kit contains twenty named Godot colour/material resources, a technical palette atlas, vertex-colour and atlas materials, a simple water shader, a radial slowing-field shader and an editable Blender generator. The runtime GLBs live in `art/models/`. Read `models_manifest.json` for the prop and enemy names, exported vertex counts, and enemy articulation details.
 
-These meshes establish shapes and scale. They still need intentional arrangement, collisions, interaction, animation and iteration against the reference art. Crawler and brute starters are unrigged; there is no final traveler model or finished game scene in this kit.
+The default asset rebuild includes the playable crawler, brute, and expanded bestiary from `scripts/hero/build_bestiary.py`. The archived Blender library in `art/source/` retains the starter mesh studies. See the [rebuild instructions](../art/materials/README.md#rebuild) for exporting them to a separate location.
 
 ## Stage 1: palette and shape, before image textures
 

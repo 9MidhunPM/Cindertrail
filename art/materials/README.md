@@ -22,10 +22,16 @@ The GLBs already include colour/material assignments. The `.tres` files are opti
 
 ```bash
 python3 scripts/make_palette.py
-blender --background --python scripts/build_blender_assets.py -- --output art/models --render
+blender --background --python scripts/build_blender_assets.py -- --output art/models
 ```
 
-The palette script requires Pillow. The asset builder runs inside Blender and reads the generated palette JSON. It overwrites its own named GLBs, `art/source/` `.blend` library and preview; commit your edited versions under new filenames first.
+The palette script requires Pillow. The asset builder reads the generated colors, exports the playable props and bestiary, and updates `models_manifest.json`. Pass `--assets crawler_static brute_static` after `--` to rebuild just those creatures. The manifest counts exported position vertices. Godot animates the creatures through authored node pivots instead of skinning.
+
+Use a separate directory to save the editable starter library and its preview, including the earlier creature studies.
+
+```bash
+blender --background --python scripts/build_blender_assets.py -- --starter-library --render --output /tmp/cindertrail-starter
+```
 
 ## Rendering profiles
 
@@ -33,4 +39,4 @@ Use the installed stable Godot version as the source of truth for renderer suppo
 
 ## Ownership and scope
 
-The palette, scripts, shaders and simple generated meshes in this kit were authored for this project and are provided for the user's use and modification. No external asset files are bundled in this material kit. Do not treat the AI concept images or the uploaded video as CC0 stock assets. The two creature models are static unrigged visual starters, not animation-ready production characters.
+The palette, scripts, shaders and generated meshes in this kit were authored for this project and are provided for the user's use and modification. No external asset files are bundled in this material kit. Do not treat the AI concept images or the uploaded video as CC0 stock assets.

@@ -1,4 +1,7 @@
-"""Build the articulated valley bestiary with Blender --background --python this_file."""
+"""Build all or selected articulated creatures with Blender's GLB exporter."""
+import argparse
+import json
+import struct
 from pathlib import Path
 from math import sin, cos, pi
 import sys
@@ -324,17 +327,72 @@ def ram():
             head.shell(points[j],(.095,.09,.085),1,10,5)
 
 
-requested = set(sys.argv[sys.argv.index('--')+1:]) if '--' in sys.argv else set()
-for species, palette in PALETTES.items():
-    if requested and species not in requested: continue
-    bpy.ops.wm.read_factory_settings(use_empty=True)
-    JOINTS=[]
-    mats=atlas(palette, species=="vesper_colossus")
-    if species in ['brute_static','vesper_colossus','bell_warden']:
-        hulking(species)
-    elif species=='quarry_ram':
-        ram()
-    else:
-        arthropod(species)
-    for joint in JOINTS: joint.finish(mats)
-    bpy.ops.export_scene.gltf(filepath=str(DEST/(species+'.glb')),export_format='GLB',export_animations=False,export_cameras=False,export_lights=False)
+def glb_vertex_count(path):
+    """Count the POSITION values the engine receives, including split UVs and normals."""
+    with path.open("rb") as glb:
+        glb.seek(12)
+        length, tag = struct.unpack("<I4s", glb.read(8))
+        if tag != b"JSON":
+            raise ValueError(f"Expected a GLB JSON chunk in {path}")
+        model = json.loads(glb.read(length))
+    return sum(
+        model["accessors"][primitive["attributes"]["POSITION"]]["count"]
+        for mesh in model["meshes"] for primitive in mesh["primitives"]
+    )
+
+
+def export_assets(output, species_names):
+    global JOINTS
+    records = []
+    for species in species_names:
+        bpy.ops.wm.read_factory_settings(use_empty=True)
+        JOINTS = []
+        materials = atlas(PALETTES[species], species == "vesper_colossus")
+        if species in ("brute_static", "vesper_colossus", "bell_warden"):
+            hulking(species)
+        elif species == "quarry_ram":
+            ram()
+        else:
+            arthropod(species)
+        for joint in JOINTS:
+            joint.finish(materials)
+        path = output / (species + ".glb")
+        bpy.ops.export_scene.gltf(
+            filepath=str(path), export_format="GLB", export_animations=False,
+            export_cameras=False, export_lights=False,
+        )
+        records.append({"file": path.name, "static": False, "rigged": True,
+                        "rig": "articulated node pivots", "skinned": False, "baked_clips": False,
+                        "vertices": glb_vertex_count(path),
+                        "generator": "scripts/hero/build_bestiary.py"})
+    return records
+
+
+def update_manifest(output, records):
+    path = output / "models_manifest.json"
+    manifest = {"generator": "build_blender_assets.py", "units": "meters",
+                "up_axis_in_glb": "Y", "assets": []}
+    if path.exists():
+        manifest = json.loads(path.read_text())
+    by_filename = {entry["file"]: entry for entry in manifest["assets"]}
+    by_filename.update({entry["file"]: entry for entry in records})
+    manifest["assets"] = list(by_filename.values())
+    path.write_text(json.dumps(manifest, indent=2) + "\n")
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--output", type=Path, default=DEST)
+    parser.add_argument("species", nargs="*", metavar="SPECIES")
+    args = parser.parse_args(sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else [])
+    names = args.species or list(PALETTES)
+    for name in names:
+        if name not in PALETTES:
+            parser.error(f"Unknown creature {name!r}. Choose from {', '.join(PALETTES)}.")
+    output = args.output.resolve()
+    output.mkdir(parents=True, exist_ok=True)
+    update_manifest(output, export_assets(output, names))
+
+
+if __name__ == "__main__":
+    main()
