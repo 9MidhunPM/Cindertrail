@@ -15,6 +15,7 @@ const MODULES: Array[CinderModuleStats] = [
 const CRAWLER: CinderEnemyStats = preload("res://data/enemies/crawler.tres")
 const BRUTE: CinderEnemyStats = preload("res://data/enemies/brute.tres")
 const WAVES: CinderWaveStats = preload("res://data/waves/valley.tres")
+const WAVE_ENTRY := preload("res://scripts/combat/wave_entry.gd")
 const REPAIR_COST := 8
 const REPAIR_AMOUNT := 20.0
 const SPARK_DAMAGE := 4.0
@@ -350,7 +351,8 @@ func _advance_waves(delta: float) -> void:
 				lane_index = _landmark_lane
 			var lane := site.lanes[lane_index]
 			if lane.size() >= 2:
-				var enemy := spawn_enemy(spec, lane, site, lane_index)
+				var route := WAVE_ENTRY.extend(get_world_3d().direct_space_state, lane, spec)
+				var enemy := spawn_enemy(spec, route, site, lane_index)
 				if not enemy:
 					return
 				enemy.counts_for_wave = true
