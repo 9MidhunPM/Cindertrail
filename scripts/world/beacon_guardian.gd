@@ -112,7 +112,7 @@ func hint() -> String:
 		if guardian.phase == guardian.Phase.BRACE:
 			return "Reach the gold shoulder and strike, or land two sparks"
 		return "Phase %d   •   %s" % [guardian.stage, guardian.phase_name()]
-	return "Space   Challenge the guardian    •    E   Repair    •    Hold R   Leave"
+	return "T   Challenge the guardian    •    E   Repair    •    Hold R   Leave"
 
 func watch(restoration: float, player_point: Vector3, camp: CinderSite, camera: Camera3D, delta: float) -> void:
 	if cleared or is_instance_valid(guardian):

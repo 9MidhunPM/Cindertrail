@@ -1,6 +1,7 @@
 extends SceneTree
 ## Retries an endgame save through normal title and defeat actions. Pass -- --generated
-## to use a newly rolled layout. Use a temporary XDG_DATA_HOME and CINDERTRAIL_TEST_SAVE=1.
+## to use a newly rolled layout, or --upgraded for three level-three modules.
+## Use a temporary XDG_DATA_HOME and CINDERTRAIL_TEST_SAVE=1.
 var game: Node
 var failures := 0
 
@@ -41,6 +42,10 @@ func _run() -> void:
 	var entered := CinderRelay.SUMMIT + Vector3(0, .23, 1.6)
 	var endgame := {"restoration": 100.0, "health": 77.0, "scrap": 0,
 		"position": entered, "inventory": [{"socket": -1, "kind": 0, "level": 2}]}
+	var upgraded := OS.get_cmdline_user_args().has("--upgraded")
+	if upgraded:
+		endgame.inventory = [{"socket": -1, "kind": 0, "level": 3}, {"socket": -1, "kind": 0, "level": 3},
+			{"socket": -1, "kind": 2, "level": 3}]
 	var generated := OS.get_cmdline_user_args().has("--generated")
 	if generated:
 		game._begin_journey()
@@ -92,6 +97,9 @@ func _run() -> void:
 	var original: int = game.core.get_instance_id()
 	game.interact()
 	await _frames(85)
+	if upgraded:
+		_check(game.battle.place(0,0) and game.battle.place(1,0) and game.battle.place(2,2),
+			"Installed two level-three bolts and a level-three mortar from the saved journey")
 	game.start_wave()
 	# First deliberately miss a brace at full pressure. Then use only the
 	# traveler's starter sparks, analog movement and the ring's walkable gap.
@@ -135,11 +143,12 @@ func _run() -> void:
 		previous_health = game.core.health
 		await physics_frame
 	_steer(game.player.global_position)
-	print("Guardian starter fight %.1fs after deliberate first miss; core %.1f, pulses %d" %
-		[fight_frames / 60.0, game.core.health, pulses])
+	print("Guardian %s fight %.1fs after deliberate first miss; core %.1f, pulses %d" %
+		["upgraded" if upgraded else "starter", fight_frames / 60.0, game.core.health, pulses])
 	_check(stages.size() == 3 and sides.size() == 2 and saw_ring and saw_offset and escort,
 		"Both shoulders, the rising ring, offset charge and escort lanes appeared across three stages")
 	if not _check(game.summit.cleared and game.mode == game.Mode.PREPARE,
+		"An active traveler wins with three upgraded towers" if upgraded else
 		"An active traveler with zero scrap, zero installed modules and starter sparks wins"):
 		quit(1)
 		return
