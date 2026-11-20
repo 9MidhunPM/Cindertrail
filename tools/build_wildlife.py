@@ -1,10 +1,12 @@
-"""Bake Cindertrail's eight original, articulated animals to metre-scale vertex-painted glTF."""
+"""Bake Cindertrail's original animals and their seamless, hand-toned surface patterns."""
+import argparse
 import json
 import math
 from pathlib import Path
 import struct
 
 import numpy as np
+from PIL import Image
 
 OUT = Path(__file__).resolve().parents[1] / "art/wildlife"
 UP = np.array([0., 1., 0.])
@@ -266,6 +268,46 @@ def bird(owl):
     return [body,head,tail,*wings]
 
 
+def bake_surface_patterns():
+    """Neutral tiles modulate the broad species colors already painted into the vertices."""
+    size = 512
+    axis = (np.arange(size) + .5) / size
+    u, v = np.meshgrid(axis, axis)
+    rng = np.random.default_rng(7223)
+    gray = {}
+
+    def wash(columns, rows):
+        colors = rng.random((rows, columns))
+        x, y = u*columns, v*rows
+        i, j = x.astype(int), y.astype(int)
+        fx, fy = x % 1, y % 1
+        fx, fy = fx*fx*(3-2*fx), fy*fy*(3-2*fy)
+        next_x, next_y = (i+1)%columns, (j+1)%rows
+        return ((1-fy)*((1-fx)*colors[j,i] + fx*colors[j,next_x])
+                + fy*((1-fx)*colors[next_y,i] + fx*colors[next_y,next_x]))
+
+    coat = wash(32, 11)
+    grain = wash(56, 27)
+    tufts = np.clip((wash(64, 18) - .50)*2, 0, 1)
+    gray["fur"] = np.clip(.90 + .074*coat + .033*grain - .10*tufts, .82, 1.)
+
+    rachis = np.abs((u*12 + .13*np.sin(v*math.tau*4)) % 1 - .5)
+    vanes = (.5 + .5*np.sin((v*19 + rachis*.88)*math.tau))**5
+    gray["feathers"] = np.clip(.91 + .065*wash(20, 10) - .10*vanes*rachis
+                               + .028*np.clip(1-rachis*12, 0, 1), .84, 1.)
+
+    rows = v*16
+    # Offset alternate rows so the curved scale edges overlap instead of forming a grid.
+    scale = (u*22 + .5*(rows.astype(int)%2)) % 1 - .5
+    lip = np.exp(-((rows%1 - .22 - .95*scale**2)/.075)**2)
+    wet = wash(13, 17)
+    gray["aquatic"] = np.clip(.89 + wet*.083 + lip*.055 - (1-lip)*.015, .84, 1.)
+
+    for family, values in gray.items():
+        pixels = np.round(values*255).astype(np.uint8)
+        Image.fromarray(pixels).convert("RGB").save(OUT / f"{family}_brush.png", optimize=True)
+
+
 def export(name, parts):
     document={"asset":{"version":"2.0","generator":"Cindertrail wildlife painter"},
               "scene":0,"scenes":[{"nodes":[0]}],"nodes":[{"name":name,"children":[]}],
@@ -298,8 +340,13 @@ def export(name, parts):
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--textures-only", action="store_true", help="rebuild only the three surface tiles")
+    args = parser.parse_args()
     OUT.mkdir(exist_ok=True)
-    for species,parts in {"fish":fish(),"frog":frog(),"pika":small_mammal(False),
-                          "goat":hoofed(True),"deer":hoofed(False),"otter":small_mammal(True),
-                          "kite":bird(False),"owl":bird(True)}.items():
-        export(species,parts)
+    bake_surface_patterns()
+    if not args.textures_only:
+        for species,parts in {"fish":fish(),"frog":frog(),"pika":small_mammal(False),
+                              "goat":hoofed(True),"deer":hoofed(False),"otter":small_mammal(True),
+                              "kite":bird(False),"owl":bird(True)}.items():
+            export(species,parts)

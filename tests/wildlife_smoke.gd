@@ -64,7 +64,7 @@ func _check_habitats() -> ANIMAL:
 			"%s is rendered at %s" % [S.keys()[species].capitalize(), site.label])
 		if species == S.DEER:
 			deer = local
-			_check(deer != null and _has_painted_mesh(deer), "Deer geometry displays its painted coat colors")
+			_check(deer != null and _has_painted_mesh(deer), "Deer combines its painted coat with the fur tile")
 	return deer
 
 func _has_painted_mesh(animal: ANIMAL) -> bool:
@@ -72,7 +72,8 @@ func _has_painted_mesh(animal: ANIMAL) -> bool:
 		for surface in part.mesh.get_surface_count():
 			var material := part.get_active_material(surface) as BaseMaterial3D
 			var paint: PackedColorArray = part.mesh.surface_get_arrays(surface)[Mesh.ARRAY_COLOR]
-			if material != null and material.vertex_color_use_as_albedo and not paint.is_empty():
+			if (material != null and material.vertex_color_use_as_albedo
+					and material.albedo_texture != null and material.uv1_triplanar and not paint.is_empty()):
 				return true
 	return false
 

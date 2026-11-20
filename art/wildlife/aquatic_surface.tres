@@ -1,0 +1,12 @@
+[gd_resource type="StandardMaterial3D" load_steps=2 format=3]
+
+[ext_resource type="Texture2D" path="res://art/wildlife/aquatic_brush.png" id="1_brush"]
+
+[resource]
+resource_name = "Wildlife aquatic brush"
+albedo_texture = ExtResource("1_brush")
+vertex_color_use_as_albedo = true
+roughness = 0.57
+uv1_scale = Vector3(1.6, 1.6, 1.6)
+uv1_triplanar = true
+uv1_triplanar_sharpness = 3.5

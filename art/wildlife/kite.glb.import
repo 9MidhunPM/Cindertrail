@@ -43,8 +43,8 @@ _subresources={
 "materials": {
 "Painted feathers, hide and scales": {
 "use_external/enabled": true,
-"use_external/fallback_path": "res://art/materials/vertex_palette_material.tres",
-"use_external/path": "res://art/materials/vertex_palette_material.tres"
+"use_external/fallback_path": "res://art/wildlife/feathers_surface.tres",
+"use_external/path": "res://art/wildlife/feathers_surface.tres"
 }
 }
 }
