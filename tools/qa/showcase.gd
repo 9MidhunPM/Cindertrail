@@ -28,6 +28,10 @@ var _next_art_frame := 0
 var _art_casts: Dictionary = {}
 var _spoken := true
 var _stopping := false
+var _speed := 1
+var _playing_finale := false
+var _base_ticks := Engine.physics_ticks_per_second
+var _base_step_limit := Engine.max_physics_steps_per_frame
 
 func _run() -> void:
 	route_case = "showcase"
@@ -52,6 +56,7 @@ func _run() -> void:
 	viewport = root
 	_card = CARD.new()
 	_card.exit_requested.connect(_exit_showcase)
+	_card.speed_requested.connect(_set_speed)
 	root.add_child(_card)
 	_voice = AudioStreamPlayer.new()
 	_voice.bus = &"Effects"
@@ -96,6 +101,9 @@ func _play_journey() -> void:
 	}
 	game = (load(MAIN) as PackedScene).instantiate()
 	root.add_child(game)
+	game.melee.hit_stop_enabled = false
+	_playing_finale = false
+	_apply_speed()
 	root.move_child(_card, -1)
 	current_scene = game
 	game.arts.cast_succeeded.connect(_record_cast)
@@ -112,6 +120,8 @@ func _play_journey() -> void:
 	if not _check(measurements.has("journey_seconds") and _mode() == "Win" and game.summit.cleared,
 			"The complete journey reaches the finale after the summit battle"):
 		return
+	_playing_finale = true
+	_apply_speed()
 	_say("The first light", ENDING_LINE, "dawn")
 	for tick in 1900:
 		if not is_instance_valid(game.finale):
@@ -219,6 +229,21 @@ func _say(headline: String, line: String, voice_name: String) -> void:
 			seconds = maxf(seconds, speech.get_length() + .25)
 	_card.narrate(headline, line, seconds)
 
+func _set_speed(speed: int) -> void:
+	if not _stopping:
+		_speed = speed
+		_apply_speed()
+
+func _apply_speed() -> void:
+	_set_clock_rate(1 if _playing_finale else _speed)
+	_card.show_speed(_speed, _playing_finale)
+
+func _set_clock_rate(speed: int) -> void:
+	# Run more physics steps per second while leaving their simulated delta fixed.
+	Engine.physics_ticks_per_second = _base_ticks * speed
+	Engine.max_physics_steps_per_frame = _base_step_limit * speed
+	Engine.time_scale = float(speed)
+
 func _clear_journey() -> void:
 	_voice.stop()
 	_voice.stream = null
@@ -239,6 +264,7 @@ func _exit_showcase(code := 0) -> void:
 	if _stopping:
 		return
 	_stopping = true
+	_set_clock_rate(1)
 	_voice.stop()
 	_voice.stream = null
 	for action in ["move_left", "move_right", "move_forward", "move_back", "pack", "sprint", "walk"]:

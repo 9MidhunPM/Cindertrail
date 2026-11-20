@@ -13,6 +13,7 @@ for option in "$@"; do
         --help)
             printf '%s\n' 'Usage: tools/showcase.sh [--once | --cycles=N] [--smoke] [--silent-voice] [--out=DIR]' \
                 'The native showcase loops by default. Press Escape to exit.' \
+                'Press 1, 2, 3, or 4 to change walkthrough speed.' \
                 'Use --smoke for a faster headless playthrough. If no cycle count is supplied, it runs once.'
             exit 0
             ;;

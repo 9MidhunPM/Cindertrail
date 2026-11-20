@@ -2,6 +2,8 @@
 
 Run `tools/showcase.sh` from the checkout. One Godot window plays the illustrated prologue, walks a seeded valley, defends four roaming shrines, fights Vesper, and delivers the same sun for the full sunrise finale. A new journey starts after the ending. Press **Escape** to exit or pass `--once` to stop after one run.
 
+Press **1**, **2**, **3**, or **4** for **1×**, **2×**, **3×**, or **4×** walkthrough speed. The speed appears in the bottom-right corner and carries over between journeys. Narration and the sunrise finale play at normal speed. If you change speed during the finale, it takes effect on the next journey.
+
 The showcase uses the normal player movement actions and the gameplay APIs behind deploying, building, striking, casting earned shrine arts, and packing. Spoken narration and animated chapter cards introduce the start, shrines, guardian, and ending. Use `--silent-voice` for captions and game audio. Voice recordings are bundled and play offline.
 
 The launcher uses temporary Godot data and configuration folders so the showcase stays separate from your normal game. Results land in `evidence/showcase/showcase.json`. Pass `--out=DIR` to change the report folder.

@@ -15,6 +15,7 @@ signal sword_cue(cue: String)
 var player: CinderPlayer
 var battle: CinderBattle
 var director: CinderCamera
+var hit_stop_enabled := true
 var _combo := 0
 var _since_swing := 99.0
 var _buffered := 0.0
@@ -108,7 +109,8 @@ func cancel() -> void:
 	player.visual.cancel_attack()
 	player.clear_swing()
 	_stop_serial += 1
-	Engine.time_scale = 1.0
+	if hit_stop_enabled:
+		Engine.time_scale = 1.0
 
 func _try_swing() -> bool:
 	if not player.move_enabled or player.is_staggered() or player.is_dashing() or _buffered <= 0.0:
@@ -191,7 +193,7 @@ func _sweep_spin() -> void:
 		swung.emit(ATTACKS.SPIN, _spin_hits.size())
 
 func _hit_stop(seconds: float) -> void:
-	if DisplayServer.get_name() == "headless" or director.reduced_motion or get_tree().paused:
+	if not hit_stop_enabled or DisplayServer.get_name() == "headless" or director.reduced_motion or get_tree().paused:
 		return
 	_stop_serial += 1
 	var serial := _stop_serial
@@ -219,4 +221,5 @@ func _physics_process(delta: float) -> void:
 		_try_swing()
 
 func _exit_tree() -> void:
-	Engine.time_scale = 1.0
+	if hit_stop_enabled:
+		Engine.time_scale = 1.0

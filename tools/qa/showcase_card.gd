@@ -1,10 +1,12 @@
 extends CanvasLayer
 
 signal exit_requested
+signal speed_requested(speed: int)
 
 var _card: PanelContainer
 var _headline: Label
 var _text: Label
+var _speed_text: Label
 var _animation: Tween
 
 func _ready() -> void:
@@ -42,6 +44,21 @@ func _ready() -> void:
 	_text.custom_minimum_size.x = minf(550.0, get_viewport().get_visible_rect().size.x - 100.0)
 	_card.hide()
 
+	var footer := MarginContainer.new()
+	add_child(footer)
+	footer.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+	footer.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	footer.add_theme_constant_override("margin_right", 24)
+	footer.add_theme_constant_override("margin_bottom", 20)
+	footer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var speed_badge := PanelContainer.new()
+	speed_badge.size_flags_horizontal = Control.SIZE_SHRINK_END
+	speed_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	speed_badge.add_theme_stylebox_override("panel", surface)
+	footer.add_child(speed_badge)
+	_speed_text = _label(speed_badge, Color("#f6e7cb"), 15)
+	show_speed(1)
+
 func _label(parent: Control, color: Color, size: int) -> Label:
 	var label := Label.new()
 	label.add_theme_color_override("font_color", color)
@@ -70,7 +87,18 @@ func clear() -> void:
 		_animation.kill()
 	_card.hide()
 
+func show_speed(speed: int, finale := false) -> void:
+	_speed_text.text = "Finale 1×  ·  Walkthrough %d×" % speed if finale else "%d× speed  ·  1–4" % speed
+
 func _input(event: InputEvent) -> void:
 	if event.is_action_pressed(&"ui_cancel"):
 		get_viewport().set_input_as_handled()
 		exit_requested.emit()
+		return
+	if event is InputEventKey:
+		var key: int = event.physical_keycode if event.physical_keycode != KEY_NONE else event.keycode
+		var first := KEY_KP_1 if key >= KEY_KP_1 and key <= KEY_KP_4 else KEY_1
+		if key >= first and key <= first + 3:
+			get_viewport().set_input_as_handled()
+			if event.pressed and not event.echo:
+				speed_requested.emit(key - first + 1)
