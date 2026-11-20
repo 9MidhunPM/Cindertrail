@@ -283,8 +283,6 @@ func _update_tower(tower: CinderInstalledModule, delta: float) -> void:
 	if tower.kind == 1:
 		return
 	tower.cooldown -= delta
-	if tower.cooldown > 0.0:
-		return
 	var target: CinderEnemy
 	var closest := INF
 	for enemy in enemies:
@@ -295,16 +293,18 @@ func _update_tower(tower: CinderInstalledModule, delta: float) -> void:
 				target = enemy
 	if not target:
 		return
-	var muzzle := tower.global_position + Vector3.UP * 1.18
 	var end := target.body_center()
-	var toward := end - muzzle
-	tower.model.rotation.y = atan2(toward.x, toward.z)
+	tower.track(end, delta)
+	if tower.cooldown > 0.0:
+		return
+	var muzzle := tower.fire()
 	var power := tower.stats.power * (1.0 + 0.48*(tower.level-1))
 	var lob := tower.kind == 2
 	if lob:
 		end += Vector3(target.velocity.x, 0.0, target.velocity.z) * 0.5
 	var shot := _visual_shot(muzzle, end, lob, Color(1.0, 0.67, 0.22))
 	if lob:
+		shot.set_blast_radius(tower.stats.splash)
 		shot.landed.connect(_splash.bind(end, tower.stats.splash, power), CONNECT_ONE_SHOT)
 	else:
 		_hit(target, power)
@@ -330,4 +330,4 @@ func _hit(enemy: CinderEnemy, amount: float) -> void:
 	if enemy.health <= 0:
 		enemies.erase(enemy)
 		scrap += enemy.stats.bounty
-		enemy.withdraw()
+		enemy.withdraw(true)
