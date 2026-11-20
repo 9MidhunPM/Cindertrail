@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="CinderSiteSpec" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/world/site_spec.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+label = "Beacon Crown"
+id = &"beacon_crown"
+energy = 0.0
+rate = 0.0
+lane_names = PackedStringArray("West buttress", "Dawn stair", "East buttress")

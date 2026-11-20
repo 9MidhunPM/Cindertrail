@@ -46,7 +46,7 @@ There is exactly one gameplay core, one health value and one restoration value. 
 7. Stay for another wave or hold the pack action to recall defenses and fold the core.
 8. Move away. New organized waves pause, but already-spawned nearby enemies can pursue.
 9. Redeploy at a different site with progress and upgrades intact.
-10. At 100% restoration, carry the core to the final beacon and trigger the sunrise ending.
+10. At 100% restoration, carry the core to the final beacon, defend the crown, and deliver the sunrise.
 
 ## Three prototype sites
 
@@ -95,7 +95,7 @@ Each connection should contain at least one choice: a short exposed path, a safe
 
 ## Win, loss and ending
 
-At full restoration, the beacon becomes the destination. Interacting there transfers the same core into its cradle, removes the backpack form and plays a short dawn sequence across the valley. A final defense is a stretch feature. Core destruction ends the run and offers a clear restart. Keep both outcomes fully playable before adding more content.
+At full restoration, unfold the shrine on the hilltop and place carried modules around the Beacon Crown. Challenge the Vesper Colossus when ready. A blade strike or spark during its pulse wind-up opens the chest plates and protects the core. Its fractured armor calls two escorts up the summit. Packing allows retreat and resets the unfinished encounter. Defeating the guardian opens the cradle for delivery of the same sun. Core destruction offers a retry from the arrival checkpoint or a fresh journey.
 
 ## Scope boundary
 
