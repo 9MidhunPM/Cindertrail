@@ -5,13 +5,11 @@ extends Node3D
 
 const ARCH = preload("res://art/models/ruin_arch.glb")
 const PILLAR = preload("res://art/models/ruin_pillar.glb")
-const TREE = preload("res://art/models/teal_tree.glb")
-const COPPER_TREE = preload("res://art/models/orange_tree.glb")
 const WATER = preload("res://art/materials/grove/shallows.gdshader")
 const PALETTE = preload("res://art/materials/grove/weathered_palette.gdshader")
 const FALL = preload("res://art/materials/grove/waterfall.gdshader")
-const CREAM = Color("#c1a57f")
-const LIGHT = Color("#ddcbaa")
+const CREAM = Color("#d6b584")
+const LIGHT = Color("#f4d8a5")
 const SHADE = Color("#827d73")
 const MOSS = Color("#687e51")
 const REED = Color("#597f58")
@@ -40,6 +38,8 @@ func _ready() -> void:
 	_architecture()
 	_shore()
 	_plantings()
+	_water_garden()
+	_ruin_gardens()
 	_finish_mesh()
 
 func _box_floor(p: Vector3, size: Vector3, yaw := 0.0, pitch := 0.0) -> void:
@@ -59,6 +59,13 @@ func _pool() -> void:
 				if rng.randf()<.18: continue
 				var loc: Vector2 = patch + Vector2(col*.68+(row%2)*.29,row*.64)
 				_rock(Vector3(loc.x,-.10,loc.y),Vector3(.48,.16,.39)*rng.randf_range(.79,1.05),Color("#689280").darkened(rng.randf_range(.0,.29)),6)
+	# Stream-bed cobbles sit below the refracting surface, with quiet patches of open water.
+	for bank in [Vector2(2.1,13.6),Vector2(4.4,9.4),Vector2(-6.1,13.1),Vector2(-5.1,7.1),Vector2(7.6,3.6),Vector2(2.8,-6.9)]:
+		for i in 50:
+			var p: Vector2=bank+Vector2(rng.randfn(0.,1.65),rng.randfn(0.,1.44))
+			var r:=rng.randf_range(.12,.49)
+			var shade:=Color("#537f76").lerp(Color("#94a67d"),rng.randf())
+			_rock(Vector3(p.x,-.035,p.y),Vector3(r,.105,r*.82),shade,6)
 	var plane := PlaneMesh.new()
 	plane.size = Vector2(49,49)
 	var water := MeshInstance3D.new()
@@ -139,7 +146,13 @@ func _walk(path: Array, width: float) -> void:
 				var x3 := float(seams1[lane])+.026
 				if lane==0: x0 += rng.randf_range(-.13,.07)
 				if lane==2: x2 += rng.randf_range(-.07,.13)
-				var poly := PackedVector2Array([start+side*x0+forward*.027,start+side*x1+forward*.027,end+side*x2-forward*.027,end+side*x3-forward*.027])
+				# Clip corners, with a drifting outer edge and moss showing at the joints.
+				var p0 := start+side*x0+forward*rng.randf_range(.012,.046)
+				var p1 := start+side*x1+forward*rng.randf_range(.014,.046)
+				var p2 := end+side*x2-forward*rng.randf_range(.012,.050)
+				var p3 := end+side*x3-forward*rng.randf_range(.010,.050)
+				var chip := rng.randf_range(.04,.27)
+				var poly := PackedVector2Array([p0.lerp(p1,chip*.66),p1.lerp(p0,.05),p1.lerp(p2,.1),p2.lerp(p1,.06),p2.lerp(p3,.06),p3.lerp(p2,chip*.52),p3.lerp(p0,chip),p0.lerp(p3,chip*.78)])
 				var high := rng.randf_range(.642,.70)
 				_slab(poly,.38+rng.randf_range(-.13,.03),high,_stone())
 				if rng.randf()<.27:
@@ -148,6 +161,13 @@ func _walk(path: Array, width: float) -> void:
 					_litter(start+side*(x0 if lane==0 else x1),high+.015)
 
 			previous_seam = seam
+			if row%3!=1:
+				var sign_side := -1. if row%3==0 else 1.
+				var edge := start+side*sign_side*(width*.52+rng.randf_range(.12,.34))
+				var toe := rng.randf_range(.14,.45)
+				_rock(Vector3(edge.x,toe,edge.y),Vector3(.46,.19,.61)*rng.randf_range(.72,1.34),_stone(),7)
+				if row%3==0:
+					_grass(edge,toe+.10,7)
 			if row%2==0:
 				var p := start+side*(width*.5+.23)*(-1 if row%4==0 else 1)
 				_rock(Vector3(p.x,.20,p.y),Vector3(.41,.32,.61),SHADE)
@@ -170,7 +190,7 @@ func _wade(start: Vector2, end: Vector2) -> void:
 
 func _architecture() -> void:
 	# Ruined processional arcade, flooded except for surviving capitals and arches.
-	for p in [[-8.5,-6.8,1.9,-.22],[-13.70,-10.15,.90,-.42],[7.4,-10.2,2.18,.31],[16.6,-13.3,1.13,.22],[-5.6,-18.0,1.18,-.10]]:
+	for p in [[-8.5,-6.8,1.9,-.22],[-13.70,-10.15,.90,-.42],[7.4,-10.2,2.18,.31],[16.6,-13.3,1.13,.22],[-5.6,-18.0,1.18,-.10],[8.45,3.35,1.91,-.64]]:
 		var ruined: bool = p[0] < -12 or p[0] > 15
 		_asset(ARCH,Vector3(p[0],.02,p[1]),Vector3.ONE*p[2],p[3],ruined)
 		var arch_scale := float(p[2])
@@ -205,11 +225,11 @@ func _shore() -> void:
 		var pos := Vector3(bank[0],-.25,bank[1])
 		_rock(pos,Vector3(bank[2],bank[3],float(bank[2])*.87),Color("#526b63"),10)
 		_rock(pos+Vector3.UP*float(bank[3])*.60,Vector3(float(bank[2])*.76,float(bank[3])*.58,float(bank[2])*.54),Color("#526852"),8)
-		for i in 5:
+		for i in 3:
 			var a := rng.randf()*TAU
 			var at := pos+Vector3(cos(a),0,sin(a))*rng.randf_range(1.,float(bank[2])*.80)
 			var sc := rng.randf_range(.70,1.25)
-			_asset(TREE,at+Vector3.UP*float(bank[3])*.48,Vector3(sc*1.45,sc,sc*1.45),a)
+			_alder(at+Vector3.UP*float(bank[3])*.48,sc*4.4,false,a,true)
 	# A dry remnant of the road supports the optional supply cache beside the trail.
 	_disc(Vector2(-6.1,9.),1.09,.02,.68,SHADE,8)
 	_disc(Vector2(-6.1,9.),.94,.60,.71,_stone(),7)
@@ -238,51 +258,50 @@ func _shore() -> void:
 	for p in [Vector2(-12.7,4.75),Vector2(-11.85,4.64),Vector2(-15.6,-9.5)]:
 		_cascade(p)
 
-func _cascade(p: Vector2) -> void:
+func _cascade(p: Vector2, crest := 1.51, pool_height := .25, width := 1.0) -> void:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var mat := ShaderMaterial.new()
 	mat.shader = FALL
 	st.set_material(mat)
-	for i in 8:
-		var x := p.x+i*.17
-		var h := 1.51+.19*sin(float(i))
-		var z := p.y+.09*sin(i*.78)
-		var a := Vector3(x,h,z)
-		var b := a+Vector3(.174,.06,0)
-		var c := Vector3(x+.22,.25,z+.55)
-		var d := Vector3(x-.055,.25,z+.55)
-		for v in [a,b,c,a,c,d]:
-			st.set_normal(Vector3.FORWARD)
-			st.add_vertex(v)
-		var pt := Vector3(x,.263,z+.61+rng.randf_range(-.19,.25))
-		_rock(pt,Vector3(.22,.025,.14),Color("#92c5b4"))
+	var course := [Vector2(-.65,1.),Vector2(-.22,1.),Vector2(0,.98),Vector2(.22,.86),Vector2(.39,.62),Vector2(.54,.07),Vector2(.66,0.)]
+	for i in 9:
+		for j in range(course.size()-1):
+			for corner in [Vector2i(0,0),Vector2i(1,0),Vector2i(1,1),Vector2i(0,0),Vector2i(1,1),Vector2i(0,1)]:
+				var u: float = (i+corner.x)/9.
+				var stop: Vector2 = course[j+corner.y]
+				var ripple:=sin(u*4.77)*.056
+				var y:=lerpf(pool_height,crest+ripple,stop.y)
+				var z:=p.y+stop.x+sin(u*6.3)*.08
+				st.set_uv(Vector2(u,1.-stop.y))
+				st.set_normal(Vector3(0,.23,1.).normalized())
+				st.add_vertex(Vector3(p.x+u*1.41*width,y,z))
+		var pt := Vector3(p.x+i*.16*width,pool_height+.013,p.y+.66+rng.randf_range(-.08,.09))
+		_rock(pt,Vector3(.21,.018,.09),Color("#b0ded1"))
+	for i in 3:
+		var center:=Vector3(p.x+.72*width,pool_height+.018,p.y+.48)
+		var r:=.48+i*.27
+		for j in 8:
+			var a:=(j+.23*i)*PI/8.
+			var b:=a+PI/9.25
+			var dir:=Vector3(cos(a),0,sin(a)*.57)
+			var end:=Vector3(cos(b),0,sin(b)*.57)
+			_face(center+dir*r,center+end*r,center+end*(r+.032),Color("#94cbbb"),Vector3.UP)
 	var mesh := MeshInstance3D.new()
 	mesh.name = "Cascade"
 	mesh.mesh = st.commit()
 	add_child(mesh)
 
 func _plantings() -> void:
-	# Foreground branches deliberately overhang at the frame edges. The broad grove
-	# canopy is made of clustered new foliage layered on the original kit trees.
-	var groups := [[-10.0,11.2,1.7],[-15.2,8.6,2.35],[-18,12.7,2.4],[12.7,11.7,2.2],[20.,8.2,2.1],[-19,-11.5,2.25],[-16,-14.2,2.2],[-11.5,-14.5,1.75],[-8.0,-16.3,2.25],[-4.0,-20.0,1.66],[4.8,-20.8,2.16],[10.,-19.5,2.2],[16.7,-18.3,2.18],[20.,-13.5,2.1],[17.,-5.,1.74],[-16,18.8,2.15],[14.3,20.,2.1]]
+	# High crowns flank the walk while the tactical camera can see under the near limbs.
+	var groups := [[-8.4,15.7,6.8,.12],[-12.7,9.4,8.8,-.36],[-18,12.7,8.2,.4],[14.1,13.7,5.6,2.85],[19.,8.2,8.1,1.3],[-18,-11.5,9.6,.32],[-14.4,-15.9,8.4,.22],[-10.4,-15.,10.7,.4],[-6.2,-17.7,8.3,-.4],[-3.6,-22.,6.8,-.8],[5.6,-19.8,8.3,.3],[10.5,-18.9,9.1,1.7],[17.,-18.3,8.6,1.3],[20.,-13.5,8.1,-.9],[17.,-5.,6.7,-.1],[-16,18.8,7.5,-.8],[14.3,20.,7.1,.6]]
 	for i in groups.size():
-		var p: Array = groups[i]
-		var size := float(p[2])
-		var copper := i in [0,4,13]
-		var at := Vector3(p[0],.0,p[1])
-		var crown := at+Vector3(0,size*2.32,0)
-		_box_floor(at+Vector3.UP*size*1.03,Vector3(.42,2.06,.42)*size)
-		_rock(at,Vector3(size*.82,.79,size*.77),Color("#63715c"))
-		_asset(COPPER_TREE if copper else TREE,at,Vector3(size*1.32,size,size*1.32),rng.randf()*TAU)
-		for j in 18:
-			var a := j*TAU/7.0+.37*(j/7)
-			var r := (1.0-float(j)/25.0)*size*1.08
-			var leaf := crown+Vector3(r*cos(a),size*(.19*(j/7)+rng.randf_range(-.26,.06)),r*sin(a))
-			var col := Color("#bc6a29") if copper else Color("#257763")
-			col = col.lightened(rng.randf_range(.0,.075)) if j>7 else col.darkened(rng.randf_range(.04,.22))
-			_rock(leaf,Vector3(size*.61,size*.26,size*.56)*rng.randf_range(.76,1.27),col,7)
-			_leaf_spray(leaf,size,col,copper)
+		var tree: Array = groups[i]
+		var at := Vector3(tree[0],.0,tree[1])
+		var h := float(tree[2])
+		_box_floor(at+Vector3.UP*h*.19,Vector3(.085,.4,.085)*h)
+		_rock(at,Vector3(h*.19,.80,h*.16),Color("#5d715d"))
+		_alder(at,h,i in [0,4,13],float(tree[3]))
 	# Rushes and floating leaves decorate coves away from socket silhouettes.
 	for c in [Vector2(-5.5,8.2),Vector2(2.4,10.5),Vector2(8.8,6.4),Vector2(-10,7),Vector2(7.2,-6.5),Vector2(-9,-11),Vector2(12.8,-4),Vector2(-8.6,-2.1),Vector2(5.9,3.9),Vector2(4.,16),Vector2(-7,16)]:
 		for i in 8:
@@ -297,6 +316,162 @@ func _plantings() -> void:
 		var p := Vector2(rng.randf_range(-22,22),rng.randf_range(-22,22))
 		if abs(p.x)<4 or p.length()<6: continue
 		_rock(Vector3(p.x,.251,p.y),Vector3(.19,.004,.022)*rng.randf_range(.5,2.),Color("#69a899"),5)
+
+func _water_garden() -> void:
+	for c in [Vector2(.7,13.6),Vector2(2.1,9.1),Vector2(-5.8,11.3),Vector2(-8.8,3.4),Vector2(5.4,5.9),Vector2(10.,-3.2),Vector2(-6.8,-6.4),Vector2(4.,-8.4)]:
+		for i in 17:
+			var at: Vector2=c+Vector2(rng.randfn(0,.94),rng.randfn(0,.62))
+			_lily(at,rng.randf_range(.12,.30),i==0 or i==5)
+	for i in 44:
+		var p:=Vector2(rng.randf_range(-6.4,.2),rng.randf_range(10.5,16.0))
+		_litter(p,.258)
+	# A broken, moss-capped aqueduct spills down a near bank in two tiers.
+	for i in 4:
+		var p:=Vector3(-9.5+i*.63,.13,7.3+sin(i*.7)*.24)
+		_rock(p,Vector3(.84,1.16,.82),Color("#778d81"),7)
+		_rock(p+Vector3(-.18,.8,-.84),Vector3(.86,1.46,1.0),Color("#60716d"),7)
+		_rock(p+Vector3(-.18,1.88,-.82),Vector3(.74,.28,.74),MOSS,7)
+	_cascade(Vector2(-9.44,7.91),1.18,.24,.94)
+	_cascade(Vector2(-9.38,7.0),2.14,1.02,.81)
+	# High beside the return trail, one bronze brazier marks the ruins at dusk.
+	# The amber ceremonial paving catches a warmer bounce than the shaded banks.
+	for pool in [Vector3(-2.7,3.2,9.5),Vector3(.48,3.8,-.34)]:
+		var bounce:=OmniLight3D.new()
+		bounce.position=pool
+		bounce.light_color=Color("#ffca86")
+		bounce.light_energy=2.15
+		bounce.omni_range=6.9
+		add_child(bounce)
+	for pos in [Vector3(5.43,2.75,-10.15),Vector3(-10.35,2.20,-6.66)]:
+		_lantern(pos)
+
+func _ruin_gardens() -> void:
+	# Fragmentary wall footings root each span in the water. Offset, stepped courses
+	# leave space between both arches for waders and the retreat to the north.
+	for cluster in [Vector3(-11.1,0,-6.6),Vector3(9.82,0,-10.6),Vector3(4.93,0,-10.1)]:
+		for i in 5:
+			var p: Vector3=cluster+Vector3(rng.randf_range(-.20,.47),0,(i-2)*.65)
+			var w:=rng.randf_range(.48,.84)
+			var poly:=PackedVector2Array([Vector2(-.81,-.40),Vector2(.64,-.46),Vector2(.83,-.13),Vector2(.62,.40),Vector2(-.71,.38)])
+			for v in poly.size(): poly[v]=Vector2(p.x,p.z)+poly[v]*w
+			_slab(poly,.04,.49+float(i%2)*.18,_stone())
+			if i%2==0: _fern(p+Vector3.UP*.55,.77)
+	# Interleaved vine runners and carved plinths make the closest arch a garden ruin.
+	var origin:=Vector3(8.45,0,3.35)
+	var basis:=Basis(Vector3.UP,-.64)
+	for sign_side in [-1.,1.]:
+		var column:=origin+basis*Vector3(2.25*float(sign_side),0,.07)
+		_disc(Vector2(column.x,column.z),.88,.12,.53,_stone(),8)
+		_disc(Vector2(column.x,column.z),.70,.51,.69,LIGHT,8)
+		for vine in 4:
+			var last:=column+basis*Vector3(-.29+vine*.15,3.77,.39)
+			for step in 13:
+				var at:=last+basis*Vector3(sin(step*.72+vine)*.047,-.18-rng.randf_range(0,.07),.02*cos(step*.68))
+				_limb(last,at,.025,.021,MOSS,4)
+				var leaf:=at+basis*Vector3((.19 if step%2==0 else -.17),-.10,.10)
+				var tint:=Color("#4d834f").lerp(Color("#9aac55"),rng.randf_range(.1,.74))
+				_face(at,at+basis*Vector3(.05,-.12,.09),leaf,tint,Vector3.BACK)
+				last=at
+		for clump in 3:
+			var root:=origin+basis*Vector3((.73+.23*clump)*float(sign_side),4.53-.14*clump,.13)
+			for j in 4:
+				var direction:=basis*Vector3(rng.randf_range(-.22,.22),-.63,.29)
+				var tip:=root+direction*rng.randf_range(.64,1.62)
+				_limb(root,tip,.021,.011,MOSS,4)
+				for n in 5:
+					var leaf:=root.lerp(tip,n*.19)+basis*Vector3(.066 if n%2==0 else -.073,0,0)
+					_face(leaf,leaf+basis*Vector3(.07,-.13,.04),leaf+basis*Vector3(-.02,-.20,.03),Color("#76a64f"),Vector3.BACK)
+		for j in 4:
+			_fern(column+Vector3(rng.randf_range(-.43,.43),.62,rng.randf_range(-.24,.24)),.70)
+	# Near-right shallows catch the amber leaves framing the crossing illustration.
+	for item in [[4.85,13.3,.90],[6.4,13.8,1.15],[6.7,12.8,.72],[3.1,17.6,.55],[-7.1,12.4,.61]]:
+		var at:=Vector3(item[0],.15,item[1])
+		var r:=float(item[2])
+		_rock(at,Vector3(r*1.28,r*.71,r),Color("#738383"),8)
+		_rock(at+Vector3.UP*r*.45,Vector3(r*.94,r*.29,r*.78),Color("#78915d"),7)
+		for j in 3:
+			var base:=at+Vector3(rng.randf_range(-.4,.4),r*.55,rng.randf_range(-.34,.34))
+			_copper_frond(base,r*rng.randf_range(.65,1.03))
+	for item in [Vector3(-6.1,.55,13.3),Vector3(-5.34,.60,16.3),Vector3(3.9,.44,5.75),Vector3(-7.3,.5,-6.2)]:
+		for j in 4: _copper_frond(item+Vector3(rng.randf_range(-.33,.33),0,rng.randf_range(-.22,.22)),rng.randf_range(.62,1.))
+	# A lateral branch sits in the camera's left margin several metres in front
+	# of the traveler. Small clusters show their orange faces against open sky.
+	var start:=Vector3(-8.1,.5,13.7)
+	var elbow:=Vector3(-7.45,3.15,12.8)
+	var tip:=Vector3(-5.8,4.0,11.45)
+	_limb(start,elbow,.29,.16,BARK,7)
+	_limb(elbow,tip,.16,.065,BARK,6)
+	for i in 8:
+		var t:=i/8.
+		var at:=elbow.lerp(tip,t)
+		var d:=Vector3(.44+.38*t,.28+sin(i)*.30,(.48 if i%2==0 else -.52))
+		_limb(at,at+d,.062,.023,BARK,5)
+		_crown(at+d,.42,true,false)
+
+func _copper_frond(at: Vector3,size: float) -> void:
+	var direction:=Vector3(rng.randf_range(-.65,.65),1.,rng.randf_range(-.68,.68)).normalized()
+	var end:=at+direction*size*.82
+	var crosswise:=Vector3(-direction.z,.13,direction.x).normalized()
+	_limb(at,end,.013,.005,BARK,4)
+	for i in 5:
+		var t:=(i+1)/6.
+		var p:=at.lerp(end,t)
+		for hand in [-1.,1.]:
+			var v:=crosswise*float(hand)*size*(.34-t*.14)+direction*size*.20
+			var w:=direction*size*(.069-.025*t)
+			var tint:=Color("#d4672d").lerp(Color("#f7ad44"),t*.72+rng.randf_range(-.1,.1))
+			tint.a=.65
+			_face(p,p+v*.5+w,p+v,tint,Vector3.UP)
+			_face(p,p+v,p+v*.5-w,tint.darkened(.08),Vector3.UP)
+
+func _lily(p: Vector2,r: float,flower: bool) -> void:
+	var at:=Vector3(p.x,.266,p.y)
+	var angle:=rng.randf()*TAU
+	var tint:=Color("#418761").lerp(Color("#96b467"),rng.randf())
+	for j in 9:
+		var a:=angle+.19+j*(TAU-.38)/9
+		var b:=angle+.19+(j+1)*(TAU-.38)/9
+		var s:=Vector3(cos(a)*r,.004,sin(a)*r*.84)
+		var t:=Vector3(cos(b)*r,.004,sin(b)*r*.84)
+		_face(at,at+s,at+t,tint.lerp(tint.lightened(.12),float(j%2)),Vector3.UP)
+	if flower:
+		at.y+=.025
+		for j in 7:
+			var d:=Vector3(cos(j*TAU/7),.72,sin(j*TAU/7))*r*.56
+			var w:=Vector3(-d.z,0,d.x)*.36
+			_face(at,at+d*.6+w,at+d,Color("#eac7ab"),Vector3.UP)
+			_face(at,at+d,at+d*.6-w,Color("#f5e3bb"),Vector3.UP)
+
+func _lantern(p: Vector3) -> void:
+	var anchor:=p+Vector3(-.53,.91,-.17)
+	_limb(anchor,p+Vector3.UP*.79,.048,.026,BARK,6)
+	_limb(p+Vector3.UP*.80,p+Vector3.UP*.26,.018,.018,BARK,5)
+	for i in 4:
+		var v:=Vector3(cos(i*PI*.5),0,sin(i*PI*.5))*.124
+		_limb(p+v-Vector3.UP*.07,p+v+Vector3.UP*.21,.015,.018,BARK,4)
+	_rock(p+Vector3.UP*.24,Vector3(.24,.12,.24),Color("#977448"),6)
+	_rock(p-Vector3.UP*.09,Vector3(.16,.075,.16),Color("#72573b"),6)
+	var glass:=MeshInstance3D.new()
+	var shade:=CylinderMesh.new()
+	shade.top_radius=.120
+	shade.bottom_radius=.102
+	shade.height=.27
+	shade.radial_segments=4
+	var glow:=StandardMaterial3D.new()
+	glow.albedo_color=Color("#ffbf4b")
+	glow.emission_enabled=true
+	glow.emission=Color("#ffac32")
+	glow.emission_energy_multiplier=3.4
+	shade.material=glow
+	glass.mesh=shade
+	glass.position=p+Vector3.UP*.07
+	add_child(glass)
+	var light:=OmniLight3D.new()
+	light.light_color=Color("#ffb257")
+	light.light_energy=3.2
+	light.omni_range=4.
+	light.position=p+Vector3.FORWARD*.22
+	add_child(light)
 
 func _fern(base: Vector3,size: float) -> void:
 	for i in 7:
@@ -315,17 +490,80 @@ func _fern(base: Vector3,size: float) -> void:
 				_face(at,tip,end,green,Vector3.UP)
 				_face(at,end,at+side*.015*size,green.darkened(.16),Vector3.UP)
 
-func _leaf_spray(base: Vector3, size: float, color: Color, copper: bool) -> void:
-	for i in 20:
-		var a := rng.randf()*TAU
-		var r := rng.randf_range(.35,.86)*size
-		var d := Vector3(cos(a),rng.randf_range(-.28,.04),sin(a))
-		var pos := base+d*r+Vector3.UP*rng.randf_range(-.16,.23)*size
-		var across := Vector3(-d.z,.28,d.x)*rng.randf_range(.044,.084)*size
-		var v := rng.randf_range(.15,.28)*size
-		var tint := color.lerp(Color("#e0a548") if copper else Color("#56a275"),rng.randf_range(.16,.73))
-		_face(pos-d*v,pos+across,pos+d*v,tint,Vector3.UP)
-		_face(pos-d*v,pos+d*v,pos-across,tint.darkened(.105),Vector3.UP)
+func _alder(at: Vector3, height: float, copper: bool, bearing: float, distant := false) -> void:
+	var b := Color("#684e3b") if copper else Color("#425761")
+	var along := Vector3(cos(bearing),0,sin(bearing))
+	var crosswise := Vector3(-along.z,0,along.x)
+	var heel := at+along*height*.06+Vector3.UP*height*.27
+	var fork := at+along*height*.16+Vector3.UP*height*.53
+	_limb(at,heel,height*.094,height*.062,b,8)
+	_limb(heel,fork,height*.064,height*.048,b,8)
+	if not distant:
+		for j in 6:
+			var a := bearing+j*TAU/6
+			var r := Vector3(cos(a),0,sin(a))
+			var root := at+r*height*rng.randf_range(.13,.21)
+			_limb(root+Vector3.DOWN*.06,at+r*.18+Vector3.UP*height*.12,height*.015,height*.062,b,5)
+	var heads := 6 if distant else 10
+	for j in heads:
+		var a := bearing+TAU*j*.382
+		var radial := Vector3(cos(a),0,sin(a))
+		var reach := height*(.42-.02*j)
+		var elbow := fork+radial*reach*.49+Vector3.UP*height*(.05+.013*j)
+		var twig := fork+radial*reach+Vector3.UP*height*(.14+.026*j)
+		_limb(fork,elbow,height*.035,height*.022,b,6)
+		_limb(elbow,twig,height*.024,height*.009,b,5)
+		var spread := height*rng.randf_range(.15,.23)
+		_crown(twig,spread,copper,distant)
+		if not distant:
+			var secondary := elbow+crosswise*spread*(1 if j%2==0 else -1)+Vector3.UP*spread*.53
+			_limb(elbow,secondary,height*.018,height*.006,b,5)
+			_crown(secondary,spread*.68,copper,false)
+
+func _limb(a: Vector3,b: Vector3,r0: float,r1: float,col: Color,sides: int) -> void:
+	var axis := (b-a).normalized()
+	var right := axis.cross(Vector3.BACK)
+	if right.length_squared()<.01: right=axis.cross(Vector3.RIGHT)
+	right=right.normalized()
+	var up:=axis.cross(right)
+	for j in sides:
+		var t:=TAU*j/sides
+		var s:=TAU*(j+1)/sides
+		var d:=right*cos(t)+up*sin(t)
+		var e:=right*cos(s)+up*sin(s)
+		var tint:=col.darkened(.11+.10*sin(t*2.0))
+		_face(a+d*r0,a+e*r0,b+e*r1,tint,d+e)
+		_face(a+d*r0,b+e*r1,b+d*r1,tint,d+e)
+
+func _crown(center: Vector3, spread: float, copper: bool, distant: bool) -> void:
+	# Each branch carries a canopy of overlapping pointed foliage fans. Clear gaps
+	# between fans let sky and moonlight show through the outer silhouettes.
+	var shade := Color("#bb4d12") if copper else Color("#065962")
+	var bright := Color("#ffc043") if copper else Color("#15bca8")
+	var sprays := 9 if distant else 15
+	for j in sprays:
+		var angle:=j*2.39996+rng.randf_range(-.18,.18)
+		var r:=sqrt((j+.5)/sprays)
+		var d:=Vector3(cos(angle),0,sin(angle))
+		var side:=Vector3(-d.z,0,d.x)
+		var p:=center+d*r*spread+Vector3.UP*spread*(.37*(1.-r*r)+rng.randf_range(-.15,.13))
+		var tint:=shade.lerp(bright,rng.randf_range(.11,.82)*(1.-r*.31))
+		tint.a=.65
+		var leaf_length:=spread*rng.randf_range(.42,.68)
+		for leaf in 5:
+			var f:=d.rotated(Vector3.UP,(leaf-2)*.37)
+			var width:=Vector3(-f.z,rng.randf_range(-.35,.36),f.x)*spread*.146
+			var tip:=p+f*leaf_length-Vector3.UP*spread*(.15+absf(leaf-2)*.025)
+			var vein:=p.lerp(tip,.46)+Vector3.UP*spread*.075
+			var near:=p-f*.12*spread
+			_face(near,vein+width,tip,tint,Vector3.UP)
+			_face(near,tip,vein-width,tint.darkened(.09),Vector3.UP)
+		if not distant and j%5==0:
+			var end:=p+d*spread*.45-Vector3.UP*spread*.46
+			_limb(p,end,spread*.021,spread*.008,BARK,4)
+			var elm:=shade.lerp(bright,.73)
+			elm.a=.65
+			_face(end,end+side*.16*spread+Vector3.UP*.23*spread,end-d*.16*spread+Vector3.UP*.40*spread,elm,Vector3.UP)
 
 func _crack(p: Vector2, h: float, f: Vector2, side: Vector2) -> void:
 	var offset := side*rng.randf_range(-.13,.13)

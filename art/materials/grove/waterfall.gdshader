@@ -3,8 +3,11 @@ render_mode cull_disabled;
 varying vec3 pos;
 void vertex(){pos=(MODEL_MATRIX*vec4(VERTEX,1.0)).xyz;}
 void fragment(){
- float streams=sin(pos.x*22.+sin(pos.y*3.5+TIME*3.)*.8)*.5+.5;
- float bands=sin(pos.y*13.+pos.x*18.+TIME*4.2)*.5+.5;
- vec3 c=mix(vec3(.034,.34,.37),vec3(.55,.93,.90),pow(streams,3.)*.50+bands*.16);
- ALBEDO=c;EMISSION=c*.30;ROUGHNESS=.39;
+	float strands=sin(UV.x*59.+sin(UV.y*4.3-TIME*1.3+UV.x*9.)*.57+1.9*sin(UV.x*17.))*.5+.5;
+	float flow=sin(UV.y*17.-TIME*4.7+UV.x*8.+sin(UV.x*31.)*1.9)*.5+.5;
+	float ripples=sin(pos.z*17.-TIME*3.9+UV.x*7.)*.5+.5;
+	float seam=smoothstep(.65,.93,strands)*(.18+flow*.55);
+	float foam=smoothstep(.79,.98,UV.y)*(.43+strands*.37);
+	vec3 c=mix(vec3(.018,.20,.235),vec3(.56,.84,.81),seam+.16*flow+foam*.39+ripples*.065);
+	ALBEDO=c;EMISSION=c*.35;ROUGHNESS=.38;
 }
