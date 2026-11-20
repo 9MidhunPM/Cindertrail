@@ -66,6 +66,8 @@ func bind(world: Node) -> void:
 			for path: PackedVector3Array in district.map_paths():
 				_roads.append(path)
 	for site: CinderSite in world.sites:
+		if not site.approach.is_empty():
+			_roads.append(site.approach)
 		for lane in site.lanes:
 			if lane.size() > 1:
 				_roads.append(lane)
@@ -79,6 +81,8 @@ func bind(world: Node) -> void:
 	_bounds = _bounds.grow(40.0)
 
 func _process(delta: float) -> void:
+	if not is_visible_in_tree():
+		return
 	_pulse = fmod(_pulse + delta, TAU)
 	var tactical: bool = game != null and game.get("active_site") != null
 	_zoom = lerpf(_zoom, (48.0 if tactical else radius_m), 1.0 - exp(-4.0 * delta))
@@ -131,9 +135,8 @@ func _draw_map() -> void:
 		_canvas.draw_circle(middle, 21.56 * scale_px, Color(WATER, 0.45))
 	for road in _roads:
 		_polyline(road, center, scale_px, yaw, origin, Color(TRAIL, 0.85), maxf(2.6 * scale_px, 1.6), reach)
-	if not full:
-		for lane in _side_streets:
-			_polyline(lane, center, scale_px, yaw, origin, Color(TRAIL, .54), 1.35, reach)
+	for lane in _side_streets:
+		_polyline(lane, center, scale_px, yaw, origin, Color(TRAIL, .54), 1.35, reach)
 	if full:
 		for town: String in _towns:
 			var point := _to_map(_towns[town], center, scale_px, yaw, origin)

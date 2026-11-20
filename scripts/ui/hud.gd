@@ -1,8 +1,7 @@
 class_name CinderHUD
 extends CanvasLayer
 ## In-game interface. Observes the run through render(state); never owns gameplay truth.
-## Layout: shrine vitals top-left, objective and wave status top-centre, minimap
-## top-right, context prompt and defense build bar bottom-centre, controls bottom-left.
+## Exploration and defense share the same core readouts and contextual action area.
 
 signal action_requested(action: StringName)
 
@@ -16,11 +15,8 @@ const BORDER := Color(0.63, 0.50, 0.31, 0.57)
 const MODULES := ["Bolt turret", "Slowing field", "Mortar"]
 const ROLE_TEXT := ["Single target", "Slows enemies", "Area damage"]
 const PROMPT := "^(Hold [A-Za-z]+|LMB|RMB|Space|Esc|[A-Z0-9])\\s{2,}(.+)$"
-const BANNERS := {
-	"Prepare": ["DEFENSE", "Place towers on the glowing sockets, then press Space"],
-	"Transit": ["ON THE ROAD", "New waves are paused  ·  creatures already hunting you still follow"],
-	"Win": ["", ""], "Lose": ["", ""],
-}
+const COMPASS := preload("res://scripts/ui/journey_compass.gd")
+const ART_DOCK := preload("res://scripts/ui/traveler_art_dock.gd")
 
 var game: Node
 var minimap: CinderMinimap
@@ -32,11 +28,14 @@ var _restoration: ProgressBar
 var _health_value: Label
 var _restoration_value: Label
 var _scrap: Label
-var _beacon_note: Label
-var _ability_readout: Label
+var _dash_readout: Label
+var _compass: COMPASS
+var _art_dock: ART_DOCK
+var _gameplay_hidden := false
+var _last_state: Dictionary = {}
+var _navigation: VBoxContainer
 var _objective_panel: PanelContainer
 var _objective: Label
-var _objective_caption: Label
 var _wave_panel: PanelContainer
 var _wave_title: Label
 var _wave_detail: Label
@@ -58,16 +57,14 @@ var _prompt_panel: PanelContainer
 var _prompt_key: Label
 var _prompt_key_panel: PanelContainer
 var _prompt_text: Label
-var _keys_panel: PanelContainer
-var _keys: Label
 var _pack: ProgressBar
 var _toast_box: VBoxContainer
 var _last_status := ""
-var _banner: Control
-var _banner_title: Label
-var _banner_detail: Label
-var _banner_tween: Tween
-var _last_mode := ""
+var _reward_panel: PanelContainer
+var _reward_icon: TextureRect
+var _reward_name: Label
+var _reward_detail: Label
+var _reward_seconds := 0.0
 var _vignette: ColorRect
 var _hurt := 0.0
 var _last_health := 100.0
@@ -103,9 +100,10 @@ func _ready() -> void:
 	_build_map()
 	_build_controls()
 	_build_toasts()
-	_build_banner()
 	_build_full_map()
 	_build_overlay()
+	_root.resized.connect(_size_panels)
+	_size_panels()
 	render({})
 
 ## Attach world readers once the run exists: minimap, full map and world labels.
@@ -114,16 +112,19 @@ func bind(world: Node) -> void:
 	minimap.bind(world)
 	_big_map.bind(world)
 	overlay.bind(world)
+	_compass.camera = world.camera
+	_compass.traveler = world.player
 
 func render(state: Dictionary) -> void:
 	if not is_instance_valid(_root):
 		return
+	_last_state = state
 	var mode := String(state.get("mode", "Explore"))
 	var paused := bool(state.get("paused", false))
 	var settings_open := bool(state.get("settings_open", false))
 	var ended := mode == "Win" or mode == "Lose"
 	var map_open := bool(state.get("map_open", false))
-	var calm := not ended and not paused and not map_open
+	var calm := not ended and not paused and not map_open and not _gameplay_hidden
 	var anchored := mode in ["Prepare", "Defend", "Pack"]
 	var selected := int(state.get("selected", -1))
 	var scrap := int(state.get("scrap", 0))
@@ -137,24 +138,27 @@ func render(state: Dictionary) -> void:
 	_health_value.text = "%d / 100" % ceili(health)
 	_restoration_value.text = "%d%%" % floori(restoration)
 	_scrap.text = "%d" % scrap
-	_beacon_note.text = "Sun restored  ·  Hilltop Beacon" if restoration >= 99.9 else "Restore to 100% to reach the final defense"
-	_beacon_note.modulate = GOLD if restoration >= 99.9 else MUTED
-	var ability := String(state.get("ability_name", ""))
-	var cooldown := float(state.get("ability_cooldown", 0.0))
-	_ability_readout.visible = not ability.is_empty()
-	if _ability_readout.visible:
-		var readiness := "Ready" if cooldown <= 0.0 else "%d s" % ceili(cooldown)
-		_ability_readout.text = "G  %s   ·   %s   ·   Q cycle" % [ability, readiness]
-		_ability_readout.modulate = TEAL if cooldown <= 0.0 else MUTED
+	var recovery := float(state.get("dash_cooldown", 0.))
+	_dash_readout.visible = not anchored and recovery > .0
+	_dash_readout.text = "Dash ready in %.1f s" % recovery
+	var slots: Array = state.get("ability_slots", [])
+	_art_dock.visible = calm and not slots.is_empty()
+	_art_dock.update_slots(slots)
 	if health < _last_health - 0.01:
 		_hurt = minf(1.0, _hurt + (_last_health - health) * 0.09 + 0.25)
 	_last_health = health
 
 	var objective := String(state.get("objective", "")).strip_edges()
-	var distance := float(state.get("objective_distance", -1.0))
-	_objective_panel.visible = calm and not objective.is_empty()
-	_objective.text = objective + ("   ·   %d m" % roundi(distance) if distance > 6.0 else "")
-	minimap.objective = state.get("objective_point", Vector3.INF)
+	var destination: Vector3 = state.get("objective_point", Vector3.INF)
+	var distance := float(state.get("compass_distance", state.get("objective_distance", -1.)))
+	_compass.waypoint = state.get("compass_point", destination)
+	_objective_panel.visible = calm and not anchored and not objective.is_empty() and mode != "Deploy"
+	_compass.visible = _objective_panel.visible
+	_objective.text = objective
+	if destination != Vector3.INF and distance >= 1.:
+		_objective.text += "   ·   %d m" % roundi(distance)
+	minimap.objective = destination
+	_big_map.objective = destination
 
 	_map_frame.visible = calm
 	var site := String(state.get("site", "")).strip_edges()
@@ -175,14 +179,17 @@ func render(state: Dictionary) -> void:
 			_wave_bar.value = float(state.get("guardian_health", 100.0))
 		elif active:
 			_wave_title.text = "WAVE %d" % wave
-			_wave_detail.text = "%d of %d creatures remain" % [left, total]
+			_wave_detail.text = "%d / %d hostiles" % [left, total]
+			var lanes := PackedStringArray(state.get("wave_lanes", PackedStringArray()))
+			if not lanes.is_empty():
+				_wave_detail.text += "   ·   " + " / ".join(lanes)
 			_wave_bar.value = 100.0 * (1.0 - float(left) / total)
 		elif next >= 0.0 and bool(state.get("engaged", false)):
 			_wave_title.text = "NEXT WAVE IN %d" % ceili(next)
 			_wave_detail.text = forecast
 			_wave_bar.value = 100.0 * (1.0 - next / maxf(float(state.get("breather", 5.0)), 0.1))
 		else:
-			_wave_title.text = "READY TO DEFEND"
+			_wave_title.text = "Prepare  ·  T to start"
 			_wave_detail.text = "Next: " + forecast if not forecast.is_empty() else ""
 			_wave_bar.value = 0.0
 		_wave_detail.visible = not _wave_detail.text.is_empty()
@@ -198,12 +205,16 @@ func render(state: Dictionary) -> void:
 		_reserve_label.visible = not summit
 		_threat.visible = not summit
 
-	_tactical.visible = calm and anchored and mode != "Pack"
+	var building := calm and anchored and mode != "Pack"
+	if building != _tactical.visible:
+		_tactical.visible = building
+		_size_panels()
 	var prices: Array = state.get("prices", [])
 	var owned: Array = state.get("owned", [])
 	var summaries: Array = state.get("summaries", [])
 	var upgrade_cap := int(state.get("upgrade_cap", CinderBattle.BASE_UPGRADE_CAP))
-	_upgrade_cap_label.text = "Defense upgrade cap  ·  Lv %d" % upgrade_cap
+	_upgrade_cap_label.text = "U   Upgrade at a tower   ·   Rank limit %d" % upgrade_cap
+	_upgrade_cap_label.visible = int(state.get("socket", -1)) >= 0 and selected < 0
 	for index in MODULES.size():
 		var price := int(prices[index]) if index < prices.size() else 0
 		var level := int(owned[index]) if index < owned.size() else 0
@@ -211,7 +222,7 @@ func render(state: Dictionary) -> void:
 		var style := _selected_card if selected == index else (_normal_card if affordable else _poor_card)
 		if _module_cards[index].get_theme_stylebox("panel") != style:
 			_module_cards[index].add_theme_stylebox_override("panel", style)
-		_module_cards[index].modulate = Color.WHITE if affordable or selected == index else Color(1, 1, 1, 0.62)
+		_module_cards[index].modulate = Color.WHITE if affordable or selected == index else Color(.90, .93, .94, .96)
 		if level > 0:
 			_module_values[index].text = "Lv %d/%d  ·  free" % [level, upgrade_cap]
 			_module_values[index].modulate = TEAL
@@ -227,23 +238,19 @@ func render(state: Dictionary) -> void:
 
 	var hint := String(state.get("hint", "")).strip_edges()
 	if anchored and selected >= 0:
-		hint = "LMB  Click a glowing socket to build  ·  Esc to cancel"
+		hint = "LMB  Build on a socket   ·   Esc to cancel"
 	_set_prompt(hint)
 	_prompt_panel.visible = calm and not hint.is_empty()
-	_keys.text = _control_hints(mode, selected)
-	_keys_panel.visible = calm and not _keys.text.is_empty()
-	_pack.visible = mode == "Pack" and not paused
+	_pack.visible = calm and mode == "Pack"
+	_toast_box.visible = calm and _reward_seconds <= 0.
+	_reward_panel.visible = calm and _reward_seconds > 0.
 	_pack.value = clampf(float(state.get("pack_progress", 0.0)), 0.0, 1.0) * 100.0
 
 	var status := String(state.get("status", "")).strip_edges()
 	if status != _last_status:
 		_last_status = status
-		if not status.is_empty() and calm:
+		if not status.is_empty() and calm and _reward_seconds <= 0. and not (anchored and status.begins_with("Wave ")):
 			_toast(status)
-	if mode != _last_mode:
-		if _last_mode != "" and BANNERS.has(mode) and not String(BANNERS[mode][0]).is_empty():
-			_show_banner(BANNERS[mode][0], BANNERS[mode][1])
-		_last_mode = mode
 	_full_map.visible = map_open
 	overlay.visible = calm
 	overlay.socket_text = String(state.get("socket_text", ""))
@@ -252,13 +259,36 @@ func render(state: Dictionary) -> void:
 	_show_overlay(mode, paused, settings_open, bool(state.get("checkpoint_available", false)),
 		String(state.get("checkpoint_hint", "")), String(state.get("summary", "")))
 
+## F10 hides the play readouts while map, settings and pause remain accessible.
+func toggle_gameplay_hud() -> void:
+	_gameplay_hidden = not _gameplay_hidden
+	render(_last_state)
+
+func announce_ability(title: String, icon: Texture2D, cap: int, first_achievement: bool) -> void:
+	_reward_icon.texture = icon
+	_reward_name.text = title
+	_reward_detail.text = "Defense rank limit %d" % cap
+	if first_achievement:
+		_reward_detail.text += "   ·   Achievement earned"
+	_reward_seconds = 4.
+	for child in _toast_box.get_children():
+		child.queue_free()
+	_toast_box.hide()
+	_reward_panel.modulate.a = 1.
+	_reward_panel.visible = overlay.visible
+
 func modal_open() -> bool:
 	return visible and _modal != &""
 
 func _process(delta: float) -> void:
+	if _reward_seconds > 0. and _reward_panel.is_visible_in_tree():
+		_reward_seconds = maxf(0., _reward_seconds - delta)
+		_reward_panel.modulate.a = clampf(_reward_seconds / .22, 0., 1.)
+		if _reward_seconds <= 0.:
+			_reward_panel.hide()
 	_hurt = maxf(0.0, _hurt - delta * 1.6)
 	_vignette.material.set_shader_parameter("strength", _hurt)
-	_vignette.visible = _hurt > 0.01
+	_vignette.visible = _hurt > 0.01 and overlay.visible
 
 func _set_prompt(hint: String) -> void:
 	var found := _prompt_matcher.search(hint)
@@ -282,13 +312,13 @@ func _build_vignette() -> void:
 	_vignette.hide()
 
 func _build_vitals() -> void:
-	_vitals_panel = _panel(Vector2(16, 12))
+	_vitals_panel = _panel(Vector2(12, 8))
 	_pin(_vitals_panel, 0.0, 0.0, 24.0, 22.0)
-	_vitals_panel.custom_minimum_size.x = 300
-	var stack := _vertical(_vitals_panel, 8)
+	_vitals_panel.custom_minimum_size.x = 205
+	var stack := _vertical(_vitals_panel, 4)
 	var seal := _horizontal(stack, 10)
 	seal.add_child(_glyph(HudGlyph.Kind.SUN, Vector2(26, 26)))
-	var heading := _label("Sun shrine", &"Title")
+	var heading := _label("Sun core", &"Title")
 	heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	seal.add_child(heading)
 	var purse := _horizontal(seal, 5)
@@ -297,31 +327,28 @@ func _build_vitals() -> void:
 	purse.add_child(_scrap)
 	purse.add_child(_label("scrap", &"Caption"))
 	_health_value = _label("100 / 100", &"Value")
-	_health = _stat(stack, "SHRINE INTEGRITY", _health_value, &"Health")
+	_health = _stat(stack, "Integrity", _health_value, &"Health")
 	_health.custom_minimum_size.y = 9.0
 	_restoration_value = _label("0%", &"Value")
-	_restoration = _stat(stack, "SUN RESTORED", _restoration_value, &"Restoration")
+	_restoration = _stat(stack, "Restoration", _restoration_value, &"Restoration")
 	_restoration.custom_minimum_size.y = 9.0
-	_beacon_note = _label("", &"Caption")
-	stack.add_child(_beacon_note)
-	_ability_readout = _label("", &"Caption")
-	stack.add_child(_ability_readout)
+	_dash_readout = _label("", &"Caption")
+	stack.add_child(_dash_readout)
 
 func _build_objective() -> void:
-	var column := VBoxContainer.new()
-	column.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	column.add_theme_constant_override("separation", 8)
-	_pin(column, 0.5, 0.0, 0.0, 22.0)
-	_objective_panel = _panel(Vector2(20, 8), column)
-	var objective_stack := _vertical(_objective_panel, 1)
-	_objective_caption = _label("OBJECTIVE", &"Caption")
-	_objective_caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	objective_stack.add_child(_objective_caption)
+	_navigation = VBoxContainer.new()
+	_navigation.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_navigation.alignment = BoxContainer.ALIGNMENT_CENTER
+	_pin(_navigation, .5, 0., 0., 20.)
+	_objective_panel = _panel(Vector2(12, 4), _navigation)
+	var objective_stack := _vertical(_objective_panel, 2)
+	_compass = COMPASS.new()
+	objective_stack.add_child(_compass)
 	_objective = _label("", &"Objective")
 	_objective.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_objective.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	objective_stack.add_child(_objective)
-	_wave_panel = _panel(Vector2(18, 10), column)
-	_wave_panel.custom_minimum_size.x = 420
+	_wave_panel = _panel(Vector2(14, 6), _navigation)
 	var wave := _vertical(_wave_panel, 5)
 	var heading := _horizontal(wave, 10)
 	_wave_title = _label("", &"Wave")
@@ -337,7 +364,7 @@ func _build_objective() -> void:
 	wave.add_child(_wave_detail)
 	_reserve_label = _label("", &"Caption")
 	wave.add_child(_reserve_label)
-	_reserve_bar = _meter(&"Restoration")
+	_reserve_bar = _meter(&"Reserve")
 	_reserve_bar.custom_minimum_size.y = 5.0
 	wave.add_child(_reserve_bar)
 
@@ -347,7 +374,7 @@ func _build_map() -> void:
 	_map_frame.add_theme_constant_override("separation", 6)
 	_pin(_map_frame, 1.0, 0.0, -24.0, 20.0)
 	minimap = CinderMinimap.new()
-	minimap.custom_minimum_size = Vector2(212, 212)
+	minimap.custom_minimum_size = Vector2(136, 136)
 	_map_frame.add_child(minimap)
 	var caption := _panel(Vector2(10, 4), _map_frame)
 	var row := _horizontal(caption, 8)
@@ -437,24 +464,55 @@ func _build_controls() -> void:
 		var subtitle := _label(ROLE_TEXT[index], &"Caption")
 		card_text.add_child(subtitle)
 		_module_values.append(subtitle)
-	_keys_panel = _panel(Vector2(14, 9))
-	_pin(_keys_panel, 0.0, 1.0, 24.0, -22.0)
-	_keys = _label("", &"Legend")
-	_keys_panel.add_child(_keys)
+	_art_dock = ART_DOCK.new()
+	_pin(_art_dock, 0., 1., 24., -22.)
+
+func _size_panels() -> void:
+	var width := _root.size.x
+	var narrow := width < 1100.
+	minimap.custom_minimum_size = Vector2.ONE * (100. if narrow else 136.)
+	var available := clampf(width - (435. if narrow else 590.), 250., 450.)
+	_navigation.custom_minimum_size.x = available
+	_objective_panel.custom_minimum_size.x = available
+	_wave_panel.custom_minimum_size.x = available
+	_vitals_panel.custom_minimum_size.x = 171. if narrow else 205.
+	for card in _module_cards:
+		card.custom_minimum_size = Vector2(133. if narrow else 161., 53.)
+	# On narrow targets the art settings sit above the tower rack.
+	_art_dock.offset_bottom = -126. if width < 1480. and _tactical.visible else -22.
+	_art_dock.offset_top = _art_dock.offset_bottom - _art_dock.custom_minimum_size.y
 
 func _build_toasts() -> void:
 	_toast_box = VBoxContainer.new()
 	_toast_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_toast_box.add_theme_constant_override("separation", 6)
-	_pin(_toast_box, 0.5, 0.0, 0.0, 190.0)
+	_pin(_toast_box, 0.5, 0.0, 0.0, 142.0)
+	_reward_panel = _panel(Vector2(16, 9))
+	_pin(_reward_panel, .5, 0., 0., 142.)
+	_reward_panel.add_theme_stylebox_override("panel", _style(Color("#172a2df5"), GOLD.darkened(.28), Vector2(16, 9), 3))
+	var row := _horizontal(_reward_panel, 12)
+	_reward_icon = TextureRect.new()
+	_reward_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_reward_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_reward_icon.custom_minimum_size = Vector2(52, 52)
+	row.add_child(_reward_icon)
+	var words := _vertical(row, 1)
+	words.add_child(_label("Art recovered", &"Accent"))
+	_reward_name = _label("", &"Title")
+	words.add_child(_reward_name)
+	_reward_detail = _label("", &"Caption")
+	words.add_child(_reward_detail)
+	_reward_panel.hide()
 
 func _toast(text: String) -> void:
 	var note := _panel(Vector2(14, 6), _toast_box)
 	note.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	var label := _label(text, &"Accent")
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	label.custom_minimum_size.x = minf(460., _root.size.x * .42)
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	note.add_child(label)
-	while _toast_box.get_child_count() > 3:
+	while _toast_box.get_child_count() > 1:
 		_toast_box.get_child(0).free()
 	note.modulate.a = 0.0
 	var fade := note.create_tween()
@@ -462,36 +520,6 @@ func _toast(text: String) -> void:
 	fade.tween_interval(3.4)
 	fade.tween_property(note, "modulate:a", 0.0, 0.5)
 	fade.tween_callback(note.queue_free)
-
-func _build_banner() -> void:
-	var plate := PanelContainer.new()
-	plate.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var fill := _style(Color(0.015, 0.04, 0.06, 0.78), Color(GOLD, 0.45), Vector2(46, 12), 4)
-	fill.border_width_left = 0
-	fill.border_width_right = 0
-	plate.add_theme_stylebox_override("panel", fill)
-	_pin(plate, 0.5, 0.33, 0.0, 0.0)
-	_banner = VBoxContainer.new()
-	_banner.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	plate.add_child(_banner)
-	_banner_title = _label("", &"Banner")
-	_banner_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_banner.add_child(_banner_title)
-	_banner_detail = _label("", &"Body")
-	_banner_detail.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_banner.add_child(_banner_detail)
-	_banner = plate
-	_banner.modulate.a = 0.0
-
-func _show_banner(title: String, detail: String) -> void:
-	_banner_title.text = title
-	_banner_detail.text = detail
-	if _banner_tween:
-		_banner_tween.kill()
-	_banner_tween = create_tween()
-	_banner_tween.tween_property(_banner, "modulate:a", 1.0, 0.25)
-	_banner_tween.tween_interval(2.2)
-	_banner_tween.tween_property(_banner, "modulate:a", 0.0, 0.6)
 
 func _build_overlay() -> void:
 	_veil = ColorRect.new()
@@ -520,6 +548,7 @@ func _build_overlay() -> void:
 	stack.add_child(_detail)
 	var actions := _vertical(stack, 7)
 	_add_action(actions, &"resume", "Resume journey")
+	_add_action(actions, &"achievements", "Achievements")
 	_add_action(actions, &"settings", "Settings")
 	_add_action(actions, &"checkpoint", "Retry from checkpoint")
 	_add_action(actions, &"restart", "Start a fresh journey")
@@ -570,7 +599,7 @@ func _show_overlay(mode: String, paused: bool, settings_open: bool, checkpoint_a
 				actions.push_front(&"checkpoint")
 		&"pause":
 			_title.text = "Journey paused"
-			actions = [&"resume", &"settings", &"title"]
+			actions = [&"resume", &"achievements", &"settings", &"title"]
 	_detail.visible = not _detail.text.is_empty()
 	for action in _buttons:
 		_buttons[action].visible = actions.has(action)
@@ -579,11 +608,11 @@ func _show_overlay(mode: String, paused: bool, settings_open: bool, checkpoint_a
 
 func _pause_text(checkpoint_hint: String) -> String:
 	var lines := [
-		"WASD move  ·  Shift sprint  ·  Ctrl walk  ·  Mouse look",
+		"WASD move  ·  Shift dash  ·  Space jump  ·  Mouse look",
 		"LMB or F  tap for cuts, hold and release to spin  ·  RMB  sun spark",
 		"G  cast equipped ability  ·  Q  cycle unlocked abilities",
 		"E  interact  ·  M  map  ·  Hold R  pack the shrine",
-		"Defense:  1 / 2 / 3 choose a tower  ·  click a socket  ·  U upgrade  ·  Space start wave",
+		"Defense:  1 / 2 / 3 choose a tower  ·  click a socket  ·  U upgrade  ·  T start wave",
 	]
 	if not checkpoint_hint.is_empty():
 		lines.append("")
@@ -600,18 +629,6 @@ func _focus_actions(actions: Array[StringName]) -> void:
 		button.focus_previous = button.get_path_to(previous)
 		button.focus_next = button.get_path_to(next)
 	_buttons[actions[0]].grab_focus.call_deferred()
-
-func _control_hints(mode: String, selected: int) -> String:
-	match mode:
-		"Prepare", "Defend":
-			var keys := "1 2 3   choose tower\nLMB   build / sword\nRMB   sun spark\nU   upgrade hovered\nE   repair (8 scrap)\nHold R   pack up"
-			if selected >= 0:
-				keys += "\nEsc   cancel building"
-			return keys
-		"Explore", "Transit":
-			return "WASD   move\nShift   sprint\nLMB / F   tap cut, hold spin\nRMB   sun spark\nE   interact\nM   map    Esc   pause"
-		_:
-			return ""
 
 func _threat_label(level: int) -> String:
 	if level >= 6:
@@ -711,9 +728,8 @@ func _theme() -> Theme:
 	for entry in [
 		[&"Caption", 14, MUTED, null], [&"Module", 18, CREAM, bold], [&"Body", 17, CREAM, null],
 		[&"Value", 16, CREAM, bold], [&"Accent", 16, GOLD, bold], [&"Title", 22, CREAM, serif],
-		[&"Location", 19, CREAM, serif], [&"Ending", 47, CREAM, serif], [&"Objective", 21, CREAM, bold],
+		[&"Location", 19, CREAM, serif], [&"Ending", 47, CREAM, serif], [&"Objective", 17, CREAM, bold],
 		[&"Wave", 21, CREAM, serif], [&"Prompt", 20, CREAM, bold], [&"Key", 19, Color("#1b2630"), bold],
-		[&"Legend", 15, CREAM, null], [&"Banner", 54, GOLD, serif],
 	]:
 		var variation: StringName = entry[0]
 		theme.set_type_variation(variation, &"Label")
@@ -721,9 +737,7 @@ func _theme() -> Theme:
 		theme.set_color("font_color", variation, entry[2])
 		if entry[3] != null:
 			theme.set_font("font", variation, entry[3])
-		theme.set_color("font_outline_color", variation, Color(0.01, 0.03, 0.05, 0.9))
-		theme.set_constant("outline_size", variation, 6 if variation == &"Banner" else 0)
-	for entry in [[&"Health", GOLD], [&"Restoration", TEAL]]:
+	for entry in [[&"Health", Color("#e39a77")], [&"Restoration", GOLD], [&"Reserve", TEAL]]:
 		var variation: StringName = entry[0]
 		theme.set_type_variation(variation, &"ProgressBar")
 		theme.set_stylebox("background", variation, _style(Color("#1b3037"), Color("#547179"), Vector2.ZERO, 2))
