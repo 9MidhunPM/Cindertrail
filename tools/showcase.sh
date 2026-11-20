@@ -49,7 +49,7 @@ export XDG_DATA_HOME="$scratch/data"
 export XDG_CONFIG_HOME="$scratch/config"
 export XDG_CACHE_HOME="$scratch/cache"
 export CINDERTRAIL_SHOWCASE_ISOLATED=1
-unset CINDERTRAIL_ONLINE_GUIDE
+unset OPENAI_API_KEY CINDERTRAIL_SHOWCASE_VOICE_DIR CINDERTRAIL_SHOWCASE_ESPEAK
 run_args=(--path "$project" --script res://tools/qa/showcase.gd)
 if "$headless"; then
     run_args+=(--headless --fixed-fps 60)
