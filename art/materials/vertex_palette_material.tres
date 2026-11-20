@@ -1,0 +1,7 @@
+[gd_resource type="StandardMaterial3D" format=3]
+
+[resource]
+resource_name = "Cindertrail vertex colour palette"
+albedo_color = Color(1, 1, 1, 1)
+vertex_color_use_as_albedo = true
+roughness = 0.85

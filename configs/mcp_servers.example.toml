@@ -1,0 +1,14 @@
+# EXAMPLE ONLY. Merge selected sections into your existing Codex configuration.
+# Do not replace an existing config wholesale. No real paths or secrets are included.
+# Verify versions and pin dependencies after your first successful connection.
+
+[mcp_servers.godot]
+command = "npx"
+args = ["-y", "@coding-solo/godot-mcp"]
+
+[mcp_servers.godot.env]
+GODOT_PATH = "/ABSOLUTE/PATH/TO/YOUR/godot"
+
+[mcp_servers.blender]
+command = "uvx"
+args = ["mcp-for-blender"]

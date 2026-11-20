@@ -1,0 +1,7 @@
+[gd_resource type="StandardMaterial3D" format=3]
+
+[resource]
+resource_name = "cloth_teal"
+albedo_color = Color(0.086275, 0.337255, 0.419608, 1)
+metallic = 0
+roughness = 0.88

@@ -1,0 +1,665 @@
+{
+  "project": "Cindertrail",
+  "created": "2026-11-20",
+  "canonical_art_count": 16,
+  "archived_art_count": 2,
+  "static_glb_count": 15,
+  "optional_texture_map_count": 13,
+  "godot_resource_validation": {
+    "godot_version": "4.7.2.stable.official.ed1daf0bf",
+    "kind": "headless resource import/load and GLB instantiation",
+    "renderer": "gl_compatibility headless; no visual GPU parity test",
+    "models": {
+      "bolt_turret.glb": {
+        "glb_version": 2,
+        "bytes": 36204
+      },
+      "brute_static.glb": {
+        "glb_version": 2,
+        "bytes": 47648
+      },
+      "crawler_static.glb": {
+        "glb_version": 2,
+        "bytes": 33376
+      },
+      "mortar.glb": {
+        "glb_version": 2,
+        "bytes": 31164
+      },
+      "orange_tree.glb": {
+        "glb_version": 2,
+        "bytes": 21468
+      },
+      "ruin_arch.glb": {
+        "glb_version": 2,
+        "bytes": 37116
+      },
+      "ruin_pillar.glb": {
+        "glb_version": 2,
+        "bytes": 26116
+      },
+      "slowing_emitter.glb": {
+        "glb_version": 2,
+        "bytes": 33856
+      },
+      "stone_block.glb": {
+        "glb_version": 2,
+        "bytes": 4580
+      },
+      "stone_stairs.glb": {
+        "glb_version": 2,
+        "bytes": 23640
+      },
+      "sun_shrine_deployed.glb": {
+        "glb_version": 2,
+        "bytes": 72540
+      },
+      "sun_shrine_folded.glb": {
+        "glb_version": 2,
+        "bytes": 63176
+      },
+      "sun_shrine_restored.glb": {
+        "glb_version": 2,
+        "bytes": 72580
+      },
+      "supply_crate.glb": {
+        "glb_version": 2,
+        "bytes": 16492
+      },
+      "teal_tree.glb": {
+        "glb_version": 2,
+        "bytes": 21448
+      }
+    },
+    "import_exit": 0,
+    "load_exit": 0,
+    "resource_result": {
+      "failures": [],
+      "loaded": 41
+    },
+    "errors": [],
+    "passed": true
+  },
+  "files": [
+    {
+      "path": "AGENTS.md",
+      "bytes": 5914,
+      "sha256": "90d84b6c02abc1dae46c0110e6bbbcaf88c1b0e753e0743f61c2381b5112a892"
+    },
+    {
+      "path": "CREDITS.md",
+      "bytes": 1383,
+      "sha256": "5f69ea9ae882681ac337d042f2e7b66df3ca55de15a46d1de9f65e73db7a2866"
+    },
+    {
+      "path": "OPEN_ME.html",
+      "bytes": 9521,
+      "sha256": "d4c2af071e5324a01a7f7c93006e0a7dfe6954e7f5732cc20d583bd1aebedb66"
+    },
+    {
+      "path": "README.md",
+      "bytes": 2722,
+      "sha256": "4a684e234805be8a9534a1c053c15924b92b8167eb4851dbaa1090134f534499"
+    },
+    {
+      "path": "START_HERE.md",
+      "bytes": 4135,
+      "sha256": "476242274e367030d1b8e97a11b9c3f1d19c05e9167d23efa93433698346f3f0"
+    },
+    {
+      "path": "VALIDATION.md",
+      "bytes": 1517,
+      "sha256": "5726b37b0562990fd1462bf081962849ad89afad88792fe27b62ad6f53728f9b"
+    },
+    {
+      "path": "art/archive/.gdignore",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "art/archive/README.md",
+      "bytes": 277,
+      "sha256": "143fded862f778e5b28ff48b8615038af9a8f6616abd0983f20a50b395d176e8"
+    },
+    {
+      "path": "art/archive/relay_before_core_continuity_fix.png",
+      "bytes": 2499478,
+      "sha256": "e045e3d3346ed1dacf060e8b4d6fd8fd09abcc4b1ddc612ff04a806c8ff18dd0"
+    },
+    {
+      "path": "art/archive/sunrise_before_core_continuity_fix.png",
+      "bytes": 2442628,
+      "sha256": "57d2918414069aa633d034ce7e1c85bd392ece7eade5032c894e735eb1d2fd29"
+    },
+    {
+      "path": "art/concept/.gdignore",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "art/concept/01_key_art.png",
+      "bytes": 2194652,
+      "sha256": "9425c29ca99e4ac1036061f0735d8fa759357e913215b65513954c4921b58b7a"
+    },
+    {
+      "path": "art/concept/02_world_valley.png",
+      "bytes": 2755082,
+      "sha256": "25761c27a416e677fd1bc3b8dad2131593583ac9475274d4ba654e32cd16c3fd"
+    },
+    {
+      "path": "art/concept/03_traveler_shrine_sheet.png",
+      "bytes": 2391256,
+      "sha256": "10a648a6197909f989db69616c8ca7d7c4405519aa26d241d484be5f047df6db"
+    },
+    {
+      "path": "art/concept/04_quarry_defense.png",
+      "bytes": 2578085,
+      "sha256": "c3c2ff3db50ec2e4406293eea961741625697b48175879aeec96385d7eac5e7b"
+    },
+    {
+      "path": "art/concept/05_grove_defense.png",
+      "bytes": 2444603,
+      "sha256": "c34bd6919dcb7a3ee2aa99841d3d62320a6dcf0960d09076e209927e5c302dc4"
+    },
+    {
+      "path": "art/concept/06_relay_defense.png",
+      "bytes": 2235384,
+      "sha256": "c4c3e6124fb0186abba27dce45643e41d5850a2731907998897ea4e3a037ce43"
+    },
+    {
+      "path": "art/concept/07_defense_modules.png",
+      "bytes": 2156760,
+      "sha256": "b87a35aa91366b563f14982b59952dbcd95feef4c96e9484201821c174d5cf57"
+    },
+    {
+      "path": "art/concept/08_enemies.png",
+      "bytes": 2035851,
+      "sha256": "029898a10c806724685df2e1af3c7b12353f1429f56449befad57b159a449bfc"
+    },
+    {
+      "path": "art/concept/09_relocation_storyboard.png",
+      "bytes": 2720312,
+      "sha256": "b66a9b58dbfe109d2bbff49189d9a05050f67af5d210a1e42e1a8d8ca1f10292"
+    },
+    {
+      "path": "art/concept/10_sunrise_ending.png",
+      "bytes": 2322723,
+      "sha256": "c0543fef70fef9c2601ff449a420fbdee1d5d4c21180335fd76474f35e7635a2"
+    },
+    {
+      "path": "art/concept/11_valley_exploration.png",
+      "bytes": 2396578,
+      "sha256": "f3b06f55c1fe0e7b33cecde906637019c8cd7240e1c9aa63fad7fd65674b7435"
+    },
+    {
+      "path": "art/concept/12_side_path.png",
+      "bytes": 2556365,
+      "sha256": "6d73772a46edce9ebe2f41308ad95da20a8570ab08bc720fa0628a1b1a9cc79e"
+    },
+    {
+      "path": "art/concept/13_quarry_approach.png",
+      "bytes": 2448542,
+      "sha256": "48277fa5749feb5f177c0d5028b225c783f8cdad2cc1f3510ff1de111cd8433e"
+    },
+    {
+      "path": "art/concept/14_grove_crossing.png",
+      "bytes": 2540125,
+      "sha256": "38cfeedd92204e01c7fbe5c06405eb1b08f0e99f635bab58e10dec8ff408913f"
+    },
+    {
+      "path": "art/concept/15_relay_ascent.png",
+      "bytes": 2463545,
+      "sha256": "327a8aa8ef7e648e6c06f9c486bcc635a6511bac6181e1791d53370922904ad1"
+    },
+    {
+      "path": "art/concept/16_camera_transition.png",
+      "bytes": 2868037,
+      "sha256": "0b96fd3c36643f5db80092a87ef0a614c9df258975fcf971e530a1c27d160a2a"
+    },
+    {
+      "path": "art/materials/README.md",
+      "bytes": 3215,
+      "sha256": "e364b8655987c56ed82550d75dc538b48a032505da0c9a53776650574d6179c9"
+    },
+    {
+      "path": "art/materials/VALIDATION.json",
+      "bytes": 1524,
+      "sha256": "abd09dd39fe9abddbb1543bb2c9cec5b8b22a4de12edbd9371a758ea6961e42e"
+    },
+    {
+      "path": "art/materials/brass.tres",
+      "bytes": 171,
+      "sha256": "22a65918de3775e00d293fc0b76b038772b805718219210a0112479412d8e670"
+    },
+    {
+      "path": "art/materials/bronze.tres",
+      "bytes": 172,
+      "sha256": "63d159400f511b7456099626443394a9f4a9f4e81440089beadd94ed24e118f8"
+    },
+    {
+      "path": "art/materials/bronze_dark.tres",
+      "bytes": 177,
+      "sha256": "76a2bc2f516cf39c5658440ce56be66b8d93a24e94044be6efba30fb57b84527"
+    },
+    {
+      "path": "art/materials/brute_violet.tres",
+      "bytes": 283,
+      "sha256": "a91d552fb709cb0cc0c209517ba75f1f9b05e86c025b074cb4f31350b781dc4f"
+    },
+    {
+      "path": "art/materials/cloth_shadow.tres",
+      "bytes": 176,
+      "sha256": "9f2d2145f1a8c199b181e49ddfc34f4fc8710cac2f9c81a32cb4b25aaffdcd2e"
+    },
+    {
+      "path": "art/materials/cloth_teal.tres",
+      "bytes": 174,
+      "sha256": "98f7b8ff2b9c3c6e7a4a8ac7d8d84b46ece52b132b239852aa2929a0e3b5564a"
+    },
+    {
+      "path": "art/materials/enemy_charcoal.tres",
+      "bytes": 178,
+      "sha256": "d897949c1304829abb58dc86f66628dda3b2745ac938bf2afd9c7531fddf761c"
+    },
+    {
+      "path": "art/materials/field_cyan.tres",
+      "bytes": 281,
+      "sha256": "18b2299173263131724cd0949cc492386dc3d8b2ba2cf1e6b4daf3d2cec42f0b"
+    },
+    {
+      "path": "art/materials/foliage_light.tres",
+      "bytes": 177,
+      "sha256": "4d96ca72776d325819ccfc6c023c27479fa04657a7b83acf65123da92248fb5a"
+    },
+    {
+      "path": "art/materials/foliage_teal.tres",
+      "bytes": 176,
+      "sha256": "cd9a2a0c834270343a6b1e2b4560e82f1836a10b592c3296a5d263fe84dba5ce"
+    },
+    {
+      "path": "art/materials/leaves_gold.tres",
+      "bytes": 175,
+      "sha256": "96690d099f614169cfa6803377081bd58f19bfcaf390f4bb33e786e03da8bf1f"
+    },
+    {
+      "path": "art/materials/leaves_orange.tres",
+      "bytes": 177,
+      "sha256": "ddd4ad8434b79842fd88008a5456a080d87582d4a7f045de3dcee19faaf7a4da"
+    },
+    {
+      "path": "art/materials/night_blue.tres",
+      "bytes": 174,
+      "sha256": "9f9b4e3f772d1bd7ad7c4ce62a6bb77eaad40de7535ec7cc80b356bfd939db2b"
+    },
+    {
+      "path": "art/materials/palette.json",
+      "bytes": 4585,
+      "sha256": "cea8f8f086c4ae8d96b6b33f6f28e39932519f47d2a6a41ae96ca1ba57a18d62"
+    },
+    {
+      "path": "art/materials/palette_atlas.png",
+      "bytes": 983,
+      "sha256": "2eb188c39a1bb54dd06e21e3954de13a62d420834eb0b36e7ea686cb4543b605"
+    },
+    {
+      "path": "art/materials/palette_atlas_material.tres",
+      "bytes": 296,
+      "sha256": "9471cd25839372bc3959be8c281fc111188c74cd14bfa5d047f370948c3b303f"
+    },
+    {
+      "path": "art/materials/palette_reference.svg",
+      "bytes": 5343,
+      "sha256": "b4432fbc40f0e411e8f16c5f5787d6025c318f318c5d19f7408de2dc1fb3933c"
+    },
+    {
+      "path": "art/materials/slowing_field.gdshader",
+      "bytes": 553,
+      "sha256": "7b69d334f93f08180afa9e3ec6a16fb7f02a8c6bdef9fda0a541bb18ff3c757e"
+    },
+    {
+      "path": "art/materials/slowing_field_material.tres",
+      "bytes": 183,
+      "sha256": "9ac44773092f6b55debf2cf3bda10a7c7ee10a514384f238e66a9b4966bf794d"
+    },
+    {
+      "path": "art/materials/soil.tres",
+      "bytes": 168,
+      "sha256": "b4132d4d820914550e543ed45c1be59be3a070ccb91b544b4dc90bce2553c477"
+    },
+    {
+      "path": "art/materials/starter_asset_preview.png",
+      "bytes": 2006544,
+      "sha256": "62fd6cf9812bf37020fdd1d1336437ee8d1837bfed203e7de2fba6605a5e0e66"
+    },
+    {
+      "path": "art/materials/stone_cream.tres",
+      "bytes": 175,
+      "sha256": "fa2412bf452665a8fb0275c90e142effa9b98596b179421e2194fa495a2e19a0"
+    },
+    {
+      "path": "art/materials/stone_light.tres",
+      "bytes": 175,
+      "sha256": "c5dd9121bc3bebfd0c8cf65329e85a4e3719fa0a1b206bc90e728d948e67c1af"
+    },
+    {
+      "path": "art/materials/stone_shadow.tres",
+      "bytes": 176,
+      "sha256": "1483cd515da75cced551a2a6c21948a4834fcba62ea0dce7eb047cab77428161"
+    },
+    {
+      "path": "art/materials/stylized_water.gdshader",
+      "bytes": 624,
+      "sha256": "777b1247f0785f224d986be12af66e8d874fcc12c74358416dd984779342a809"
+    },
+    {
+      "path": "art/materials/sun_amber.tres",
+      "bytes": 280,
+      "sha256": "77efeed1adc03d3cf4a5604f83f2b7da191abc21355afd834d833c06e312ea3c"
+    },
+    {
+      "path": "art/materials/vertex_palette_material.tres",
+      "bytes": 197,
+      "sha256": "bfc9e8816f57f4925a2d7c1f91993bd804a280cb62941a39991990680c1275e2"
+    },
+    {
+      "path": "art/materials/water_material.tres",
+      "bytes": 184,
+      "sha256": "efa863ac0bd5a066def99738fbdc3171ba57d5287e17d879a0fe136986bdadd9"
+    },
+    {
+      "path": "art/materials/water_teal.tres",
+      "bytes": 174,
+      "sha256": "ad365b2ab42c7e12a7e976cbfcc7606dc955d65ac9cfce7cb6678dbbbb7b8b3e"
+    },
+    {
+      "path": "art/materials/wood.tres",
+      "bytes": 168,
+      "sha256": "73fe00d85a95e8ef6861ae33571687c0dc8c41df1ab1696b8a5bc7cb7f7a89e4"
+    },
+    {
+      "path": "art/models/bolt_turret.glb",
+      "bytes": 36204,
+      "sha256": "5bcde958e48074487fbfda61b0f67727b9c2b02164a74fb733e7379650cea6f7"
+    },
+    {
+      "path": "art/models/brute_static.glb",
+      "bytes": 47648,
+      "sha256": "1d19e745e02fb3ae21496b1788577bdf63ec72f22b651563d94c74f397ea9332"
+    },
+    {
+      "path": "art/models/crawler_static.glb",
+      "bytes": 33376,
+      "sha256": "dab40bee3cf0101307970cd09e53189f9c109e3d5903890243cd7ff5eb63d101"
+    },
+    {
+      "path": "art/models/models_manifest.json",
+      "bytes": 1825,
+      "sha256": "7bf70653e21140a1a82d737e8a7b6463a359911aa7248f414b2fd1185291f6f9"
+    },
+    {
+      "path": "art/models/mortar.glb",
+      "bytes": 31164,
+      "sha256": "a098bed4035c3caf4f6e952f63ff4b28d7fcb909c8a667965e4d5185a107d301"
+    },
+    {
+      "path": "art/models/orange_tree.glb",
+      "bytes": 21468,
+      "sha256": "e5e2c6b20ec1c554eac659c7d3e71de72591e46d84627be6898129aeeb22c323"
+    },
+    {
+      "path": "art/models/ruin_arch.glb",
+      "bytes": 37116,
+      "sha256": "6b70f433f240758eda0cb5a9f51068690446eb059f16b4e630a0dfbb784787a0"
+    },
+    {
+      "path": "art/models/ruin_pillar.glb",
+      "bytes": 26116,
+      "sha256": "1fefffadeedd6c69ad3be47c53d49418356f8055f8d51c6e8fe836b468629464"
+    },
+    {
+      "path": "art/models/slowing_emitter.glb",
+      "bytes": 33856,
+      "sha256": "6dcff84b2fb78afb6341feb43ecb316c75eab1ad7f2e3b450f82bcb5e5e4d2c3"
+    },
+    {
+      "path": "art/models/stone_block.glb",
+      "bytes": 4580,
+      "sha256": "a8141ae5788294d4cc2f9b565caafcd09bb3ad93d763f3fae2cb20fa3e7e169a"
+    },
+    {
+      "path": "art/models/stone_stairs.glb",
+      "bytes": 23640,
+      "sha256": "7f7e840797a175da61f7df7c1575733a960e7a08beada1ca7dbdb49f15b11c98"
+    },
+    {
+      "path": "art/models/sun_shrine_deployed.glb",
+      "bytes": 72540,
+      "sha256": "8d958a1fff8084a0dbd2d60acdf35c29b15d22160155a1133201fad638caec71"
+    },
+    {
+      "path": "art/models/sun_shrine_folded.glb",
+      "bytes": 63176,
+      "sha256": "ddda61aa9746b7772f6ec06b5751de7485736094bdbc3d2d75260d47ff7c8610"
+    },
+    {
+      "path": "art/models/sun_shrine_restored.glb",
+      "bytes": 72580,
+      "sha256": "c16c5d9f7feaa31e5028f0a16fb999c27ce368c845e3332bff1b297fdced5ec2"
+    },
+    {
+      "path": "art/models/supply_crate.glb",
+      "bytes": 16492,
+      "sha256": "c7b9858ce49a99a1b69d9a6a9afc5b95d5c216d3e447cc8e90bd2166157cd14e"
+    },
+    {
+      "path": "art/models/teal_tree.glb",
+      "bytes": 21448,
+      "sha256": "9a349a5e5ea53f0810b3df4703b5a25415304f546b623db96fbd54e596f3e7c2"
+    },
+    {
+      "path": "art/source/.gdignore",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "art/source/cindertrail_starter_library.blend",
+      "bytes": 1869304,
+      "sha256": "41d7fc466469a255971d17452cd88527ae20234ec4eedffd9260473b7a5ba864"
+    },
+    {
+      "path": "art/textures/third_party/ambientCG/CREDITS.md",
+      "bytes": 488,
+      "sha256": "81680353c0838c5d30477133d5ef7ac6b845c7705c98ff4fbee02cbadc6cfcb6"
+    },
+    {
+      "path": "art/textures/third_party/ambientCG/Fabric030/Fabric030_1K-JPG_Color.jpg",
+      "bytes": 1681447,
+      "sha256": "6388762708722de48cdbdfb4878b9ae6d8012de5948d564006067b629f0b84ef"
+    },
+    {
+      "path": "art/textures/third_party/ambientCG/Fabric030/Fabric030_1K-JPG_NormalGL.jpg",
+      "bytes": 2682952,
+      "sha256": "c9a8f4ff15527af0b226b8a8840405f944c45a32c2e4462864d3b0136827e6e2"
+    },
+    {
+      "path": "art/textures/third_party/ambientCG/Fabric030/Fabric030_1K-JPG_Roughness.jpg",
+      "bytes": 866950,
+      "sha256": "221bf708cb614b01ae83b856376fa79fff22dc249d8a397ab0f89dd3b7fe6da6"
+    },
+    {
+      "path": "art/textures/third_party/ambientCG/Metal032/Metal032_1K-JPG_Color.jpg",
+      "bytes": 701900,
+      "sha256": "49493d6ade78ccbbbd270c6a15e4b4c9b1a097e66ddf28a1073de3e85712d9af"
+    },
+    {
+      "path": "art/textures/third_party/ambientCG/Metal032/Metal032_1K-JPG_Metalness.jpg",
+      "bytes": 4257,
+      "sha256": "843102638fa0a5bf897888868877efab8ccdc4cb84a48e57bdb52bfb30f5e714"
+    },
+    {
+      "path": "art/textures/third_party/ambientCG/Metal032/Metal032_1K-JPG_NormalGL.jpg",
+      "bytes": 341948,
+      "sha256": "8537c1015de5cc33d20231e5b6aa27309edcb983e1c37e608d08bb00f733747d"
+    },
+    {
+      "path": "art/textures/third_party/ambientCG/Metal032/Metal032_1K-JPG_Roughness.jpg",
+      "bytes": 404875,
+      "sha256": "55d3eee2b69008ad3701b18977495531d0e3515105102e56f40a4d1098d10bce"
+    },
+    {
+      "path": "art/textures/third_party/ambientCG/PavingStones036/PavingStones036_1K-JPG_Color.jpg",
+      "bytes": 1796007,
+      "sha256": "065dad4ad95ee74992a6d3cbeb0efb107d3b18a0a3425487bf41452dce12c533"
+    },
+    {
+      "path": "art/textures/third_party/ambientCG/PavingStones036/PavingStones036_1K-JPG_NormalGL.jpg",
+      "bytes": 2139484,
+      "sha256": "7e86034b299d5628bb072c74ed30364dbab5da21f55e17c675ccbef15b209543"
+    },
+    {
+      "path": "art/textures/third_party/ambientCG/PavingStones036/PavingStones036_1K-JPG_Roughness.jpg",
+      "bytes": 688711,
+      "sha256": "d97ddc1b344edf9e799d5a63b497c5bafabf3afe189bca565bbd155c79f269a1"
+    },
+    {
+      "path": "art/textures/third_party/ambientCG/SOURCE_MANIFEST.json",
+      "bytes": 4970,
+      "sha256": "b3c8a53f9175d9f060477981c68621920cdc4bcae42952707eb60caf4caf4c77"
+    },
+    {
+      "path": "art/textures/third_party/ambientCG/WoodFloor050/WoodFloor050_1K-JPG_Color.jpg",
+      "bytes": 1345285,
+      "sha256": "58e32a5c84213fe8d9353fcbd2fa2e1678f2f30dfef84993ecb8c8d4e05b5e51"
+    },
+    {
+      "path": "art/textures/third_party/ambientCG/WoodFloor050/WoodFloor050_1K-JPG_NormalGL.jpg",
+      "bytes": 658922,
+      "sha256": "cc58667acf8acb9c6bb8444a485751748c96619122b8f2a3801ea0cbaa9f2b2a"
+    },
+    {
+      "path": "art/textures/third_party/ambientCG/WoodFloor050/WoodFloor050_1K-JPG_Roughness.jpg",
+      "bytes": 369540,
+      "sha256": "9df4b049f3b0d6e0ca6dfc52d99990f9d9d292808f40267803bb82169590704a"
+    },
+    {
+      "path": "configs/.gdignore",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "configs/mcp_servers.example.toml",
+      "bytes": 457,
+      "sha256": "7c0aff735c650c83aedfade5cebcef398b33ea8559b3a2e86102f6039b61b242"
+    },
+    {
+      "path": "docs/.gdignore",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/01_GAME_DESIGN.md",
+      "bytes": 8371,
+      "sha256": "318566a803a315f944d746b3247c125de0601d2aa4a8b49be8798b924446b02a"
+    },
+    {
+      "path": "docs/02_MVP_AND_ROADMAP.md",
+      "bytes": 5240,
+      "sha256": "77cbfd88d97a47118c3b510321268e51d4b06fba57c184439f86ad1c76b69298"
+    },
+    {
+      "path": "docs/03_TECHNICAL_ARCHITECTURE.md",
+      "bytes": 8884,
+      "sha256": "0cd6b6b40098dacccebe79c5770ac2e9b405a3205d955f1c8955f45e52f79acd"
+    },
+    {
+      "path": "docs/04_VISUAL_ACCEPTANCE.md",
+      "bytes": 6848,
+      "sha256": "283a0e555795d64c51ba5ffbccf200513c99047f761de282f82bce85495600bb"
+    },
+    {
+      "path": "docs/05_TEST_PLAN.md",
+      "bytes": 4792,
+      "sha256": "0b61bc83463b549164e124417e9985ae708133cf69b6b3a0ddb9419647d572ee"
+    },
+    {
+      "path": "docs/06_MATERIAL_AND_MODEL_PIPELINE.md",
+      "bytes": 8395,
+      "sha256": "fd0eb19941b0adfecd44361b4061aac48a51c8c0ebed20b2ce1f99b005be2f18"
+    },
+    {
+      "path": "docs/07_ASSET_SOURCES_AND_LICENSES.md",
+      "bytes": 6896,
+      "sha256": "910f650501a9e936c7a80ac78a966b9f496feb55df8c8ee276e5f99d5816e891"
+    },
+    {
+      "path": "docs/08_SKILLS_AND_MCP_SETUP.md",
+      "bytes": 7600,
+      "sha256": "8b0f988e43a610b48d31dcdcb9da5f77864bec7b188636ab5e0b9cd09d895609"
+    },
+    {
+      "path": "docs/09_TRAILER_REFERENCE_NOTES.md",
+      "bytes": 1793,
+      "sha256": "a90f510c1ce785593b3956d33fc7107a31923e168c977dbcfce7974ba4320116"
+    },
+    {
+      "path": "docs/10_ART_CATALOGUE.md",
+      "bytes": 3194,
+      "sha256": "d9e7b2208b87bcbea471571946527d93a0a20ef80b078e803a717336f06648c9"
+    },
+    {
+      "path": "media/.gdignore",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "media/CINDERTRAIL_Concept_Trailer.mp4",
+      "bytes": 18072335,
+      "sha256": "309770a43290ad2094c975f57521c445fda9dadee38519ab8bb676545b485d0f"
+    },
+    {
+      "path": "media/trailer_contact_sheet.jpg",
+      "bytes": 76384,
+      "sha256": "d2f8d2ea40eb770256f762b2a3abf7489329fd1371013d558839516cdfce657c"
+    },
+    {
+      "path": "prompts/.gdignore",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "prompts/START_CODEX.md",
+      "bytes": 2150,
+      "sha256": "2a9422bbd608496c8d0e6c9bb37f2591afc167e184a51033cc0d6e9d36b49c81"
+    },
+    {
+      "path": "prompts/TEXTURE_AND_ASSET_PROMPTS.md",
+      "bytes": 4754,
+      "sha256": "27a1b6aef8dc89161e9c3a52be4a8a2324f5c8e2aa5db864885be688e55c44c9"
+    },
+    {
+      "path": "prompts/TRAILER_PROMPT.md",
+      "bytes": 3265,
+      "sha256": "031248bb6e25ca4338b5020312a44a1df1768d172dd2472a06f73e781a52e4d8"
+    },
+    {
+      "path": "scripts/build_blender_assets.py",
+      "bytes": 13783,
+      "sha256": "79f013691971cc567957132bcbd22828cdcb8dc037c5519a200194c71733d6be"
+    },
+    {
+      "path": "scripts/fetch_optional_textures.py",
+      "bytes": 6353,
+      "sha256": "5510281869d0df58a37d8b97840ce1cf8aa062a1569037d7763ca504e400a002"
+    },
+    {
+      "path": "scripts/make_palette.py",
+      "bytes": 3402,
+      "sha256": "731b497e67fbab4f100a0c237d1ea462873869dcea503c4564922ffb5e285787"
+    },
+    {
+      "path": "scripts/validate_asset_kit.py",
+      "bytes": 4070,
+      "sha256": "73b9107dd78bece03066c5d89a2ba019c71578d2c27eb6c4dfe87b27a19d2973"
+    }
+  ]
+}

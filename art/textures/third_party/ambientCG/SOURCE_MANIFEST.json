@@ -1,0 +1,137 @@
+{
+  "source": "ambientCG",
+  "license": "CC0-1.0",
+  "license_url": "https://docs.ambientcg.com/license/",
+  "metadata_url": "https://ambientcg.com/api/v2/full_json?id=PavingStones036%2CMetal032%2CFabric030%2CWoodFloor050&include=downloadData&limit=4",
+  "checked_utc": "2026-11-20T15:30:54.315400+00:00",
+  "assets": [
+    {
+      "id": "PavingStones036",
+      "name": "Paving Stones 036",
+      "asset_url": "https://ambientcg.com/a/PavingStones036",
+      "download_url": "https://ambientcg.com/get?file=PavingStones036_1K-JPG.zip",
+      "variant": "1K-JPG",
+      "license": "CC0-1.0",
+      "credit": "PavingStones036 by ambientCG.com \u2014 CC0 1.0 Universal",
+      "archive_sha256": "91223aa46aa4275bb30df310fba788d8bfb740f2b1e9796ac0eb9a14f367e9ce",
+      "maps": [
+        {
+          "file": "PavingStones036_1K-JPG_Color.jpg",
+          "map": "Color",
+          "bytes": 1796007,
+          "sha256": "065dad4ad95ee74992a6d3cbeb0efb107d3b18a0a3425487bf41452dce12c533"
+        },
+        {
+          "file": "PavingStones036_1K-JPG_NormalGL.jpg",
+          "map": "NormalGL",
+          "bytes": 2139484,
+          "sha256": "7e86034b299d5628bb072c74ed30364dbab5da21f55e17c675ccbef15b209543"
+        },
+        {
+          "file": "PavingStones036_1K-JPG_Roughness.jpg",
+          "map": "Roughness",
+          "bytes": 688711,
+          "sha256": "d97ddc1b344edf9e799d5a63b497c5bafabf3afe189bca565bbd155c79f269a1"
+        }
+      ]
+    },
+    {
+      "id": "Metal032",
+      "name": "Metal 032",
+      "asset_url": "https://ambientcg.com/a/Metal032",
+      "download_url": "https://ambientcg.com/get?file=Metal032_1K-JPG.zip",
+      "variant": "1K-JPG",
+      "license": "CC0-1.0",
+      "credit": "Metal032 by ambientCG.com \u2014 CC0 1.0 Universal",
+      "archive_sha256": "9e4f363905a647958c273154fa125d2a6440892d0e583f9b3af24bb08b5afc3c",
+      "maps": [
+        {
+          "file": "Metal032_1K-JPG_Color.jpg",
+          "map": "Color",
+          "bytes": 701900,
+          "sha256": "49493d6ade78ccbbbd270c6a15e4b4c9b1a097e66ddf28a1073de3e85712d9af"
+        },
+        {
+          "file": "Metal032_1K-JPG_Metalness.jpg",
+          "map": "Metalness",
+          "bytes": 4257,
+          "sha256": "843102638fa0a5bf897888868877efab8ccdc4cb84a48e57bdb52bfb30f5e714"
+        },
+        {
+          "file": "Metal032_1K-JPG_NormalGL.jpg",
+          "map": "NormalGL",
+          "bytes": 341948,
+          "sha256": "8537c1015de5cc33d20231e5b6aa27309edcb983e1c37e608d08bb00f733747d"
+        },
+        {
+          "file": "Metal032_1K-JPG_Roughness.jpg",
+          "map": "Roughness",
+          "bytes": 404875,
+          "sha256": "55d3eee2b69008ad3701b18977495531d0e3515105102e56f40a4d1098d10bce"
+        }
+      ]
+    },
+    {
+      "id": "Fabric030",
+      "name": "Fabric 030",
+      "asset_url": "https://ambientcg.com/a/Fabric030",
+      "download_url": "https://ambientcg.com/get?file=Fabric030_1K-JPG.zip",
+      "variant": "1K-JPG",
+      "license": "CC0-1.0",
+      "credit": "Fabric030 by ambientCG.com \u2014 CC0 1.0 Universal",
+      "archive_sha256": "82d4d00ccf901cf4707c5489005945ab8574933fc60437e26c6737f0436699e0",
+      "maps": [
+        {
+          "file": "Fabric030_1K-JPG_Color.jpg",
+          "map": "Color",
+          "bytes": 1681447,
+          "sha256": "6388762708722de48cdbdfb4878b9ae6d8012de5948d564006067b629f0b84ef"
+        },
+        {
+          "file": "Fabric030_1K-JPG_NormalGL.jpg",
+          "map": "NormalGL",
+          "bytes": 2682952,
+          "sha256": "c9a8f4ff15527af0b226b8a8840405f944c45a32c2e4462864d3b0136827e6e2"
+        },
+        {
+          "file": "Fabric030_1K-JPG_Roughness.jpg",
+          "map": "Roughness",
+          "bytes": 866950,
+          "sha256": "221bf708cb614b01ae83b856376fa79fff22dc249d8a397ab0f89dd3b7fe6da6"
+        }
+      ]
+    },
+    {
+      "id": "WoodFloor050",
+      "name": "Wood Floor 050",
+      "asset_url": "https://ambientcg.com/a/WoodFloor050",
+      "download_url": "https://ambientcg.com/get?file=WoodFloor050_1K-JPG.zip",
+      "variant": "1K-JPG",
+      "license": "CC0-1.0",
+      "credit": "WoodFloor050 by ambientCG.com \u2014 CC0 1.0 Universal",
+      "archive_sha256": "e64f22e8795fa1bd43111894382b4f3fea460563799dc9fd286a4a9dfff72818",
+      "maps": [
+        {
+          "file": "WoodFloor050_1K-JPG_Color.jpg",
+          "map": "Color",
+          "bytes": 1345285,
+          "sha256": "58e32a5c84213fe8d9353fcbd2fa2e1678f2f30dfef84993ecb8c8d4e05b5e51"
+        },
+        {
+          "file": "WoodFloor050_1K-JPG_NormalGL.jpg",
+          "map": "NormalGL",
+          "bytes": 658922,
+          "sha256": "cc58667acf8acb9c6bb8444a485751748c96619122b8f2a3801ea0cbaa9f2b2a"
+        },
+        {
+          "file": "WoodFloor050_1K-JPG_Roughness.jpg",
+          "map": "Roughness",
+          "bytes": 369540,
+          "sha256": "9df4b049f3b0d6e0ca6dfc52d99990f9d9d292808f40267803bb82169590704a"
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "complete": true
+}

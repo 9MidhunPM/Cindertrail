@@ -1,0 +1,46 @@
+class_name CinderPlayer
+extends CharacterBody3D
+
+var move_enabled := true
+var tactical := false
+var camera: Camera3D
+var visual: TravelerVisual
+var recovery_point: Vector3
+
+func _ready() -> void:
+	collision_layer = 2
+	collision_mask = 1
+	floor_snap_length = 0.45
+	floor_max_angle = deg_to_rad(47.0)
+	var capsule := CapsuleShape3D.new()
+	capsule.height = 1.65
+	capsule.radius = 0.29
+	var collider := CollisionShape3D.new()
+	collider.shape = capsule
+	collider.position.y = 0.83
+	add_child(collider)
+
+func _physics_process(delta: float) -> void:
+	if camera == null:
+		return
+	var input := Vector2.ZERO
+	if move_enabled:
+		input = Input.get_vector("move_left", "move_right", "move_forward", "move_back")
+	var right := camera.global_basis.x
+	right.y = 0.0
+	var forward := -camera.global_basis.z
+	forward.y = 0.0
+	var direction := right.normalized() * input.x - forward.normalized() * input.y
+	var speed := 6.1 if Input.is_action_pressed("sprint") else 3.65
+	velocity.x = move_toward(velocity.x, direction.x * speed, delta * 31.0)
+	velocity.z = move_toward(velocity.z, direction.z * speed, delta * 31.0)
+	velocity.y = maxf(-24.0, velocity.y - delta * 21.0)
+	move_and_slide()
+	if direction.length_squared() > 0.01:
+		var heading := atan2(-direction.x, -direction.z)
+		visual.rotation.y = lerp_angle(visual.rotation.y, heading, 1.0 - exp(-13.0 * delta))
+	if visual != null:
+		visual.animate(delta, get_real_velocity().slide(Vector3.UP).length(), tactical)
+	if global_position.y < -4.5:
+		global_position = recovery_point
+		velocity = Vector3.ZERO

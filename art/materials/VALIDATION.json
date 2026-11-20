@@ -1,0 +1,75 @@
+{
+  "godot_version": "4.7.2.stable.official.ed1daf0bf",
+  "kind": "headless resource import/load and GLB instantiation",
+  "renderer": "gl_compatibility headless; no visual GPU parity test",
+  "models": {
+    "bolt_turret.glb": {
+      "glb_version": 2,
+      "bytes": 36204
+    },
+    "brute_static.glb": {
+      "glb_version": 2,
+      "bytes": 47648
+    },
+    "crawler_static.glb": {
+      "glb_version": 2,
+      "bytes": 33376
+    },
+    "mortar.glb": {
+      "glb_version": 2,
+      "bytes": 31164
+    },
+    "orange_tree.glb": {
+      "glb_version": 2,
+      "bytes": 21468
+    },
+    "ruin_arch.glb": {
+      "glb_version": 2,
+      "bytes": 37116
+    },
+    "ruin_pillar.glb": {
+      "glb_version": 2,
+      "bytes": 26116
+    },
+    "slowing_emitter.glb": {
+      "glb_version": 2,
+      "bytes": 33856
+    },
+    "stone_block.glb": {
+      "glb_version": 2,
+      "bytes": 4580
+    },
+    "stone_stairs.glb": {
+      "glb_version": 2,
+      "bytes": 23640
+    },
+    "sun_shrine_deployed.glb": {
+      "glb_version": 2,
+      "bytes": 72540
+    },
+    "sun_shrine_folded.glb": {
+      "glb_version": 2,
+      "bytes": 63176
+    },
+    "sun_shrine_restored.glb": {
+      "glb_version": 2,
+      "bytes": 72580
+    },
+    "supply_crate.glb": {
+      "glb_version": 2,
+      "bytes": 16492
+    },
+    "teal_tree.glb": {
+      "glb_version": 2,
+      "bytes": 21448
+    }
+  },
+  "import_exit": 0,
+  "load_exit": 0,
+  "resource_result": {
+    "failures": [],
+    "loaded": 41
+  },
+  "errors": [],
+  "passed": true
+}

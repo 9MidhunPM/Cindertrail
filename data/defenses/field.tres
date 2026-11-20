@@ -1,0 +1,14 @@
+[gd_resource type="Resource" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/combat/module_stats.gd" id="1"]
+[ext_resource type="PackedScene" path="res://art/models/slowing_emitter.glb" id="2"]
+
+[resource]
+script = ExtResource("1")
+model = ExtResource("2")
+label = "Field"
+price = 7
+reach = 6.5
+interval = 1.5
+power = 0.46
+splash = 0

@@ -1,0 +1,13 @@
+[gd_resource type="Resource" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/combat/enemy_stats.gd" id="1"]
+[ext_resource type="PackedScene" path="res://art/models/brute_static.glb" id="2"]
+
+[resource]
+script = ExtResource("1")
+model = ExtResource("2")
+health = 67
+speed = 1.55
+damage = 7
+height = 1.5
+bounty = 5

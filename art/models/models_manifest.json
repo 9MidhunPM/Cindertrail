@@ -1,0 +1,97 @@
+{
+  "generator": "build_blender_assets.py",
+  "units": "meters",
+  "up_axis_in_glb": "Y",
+  "assets": [
+    {
+      "file": "stone_block.glb",
+      "static": true,
+      "rigged": false,
+      "vertices": 24
+    },
+    {
+      "file": "ruin_pillar.glb",
+      "static": true,
+      "rigged": false,
+      "vertices": 152
+    },
+    {
+      "file": "ruin_arch.glb",
+      "static": true,
+      "rigged": false,
+      "vertices": 232
+    },
+    {
+      "file": "stone_stairs.glb",
+      "static": true,
+      "rigged": false,
+      "vertices": 144
+    },
+    {
+      "file": "teal_tree.glb",
+      "static": true,
+      "rigged": false,
+      "vertices": 100
+    },
+    {
+      "file": "orange_tree.glb",
+      "static": true,
+      "rigged": false,
+      "vertices": 100
+    },
+    {
+      "file": "supply_crate.glb",
+      "static": true,
+      "rigged": false,
+      "vertices": 96
+    },
+    {
+      "file": "sun_shrine_deployed.glb",
+      "static": true,
+      "rigged": false,
+      "vertices": 534
+    },
+    {
+      "file": "sun_shrine_restored.glb",
+      "static": true,
+      "rigged": false,
+      "vertices": 534
+    },
+    {
+      "file": "sun_shrine_folded.glb",
+      "static": true,
+      "rigged": false,
+      "vertices": 486
+    },
+    {
+      "file": "bolt_turret.glb",
+      "static": true,
+      "rigged": false,
+      "vertices": 196
+    },
+    {
+      "file": "slowing_emitter.glb",
+      "static": true,
+      "rigged": false,
+      "vertices": 228
+    },
+    {
+      "file": "mortar.glb",
+      "static": true,
+      "rigged": false,
+      "vertices": 208
+    },
+    {
+      "file": "crawler_static.glb",
+      "static": true,
+      "rigged": false,
+      "vertices": 156
+    },
+    {
+      "file": "brute_static.glb",
+      "static": true,
+      "rigged": false,
+      "vertices": 252
+    }
+  ]
+}

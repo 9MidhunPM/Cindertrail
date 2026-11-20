@@ -1,0 +1,14 @@
+[gd_resource type="Resource" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/combat/module_stats.gd" id="1"]
+[ext_resource type="PackedScene" path="res://art/models/bolt_turret.glb" id="2"]
+
+[resource]
+script = ExtResource("1")
+model = ExtResource("2")
+label = "Bolt"
+price = 8
+reach = 10
+interval = 0.7
+power = 9
+splash = 0

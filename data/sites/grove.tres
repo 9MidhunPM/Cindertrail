@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="CinderSiteSpec" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/world/site_spec.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+label = "Flooded Grove"
+energy = 45.0
+rate = 0.18
+intensity = 1.0
+lane_names = PackedStringArray("Western shallows", "Eastern ford")

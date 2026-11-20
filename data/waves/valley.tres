@@ -1,0 +1,12 @@
+[gd_resource type="Resource" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/combat/wave_stats.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+base_count = 4
+max_count = 14
+interval = 1.55
+breather = 4.0
+active_limit = 18
+leash = 34.0

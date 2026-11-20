@@ -1,0 +1,13 @@
+[gd_resource type="Resource" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/combat/enemy_stats.gd" id="1"]
+[ext_resource type="PackedScene" path="res://art/models/crawler_static.glb" id="2"]
+
+[resource]
+script = ExtResource("1")
+model = ExtResource("2")
+health = 19
+speed = 2.65
+damage = 3
+height = 0.55
+bounty = 2
