@@ -495,7 +495,7 @@ func _interact_frontier() -> bool:
 func _deploy(site: CinderSite) -> void:
 	active_site = site
 	mode = Mode.DEPLOY
-	player.visual.gesture(&"deploy")
+	player.visual.gesture(&"deploy", core)
 	core.transfer(site.anchor, SunCore.Form.DEPLOYED, 0.91)
 	director.show_site(site.view_position, site.view_target)
 	if site == grove:
@@ -556,7 +556,7 @@ func pack_step(delta: float) -> void:
 		mode = Mode.PACK
 		_selected = -1
 		_pack_elapsed = 0.0
-		player.visual.gesture(&"pack")
+		player.visual.gesture(&"pack", core)
 		if battle != null:
 			battle.hold()
 		_sync_controls()
