@@ -9,12 +9,16 @@ var _world: Node
 var _next_check := 0.0
 var _nearby: Array[Animal] = []
 var _seed := 0
+var _bell_fish: Array[Animal] = []
+var _bell_scatter := 0.0
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_PAUSABLE
 	_world = get_parent()
 
 func _populate() -> void:
+	if not animals.is_empty():
+		return
 	_seed = _world.frontier.journey_seed
 	for site: CinderSite in _world.sites:
 		var p := site.anchor.global_position
@@ -50,8 +54,36 @@ func _populate() -> void:
 		var verge := tangent.cross(Vector3.UP).normalized()
 		var point := road[2].lerp(road[3], .53) + verge * 2.2
 		_place(S.DEER if road_name == "High orchard" else S.PIKA, point, point + verge * 4.8 + tangent)
+	_populate_bell_fish()
 
-func _place(kind: Animal.Species, home: Vector3, refuge: Vector3, ledge := false) -> void:
+func _populate_bell_fish() -> void:
+	var road := _world.get("bell_road") as Node3D
+	if road == null:
+		return
+	var route: PackedVector3Array = road.route
+	if route.size() < 2:
+		return
+	var crest: Vector3 = road.ruin_local
+	var current := (crest - route[0]).slide(Vector3.UP).normalized()
+	var bank := current.cross(Vector3.UP)
+	# Follow the chosen crest and leave both deck approaches clear, including after the lift.
+	var shoal := RandomNumberGenerator.new()
+	shoal.seed = _seed ^ hash(crest)
+	for i in 6:
+		var along := (i % 3 - 1) * .71 + shoal.randf_range(-.12, .12)
+		var across := (1.0 + float(i / 3) * .68) * (-1.0 if i % 2 == 0 else 1.0)
+		var home := Vector3(crest.x, shoal.randf_range(.095, .14), crest.z)
+		home += current * along + bank * across
+		var refuge := home + bank * signf(across) * shoal.randf_range(2.3, 3.6) + current * .59
+		refuge.y = .015
+		_bell_fish.append(_place(S.FISH, road.to_global(home), road.to_global(refuge)))
+	road.connect(&"toll_requested", _on_bell_toll)
+
+func _on_bell_toll(_at: Vector3, _submerged: bool) -> void:
+	# Keep danger raised through the short look-up state, then use ordinary refuge behavior.
+	_bell_scatter = .85
+
+func _place(kind: Animal.Species, home: Vector3, refuge: Vector3, ledge := false) -> Animal:
 	var animal := Animal.new()
 	animal.visible = false
 	animal.authored_footing = ledge
@@ -60,12 +92,14 @@ func _place(kind: Animal.Species, home: Vector3, refuge: Vector3, ledge := false
 	random.seed = _seed ^ hash(home)
 	animal.configure(kind, home, refuge, random.randf_range(0, TAU), random.randf_range(-PI, PI))
 	animals.append(animal)
+	return animal
 
 func _physics_process(delta: float) -> void:
 	if _world.frontier == null or _world.player == null:
 		return
 	if animals.is_empty():
 		_populate()
+	_bell_scatter = maxf(0.0, _bell_scatter - delta)
 	var player: CinderPlayer = _world.player
 	var observer := player.global_position
 	_next_check -= delta
@@ -80,7 +114,8 @@ func _physics_process(delta: float) -> void:
 	var battle: CinderBattle = _world.battle
 	var busy := _world.active_site != null and (battle.active_wave or battle.engaged)
 	for animal in _nearby:
-		var danger := busy and animal.home.distance_squared_to(_world.active_site.anchor.global_position) < 28.0 * 28.0
+		var danger := _bell_scatter > 0.0 and animal in _bell_fish
+		danger = danger or (busy and animal.home.distance_squared_to(_world.active_site.anchor.global_position) < 28.0 * 28.0)
 		if not danger:
 			for enemy in battle.enemies:
 				if animal.wake_point().distance_squared_to(enemy.global_position) < 7.5 * 7.5:
