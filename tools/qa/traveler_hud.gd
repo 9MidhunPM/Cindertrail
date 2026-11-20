@@ -43,8 +43,11 @@ func _run() -> void:
 	_check(hud._art_dock.slots.size() == 7 and hud._art_dock.slots.all(func(row): return not row.owned and row.icon is Texture2D),
 		"Seven imported locked arts at the beginning of a journey")
 	_check(hud.minimap.objective != Vector3.INF and hud.minimap.objective == hud._big_map.objective, "Both maps carry the final destination")
+	hud.guide_line("Look for the golden rings where the old causeway bends.", true)
 	await _screens("exploration")
+	_check(hud._guide_panel.is_visible_in_tree(), "Persistent Lantern subtitle remains in gameplay")
 	_key_action("toggle_hud")
+	_check(not hud._guide_panel.is_visible_in_tree(), "Hiding the HUD hides Lantern's subtitle")
 	_key_action("map")
 	await _physics_frames(2)
 	_check(paused and hud._full_map.is_visible_in_tree(), "F10 followed by M still opens a visible map")
@@ -55,6 +58,9 @@ func _run() -> void:
 	_key_action("cancel")
 	_check(not hud._vitals_panel.visible, "Closing modal restores hidden readouts")
 	_key_action("toggle_hud")
+	_check(hud._guide_panel.is_visible_in_tree(), "Closing a modal restores the pending Lantern line")
+	hud.guide_line("")
+	_check(not hud._guide_panel.visible, "The guide can clear a persistent line")
 	_position_player(game.grove.anchor.global_position + Vector3(0,.12,1.5))
 	await _physics_frames(5)
 	game.interact()
@@ -65,7 +71,7 @@ func _run() -> void:
 		_finish()
 		return
 	game.arts.restore([&"flooded_grove",&"broken_quarry"], &"flooded_grove",
-		{&"flooded_grove": 6., &"broken_quarry": 8.}, 0.)
+		{&"flooded_grove": 6., &"broken_quarry": 8.})
 	game.battle.place(0,0)
 	_key_action("start_wave")
 	await _physics_frames(72)
@@ -74,6 +80,10 @@ func _run() -> void:
 		"Single sun readouts and selected art cooldown survive deployment")
 	_check(hud._art_dock.slots.any(func(row): return row.owned and not row.selected and row.cooldown > 0.),
 		"Independent recovering art remains in the dock")
+	_check("Recharges" in hud._art_dock.readiness, "The equipped art reports remaining recharge time")
+	_key_action("cast_ability")
+	_check(hud._art_dock._feedback_label.is_visible_in_tree() and "ready in" in hud._art_dock._feedback_label.text,
+		"Pressing G during recharge reports the actual failed cast near the art")
 	await _screens("defense")
 	if use_window:
 		# Freeze the live battle without opening the pause menu for matched render samples.
@@ -85,11 +95,17 @@ func _run() -> void:
 		measurements["defense_with_hud"] = await _profile(32, 16)
 		paused = false
 		game.set_physics_process(true)
+	game.arts.restore([&"flooded_grove", &"broken_quarry"], &"broken_quarry")
+	game._render_hud()
+	_check("Ready" in hud._art_dock.readiness and "G" in hud._art_dock.readiness, "An equipped charged art advertises the cast key")
 	game.core.damage(74)
+	hud.guide_line("Stay close to the shrine.")
 	hud.announce_ability("Faultline", load("res://art/ui/arts/broken_quarry.svg"), 3, true)
 	game._render_hud()
 	await _physics_frames(6)
 	_check(hud._reward_panel.visible and not hud._toast_box.visible, "One reward panel replaces combat notices")
+	_check(hud._reward_effect.text == game.arts.hud_state().ability_description and not hud._guide_panel.visible,
+		"The recovery shows the actual effect and gives it priority over the guide")
 	if use_window:
 		await _photo("low-integrity-reward")
 	Input.action_press("pack")
