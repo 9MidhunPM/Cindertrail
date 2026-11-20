@@ -1,6 +1,7 @@
 shader_type canvas_item;
 
 uniform int page = 0;
+uniform bool historic = false;
 uniform bool motion_enabled = true;
 uniform float age = 0.0;
 varying vec4 tint;
@@ -19,7 +20,13 @@ void fragment() {
 	float falling_water = 0.0;
 	float ripples = 0.0;
 	float sun = 0.0;
-	if (page == 0) {
+	if (historic) {
+		// Give the foreground paint slightly more drift than the horizon.
+		depth = smoothstep(0.34, 0.92, uv.y);
+		if (page == 4) {
+			ripples = smoothstep(0.54, 0.79, uv.y) * 0.5;
+		}
+	} else if (page == 0) {
 		// The stone arch and its orange canopy frame a distant observatory.
 		depth = 1.0 - ellipse(uv, vec2(0.56, 0.53), vec2(0.42, 0.59));
 		falling_water = ellipse(uv, vec2(0.78, 0.69), vec2(0.05, 0.065))

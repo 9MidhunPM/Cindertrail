@@ -11,28 +11,22 @@ const BACKDROP := preload("res://scripts/ui/front_ornament.gd")
 const SEAL := preload("res://scripts/ui/front_seal.gd")
 const AIR := preload("res://scripts/ui/comic_air.gd")
 const COMIC_SHADER := preload("res://scripts/ui/comic_motion.gdshader")
+const PROLOGUE := preload("res://scripts/ui/prologue_pages.gd")
+const MISSING_PLATE := preload("res://art/comic/01_valley.webp")
 const INK := Color("#102735")
 const CREAM := Color("#f7e9ce")
 const GOLD := Color("#eac28b")
 const MUTED := Color("#acbbc0")
 const PAPER := Color("#e9dab9")
 const PREFS_PATH := "user://presentation.cfg"
-const IMAGES := [
-	"res://art/comic/01_valley.webp", "res://art/comic/02_discovery.webp",
-	"res://art/comic/03_harness.webp", "res://art/comic/04_crossing.webp"]
-const TITLES := ["The long night", "A sun in the ruins", "The traveler’s oath", "The flooded road"]
-const CAPTIONS := [
-	"First the mornings paled. Then one morning never came. Down in the valley, the old beacons went cold.",
-	"Under a fallen arch, something still burned. Three broken rings circled a sun small enough to carry.",
-	"The bronze frame folded against the traveler’s back. Through the cloth came the faint warmth of a last ember.",
-	"Beyond the flooded grove stood the hilltop beacon. If the old shrines could wake this sun, the valley might see morning again."]
-const FOLIOS := ["I", "II", "III", "IV"]
 
 var stage: StringName = &"hidden"
 var panel_index := 0
+var achievement_rows: Callable
 var mouse_sensitivity := 1.0
 var reduced_motion := false
 var _volume := 0.82
+var _mix_volumes := {&"Music": 1.0, &"Effects": 1.0, &"Ambience": 1.0}
 var _has_checkpoint := false
 var _replay := false
 var _from_pause := false
@@ -49,8 +43,7 @@ var _art_frame := Panel.new()
 var _image := TextureRect.new()
 var _air := AIR.new()
 var _ink := ShaderMaterial.new()
-var _thumbnails: Array[Button] = []
-var _pictures: Array[Texture2D] = []
+var _chapter_buttons: Array[Button] = []
 var _motion_tween: Tween
 var _panel_tween: Tween
 var _folio: Label
@@ -63,6 +56,7 @@ var _continue: Button
 var _new: Button
 var _controls: Button
 var _settings: Button
+var _achievements: Button
 var _back_button: Button
 var _serif := SystemFont.new()
 var _sans := SystemFont.new()
@@ -92,8 +86,6 @@ func _ready() -> void:
 	_design.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_attach(_design, _back)
 	_back.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	for path in IMAGES:
-		_pictures.append(load(path) as Texture2D)
 	_build_menu()
 	_build_utility()
 	_build_comic()
@@ -139,7 +131,7 @@ func _button(parent: Control, node_name: String, wording: String, action: Callab
 	b.add_theme_font_size_override("font_size", 21)
 	var base := _box(Color("#dcb881"), Color("#f3d69c")) if primary else _box(Color("#142e3b"), Color("#52646a"))
 	var active := _box(Color("#f2d4a2"), CREAM)
-	if node_name in ["Settings", "Controls", "ReplayPrologue", "Quit"]:
+	if node_name in ["Settings", "Controls", "ReadAchievements", "ReplayPrologue", "Quit"]:
 		base = _box(Color("#102735a3"), Color("#9e927b80"), 0)
 		base.border_width_bottom = 1
 	b.add_theme_stylebox_override("normal", base)
@@ -200,6 +192,7 @@ func _build_menu() -> void:
 	var tools := _row(stack)
 	_controls = _button(tools, "Controls", "Controls", _show_controls)
 	_settings = _button(tools, "Settings", "Settings", show_settings)
+	_achievements = _button(tools, "ReadAchievements", "Achievements", show_achievements)
 	var exits := _row(stack)
 	_button(exits, "ReplayPrologue", "Read prologue", _replay_comic)
 	_button(exits, "Quit", "Quit", func() -> void: quit_requested.emit())
@@ -224,6 +217,7 @@ func _build_comic() -> void:
 	_image.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_image.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	_image.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_image.name = "PrologueIllustration"
 	_attach(_art_frame, _image)
 	_ink.shader = COMIC_SHADER
 	_image.material = _ink
@@ -231,45 +225,29 @@ func _build_comic() -> void:
 	_card.add_theme_stylebox_override("panel", _box(PAPER, Color("#f6e5c5"), 2))
 	_attach(_comic, _card)
 	_attach(_card, _caption)
-	_caption.add_theme_constant_override("separation", 14)
-	_folio = _text(_caption, "", _tracked, 15, Color("#735735"))
+	_caption.add_theme_constant_override("separation", 12)
+	_folio = _text(_caption, "", _sans, 17, Color("#735735"))
 	_rule(_caption, Color("#9e855e"))
-	_heading = _text(_caption, "", _serif, 49, INK)
+	_heading = _text(_caption, "", _serif, 45, INK)
 	_heading.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_body = _text(_caption, "", _serif, 26, Color("#293d43"))
+	_body = _text(_caption, "", _serif, 25, Color("#293d43"))
 	_body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_body.add_theme_constant_override("line_spacing", 3)
 	var strip := _row(_caption)
-	strip.add_theme_constant_override("separation", 5)
-	for i in _pictures.size():
-		var thumb := Button.new()
-		thumb.name = "ReadPanel%d" % (i + 1)
-		thumb.tooltip_text = TITLES[i]
-		thumb.accessibility_name = TITLES[i]
-		thumb.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-		thumb.custom_minimum_size.y = 49
-		thumb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		thumb.add_theme_stylebox_override("normal", _box(INK, INK, 1))
-		var focus_box := _box(Color.TRANSPARENT, INK, 2)
-		focus_box.set_expand_margin_all(3)
-		thumb.add_theme_stylebox_override("focus", focus_box)
-		_attach(strip, thumb)
-		var preview := TextureRect.new()
-		preview.texture = _pictures[i]
-		preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		preview.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-		preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		_attach(thumb, preview)
-		preview.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		preview.offset_left = 3
-		preview.offset_top = 3
-		preview.offset_right = -3
-		preview.offset_bottom = -3
-		thumb.pressed.connect(func() -> void:
-			_chime()
-			_show_panel(i)
-			_next.grab_focus())
-		_thumbnails.append(thumb)
+	strip.add_theme_constant_override("separation", 6)
+	for i in PROLOGUE.CHAPTERS.size():
+		var first_page := i * PROLOGUE.PAGES_PER_CHAPTER
+		var chapter := _button(strip, "Chapter%d" % (i + 1), PROLOGUE.CHAPTERS[i], _show_panel.bind(first_page))
+		chapter.toggle_mode = true
+		chapter.tooltip_text = "Pages %d–%d" % [first_page + 1, first_page + PROLOGUE.PAGES_PER_CHAPTER]
+		chapter.add_theme_font_size_override("font_size", 15)
+		chapter.custom_minimum_size.y = 36
+		for style_name in [&"normal", &"hover", &"pressed", &"focus"]:
+			var style := chapter.get_theme_stylebox(style_name).duplicate() as StyleBoxFlat
+			style.content_margin_left = 8
+			style.content_margin_right = 8
+			chapter.add_theme_stylebox_override(style_name, style)
+		_chapter_buttons.append(chapter)
 	var nav := Control.new()
 	nav.name = "PageNavigation"
 	_attach(_comic, nav)
@@ -336,7 +314,9 @@ func _switch(which: StringName) -> void:
 	_back.queue_redraw()
 	_menu.visible = which == &"menu"
 	_comic.visible = which == &"comic"
-	_utility.visible = which in [&"settings", &"controls", &"confirm"]
+	_utility.visible = which in [&"settings", &"controls", &"confirm", &"achievements"]
+	if which != &"comic":
+		_release_plate()
 	var page: Control = _menu if _menu.visible else (_comic if _comic.visible else _utility)
 	if _panel_tween:
 		_panel_tween.kill()
@@ -383,26 +363,27 @@ func _open_comic(replay: bool) -> void:
 
 func _show_panel(index: int) -> void:
 	panel_index = index
-	_folio.text = "PROLOGUE     /     " + FOLIOS[index] + " OF IV"
-	_heading.text = TITLES[index]
-	_body.text = CAPTIONS[index]
-	_next.text = ("Return to title" if _replay else "Begin journey") if index == 3 else "Next   →"
+	var page: Dictionary = PROLOGUE.PAGES[index]
+	_folio.text = "Page %d of %d" % [index + 1, PROLOGUE.PAGES.size()]
+	_heading.text = page.title
+	_body.text = page.caption
+	_next.text = ("Return to title" if _replay else "Begin journey") if index == PROLOGUE.PAGES.size() - 1 else "Next   →"
 	_previous.text = "←  Title" if index == 0 else "←  Back"
 	_skip.text = "Close prologue" if _replay else "Skip prologue"
-	_image.texture = _pictures[index]
+	_image.texture = load(page.image) as Texture2D if ResourceLoader.exists(page.image, "Texture2D") else MISSING_PLATE
 	_air.page = index
 	_air.clock = 0
 	_air.still = reduced_motion
 	_air.aspect = float(_image.texture.get_width()) / _image.texture.get_height()
 	_air.queue_redraw()
-	_ink.set_shader_parameter("page", index)
+	var vow_start := (PROLOGUE.CHAPTERS.size() - 1) * PROLOGUE.PAGES_PER_CHAPTER
+	_ink.set_shader_parameter("page", index if index < vow_start else index - vow_start)
+	_ink.set_shader_parameter("historic", index < vow_start)
 	_ink.set_shader_parameter("motion_enabled", not reduced_motion)
 	_ink.set_shader_parameter("age", 0.0)
-	for i in _thumbnails.size():
-		var is_current := i == index
-		_thumbnails[i].modulate = Color.WHITE if is_current else Color("#afac9f")
-		_thumbnails[i].add_theme_stylebox_override("normal", _box(Color("#a36a34") if is_current else INK, INK))
-		_thumbnails[i].get_child(0).modulate.a = 1.0 if is_current else 0.74
+	for i in _chapter_buttons.size():
+		var current := index >= i * PROLOGUE.PAGES_PER_CHAPTER and index < (i + 1) * PROLOGUE.PAGES_PER_CHAPTER
+		_chapter_buttons[i].set_pressed_no_signal(current)
 	_layout()
 	_layout.call_deferred()
 	if _motion_tween:
@@ -423,7 +404,7 @@ func _process(delta: float) -> void:
 		_ink.set_shader_parameter("age", _air.clock)
 
 func _comic_next() -> void:
-	if panel_index < TITLES.size() - 1:
+	if panel_index < PROLOGUE.PAGES.size() - 1:
 		_show_panel(panel_index + 1)
 	else:
 		_finish_comic()
@@ -435,16 +416,19 @@ func _comic_back() -> void:
 		_show_panel(panel_index - 1)
 
 func _finish_comic() -> void:
+	if stage != &"comic":
+		return
 	if _replay:
 		show_menu(_has_checkpoint)
 	else:
 		if not reduced_motion:
-			_reveal_valley()
+			_reveal_valley(_image.texture if panel_index == PROLOGUE.PAGES.size() - 1 else null)
 		hide_all()
 		begin_journey.emit()
 
-func _reveal_valley() -> void:
+func _reveal_valley(last_illustration: Texture2D) -> void:
 	var overlay := CanvasLayer.new()
+	overlay.name = "PrologueDissolve"
 	overlay.layer = layer + 1
 	overlay.process_mode = PROCESS_MODE_ALWAYS
 	get_parent().add_child(overlay)
@@ -453,8 +437,16 @@ func _reveal_valley() -> void:
 	veil.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	overlay.add_child(veil)
 	veil.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	if last_illustration != null:
+		var plate := TextureRect.new()
+		plate.texture = last_illustration
+		plate.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		plate.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+		plate.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		veil.add_child(plate)
+		plate.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var reveal := veil.create_tween().set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
-	reveal.tween_property(veil, "modulate:a", 0.0, 0.48)
+	reveal.tween_property(veil, "modulate:a", 0.0, 0.78 if last_illustration != null else 0.48)
 	reveal.tween_callback(overlay.queue_free)
 
 func _resume() -> void:
@@ -464,9 +456,15 @@ func _resume() -> void:
 func hide_all() -> void:
 	stage = &"hidden"
 	visible = false
+	_release_plate()
 	var focus := get_viewport().gui_get_focus_owner()
 	if focus and _root.is_ancestor_of(focus):
 		focus.release_focus()
+
+func _release_plate() -> void:
+	if _motion_tween:
+		_motion_tween.kill()
+	_image.texture = null
 
 func _clear_items() -> void:
 	for child in _items.get_children():
@@ -478,12 +476,13 @@ func _show_controls() -> void:
 	_page_title.text = "Controls"
 	_back_button.text = "Back to title"
 	for entry in [
-		["W A S D", "Move"], ["Ctrl   ·   Shift", "Hold to walk  /  sprint"],
+		["W A S D", "Move"], ["Ctrl   ·   Shift", "Hold Ctrl to walk. Press Shift to dash and hold it to sprint."],
+		["Space", "Jump"],
 		["Left click   ·   F", "Tap for sword cuts. Hold until the blade glows, release to spin."],
 		["Right click   ·   M", "Sun spark at range  /  open the valley map"],
 		["E", "Unfold shrine, repair, open cache, deliver"],
 		["1   2   3   ·   Left click", "Select module  /  place on socket"],
-		["Space   ·   U", "Start wave  /  upgrade pointed tower"],
+		["T   ·   U", "Start wave  /  upgrade pointed tower"],
 		["G   ·   Q", "Cast  /  cycle shrine abilities"],
 		["Hold R", "Recall towers and pack the shrine"],
 		["Esc   ·   F10", "Pause  /  toggle HUD"]]:
@@ -507,6 +506,13 @@ func show_settings(from_pause: bool = false) -> void:
 		_volume = value
 		_apply_settings()
 		_save_settings())
+	for channel: StringName in _mix_volumes:
+		var level := _slider(String(channel) + "Volume", String(channel), 0, 1, 0.01,
+			_mix_volumes[channel], func(value: float) -> String: return "%d%%" % roundi(value * 100))
+		level.value_changed.connect(func(value: float) -> void:
+			_mix_volumes[channel] = value
+			_apply_settings()
+			_save_settings())
 	var sensitivity := _slider("Sensitivity", "Look sensitivity", 0.5, 2.0, 0.05, mouse_sensitivity,
 		func(value: float) -> String: return "%.2f×" % value)
 	sensitivity.value_changed.connect(func(value: float) -> void:
@@ -518,6 +524,34 @@ func show_settings(from_pause: bool = false) -> void:
 	toggle.text = _motion_label()
 	_switch(&"settings")
 	volume.grab_focus()
+
+func show_achievements(from_pause: bool = false) -> void:
+	_from_pause = from_pause
+	_clear_items()
+	_page_title.text = "Achievements"
+	_back_button.text = "Back to pause" if from_pause else "Back to title"
+	if achievement_rows.is_valid():
+		for record: Dictionary in achievement_rows.call():
+			var row := _row(_items)
+			var icon := TextureRect.new()
+			icon.custom_minimum_size = Vector2(38, 38)
+			icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+			icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+			icon.texture = record.get("icon")
+			icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			_attach(row, icon)
+			var earned := bool(record.get("unlocked", false))
+			icon.modulate = Color.WHITE if earned else Color("#7e9599")
+			var words := VBoxContainer.new()
+			words.add_theme_constant_override("separation", 1)
+			words.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			_attach(row, words)
+			_text(words, str(record.title), _serif, 23, CREAM if earned else MUTED)
+			var detail := _text(words, str(record.get("description", "")), _sans, 16, MUTED)
+			detail.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			_text(row, "Earned" if earned else "Locked", _sans, 15, GOLD if earned else MUTED)
+	_switch(&"achievements")
+	_back_button.grab_focus()
 
 func _slider(node_name: String, label: String, low: float, high: float, step_size: float, initial: float, formatter: Callable) -> HSlider:
 	var header := _row(_items)
@@ -553,7 +587,11 @@ func _exit_utility() -> void:
 		hide_all()
 		settings_closed.emit()
 	else:
-		var opener := _settings if stage == &"settings" else (_new if stage == &"confirm" else _controls)
+		var opener := _controls
+		match stage:
+			&"settings": opener = _settings
+			&"confirm": opener = _new
+			&"achievements": opener = _achievements
 		show_menu(_has_checkpoint)
 		opener.grab_focus()
 
@@ -578,18 +616,33 @@ func _load_settings() -> void:
 	var cfg := ConfigFile.new()
 	if cfg.load(PREFS_PATH) == OK:
 		_volume = clampf(float(cfg.get_value("audio", "volume", _volume)), 0, 1)
+		for channel: StringName in _mix_volumes:
+			var saved := float(cfg.get_value("audio", String(channel).to_lower(), _mix_volumes[channel]))
+			_mix_volumes[channel] = clampf(saved, 0, 1)
 		mouse_sensitivity = clampf(float(cfg.get_value("controls", "sensitivity", mouse_sensitivity)), 0.5, 2)
 		reduced_motion = bool(cfg.get_value("display", "reduced_motion", false))
 	_apply_settings()
 
 func _apply_settings() -> void:
-	AudioServer.set_bus_volume_db(0, linear_to_db(maxf(0.0001, _volume)))
-	AudioServer.set_bus_mute(0, _volume <= 0.0)
+	_apply_bus_level(&"Master", _volume)
+	for channel: StringName in _mix_volumes:
+		_apply_bus_level(channel, _mix_volumes[channel])
+	if AudioServer.get_bus_index(&"Effects") >= 0:
+		_audio.bus = &"Effects"
 	_seal.still = reduced_motion
+
+func _apply_bus_level(channel: StringName, value: float) -> void:
+	var index := AudioServer.get_bus_index(channel)
+	if index < 0:
+		return
+	AudioServer.set_bus_volume_db(index, linear_to_db(maxf(0.0001, value)))
+	AudioServer.set_bus_mute(index, value <= 0.0)
 
 func _save_settings() -> void:
 	var cfg := ConfigFile.new()
 	cfg.set_value("audio", "volume", _volume)
+	for channel: StringName in _mix_volumes:
+		cfg.set_value("audio", String(channel).to_lower(), _mix_volumes[channel])
 	cfg.set_value("controls", "sensitivity", mouse_sensitivity)
 	cfg.set_value("display", "reduced_motion", reduced_motion)
 	cfg.save(PREFS_PATH)
@@ -597,7 +650,7 @@ func _save_settings() -> void:
 func _chime() -> void:
 	if DisplayServer.get_name() == "headless":
 		return
-	_audio.pitch_scale = 1.0 + panel_index * 0.025 if stage == &"comic" else 1.0
+	_audio.pitch_scale = 1.0 + (panel_index % PROLOGUE.PAGES_PER_CHAPTER) * 0.025 if stage == &"comic" else 1.0
 	_audio.play()
 
 func _make_chime() -> AudioStreamWAV:
