@@ -17,7 +17,18 @@ The six main camps share one continuous 3D world and all use the same protected 
 
 Camp landmarks can swing a wave. Press **E** at a bell, crane, relay switch, lantern, sluice wheel, or mirror control. At Fallen Relay, aim the pointer at the lane you want to pulse. Follow the moths in Lanternwood and align the Sunwatch mirrors during exploration to prepare those defenses.
 
-Follow the spillway off **Tanners’ Road** to reach Last Lantern. Each journey assembles two different frontier trails with discoveries and an optional 10-point camp. You can return along either branch, and Continue restores your layout and discoveries.
+Follow the spillway off **Tanners’ Road** to reach Last Lantern. Each journey assembles two different frontier trails with discoveries and an optional 10-point camp. Watch for tracks at turnoffs. You can follow the road past a resting pack, approach it, or fire a spark to draw it out. Clearing a pack earns scrap once. Continue restores the creatures you cleared as well as your discoveries.
+
+Hold still to watch fish school beneath the Grove crossing, deer browse in Lanternwood, or otters surface in the Aqueduct. Movement and nearby fighting startle the wildlife. In defense, follow the light flowing out of the terrain into the shrine to see when it is drawing energy.
+
+| Creature | Tell and response |
+| --- | --- |
+| Ford Skimmer | Its cyan joints flare in the shallows. Cover the dry exit where it slows. |
+| Quarry Ram | It stamps and lowers its horns. A slowing field breaks the charge. |
+| Splinterback | Its crystal fan opens over a marked landing zone. Interrupt the wind-up or carry the sun out of the mark. |
+| Bell Warden | The bell opens around its chime and shields an ally. Strike the Warden to break the ward. |
+
+At full restoration, take the ridge beyond Fallen Relay to the beacon. Press **E** to unfold the shrine on its summit, place any carried modules, then press **Space** to challenge the **Vesper Colossus**. Watch its marked charge, strike while it braces, and aim for the open chest. After it falls, approach the cradle and press **E** to release the sunrise. Folding the shrine lets you retreat and attempt the defense again. If the core falls, **Retry from checkpoint** returns to the pre-fight journey.
 
 | Input | Action |
 | --- | --- |
@@ -33,7 +44,7 @@ Follow the spillway off **Tanners’ Road** to reach Last Lantern. Each journey 
 | **Esc**, **Enter** | Pause or resume. Enter activates the focused menu action |
 | **F10** | Toggle HUD visibility |
 
-Use the in-world markers to choose your next camp. Reach 100% restoration, then carry the sun to the hilltop beacon. Repairs use scrap and restore shrine health.
+Repairs spend scrap to restore shrine health. Energy drawn from a camp advances the journey toward sunrise.
 
 See the [polish milestone report](docs/POLISH_VERIFICATION.md), [repeatable QA commands](tools/qa/README.md) and the original [visual fieldbook](OPEN_ME.html).
 
