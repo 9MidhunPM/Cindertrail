@@ -65,6 +65,11 @@ var _grip_target: Node3D
 var _carrier: CharacterBody3D
 var _ground_offset := Vector2.ZERO
 var _slope_tilt := Vector2.ZERO
+var _on_ground := true
+var _air_pose := 0.0
+var _air_rise := 0.0
+var _dash_pose := 0.0
+var _land_pose := 0.0
 var _brake := 0.0
 var _prior_speed := 0.0
 var _turn_plant: Array[Vector3] = [Vector3.INF, Vector3.INF]
@@ -163,6 +168,34 @@ func attacking() -> bool:
 func can_cast_art() -> bool:
 	return _attack < 0 and _charge <= 0.0
 
+func art_buffer_window() -> bool:
+	if _attack < 0 or _charge > 0.0 or not _struck:
+		return false
+	if _attack == ATTACKS.SPIN and _attack_age < ATTACKS.SPIN_END:
+		return false
+	return _attack_age >= ATTACKS.length(_attack) - .20
+
+func movement_pose(delta: float, grounded: bool, vertical: float, dash: bool, landed: bool, impact: float) -> void:
+	_on_ground = grounded
+	_air_pose = move_toward(_air_pose, 0.0 if grounded else 1.0, delta * 11.0)
+	_air_rise = lerpf(_air_rise, clampf(vertical / 5.8, -1.0, 1.0), 1.0 - exp(-14.0 * delta))
+	_dash_pose = move_toward(_dash_pose, float(dash), delta * (16.0 if dash else 9.0))
+	_land_pose = maxf(0.0, _land_pose - delta * 4.8)
+	if landed:
+		_land_pose = clampf(-impact / 6.8, 0.0, 1.0)
+
+func reset_movement_pose() -> void:
+	_on_ground = true
+	_air_pose = 0.0
+	_dash_pose = 0.0
+	_land_pose = 0.0
+	_ground_offset = Vector2.ZERO
+	_turn_plant.assign([Vector3.INF, Vector3.INF])
+	_speed = 0.0
+	_prior_speed = 0.0
+	_stride = 0.0
+	_brake = 0.0
+
 ## World-space base and tip of the blade, used by the swing trail.
 func blade_segment() -> PackedVector3Array:
 	var basis := _weapon.global_basis
@@ -256,8 +289,8 @@ func animate(delta: float, speed: float, tactical: bool) -> void:
 	var cycle_length := lerpf(1.50, 3.10, run)
 	var stance := lerpf(0.795, 0.83, run) / cycle_length
 	var previous_step := floori(_phase * 2.0)
-	_phase += speed * delta / cycle_length
-	if floori(_phase * 2.0) != previous_step and _stride > 0.38:
+	_phase += speed * delta / cycle_length * (1.0 - maxf(_air_pose, _dash_pose))
+	if floori(_phase * 2.0) != previous_step and _stride > 0.38 and _on_ground and _dash_pose < .1:
 		footfall.emit(run > 0.50)
 	_phase = fposmod(_phase, 1.0)
 	var angle := _phase * TAU
@@ -265,11 +298,12 @@ func animate(delta: float, speed: float, tactical: bool) -> void:
 	var rise := (1.0 - cos(2.0 * angle - 0.50)) * 0.5
 	var breath := sin(_time * 1.85)
 	var y := _rest_y - 0.053 - _guard * 0.031 - _crouch - _brake * 0.047
+	y -= .090 * _land_pose + .055 * _dash_pose
 	y += (-0.061 + rise * lerpf(0.036, 0.084, run)) * _stride + breath * 0.004
 	_pelvis.position.y = y - float(pose.get("crouch", 0.0)) * _attack_weight
 
 	_body.rotation = Vector3(
-		-0.025 - _stride * (0.075 + run * 0.13) - _crouch * 1.6 + _brake * 0.15 + _recoil + _flinch * 0.5,
+		-0.025 - _dash_pose * .26 - _land_pose * .18 - _air_pose * .08 - _stride * (0.075 + run * 0.13) - _crouch * 1.6 + _brake * 0.15 + _recoil + _flinch * 0.5,
 		-swing * (0.070 + run * 0.060) - _turn * 0.10 + _flinch,
 		sin(angle) * _stride * 0.035 + _turn * _stride * 0.14 - _flinch * 0.5)
 	_head.rotation = Vector3(
@@ -282,14 +316,14 @@ func animate(delta: float, speed: float, tactical: bool) -> void:
 		var arm_swing := side * swing
 		var reach := _reach[i]
 		_arms[i].rotation = Vector3(
-			0.05 + arm_swing * lerpf(0.43, 0.80, run) + reach,
+			0.05 + arm_swing * lerpf(0.43, 0.80, run) + reach + _air_pose * (.18 + side * .36) - _dash_pose * (0.35 + side * .31),
 			-side * (0.06 + reach * 0.18),
 			side * (0.12 + _stride * 0.045 + reach * 0.10))
 		_elbows[i].rotation = Vector3(0.24 + breath * 0.018 + _guard * 0.12, 0.0, 0.0)
 		_elbows[i].rotation.x += _stride * (0.10 + run * 0.62) + arm_swing * 0.14 - reach * 0.16
 		var trailing := sin(TAU * phase - 0.7)
 		var tail_target := Vector3(
-			-_stride * (0.17 + run * 0.34 + trailing * 0.16) - _crouch * 0.9 + _brake * 0.32,
+			-_stride * (0.17 + run * 0.34 + trailing * 0.16) - _dash_pose * .46 - _air_pose * .25 - _crouch * 0.9 + _brake * 0.32,
 			side * _stride * (0.09 + run * 0.06) - _turn * 0.17,
 			side * (0.03 + _stride * 0.09) - _turn * 0.17 + sin(_time * 2.1 + i) * 0.027)
 		_tails[i].rotation = _tails[i].rotation.lerp(tail_target, 1.0 - exp(-8.0 * delta))
@@ -438,6 +472,11 @@ func _place_foot(i: int, phase: float, run: float, stance: float, cycle_length: 
 	roll *= _stride
 	var side := -1.0 if i == 0 else 1.0
 	lift *= _stride
+	# One knee leads the jump while the other leg extends to meet the landing.
+	forward = lerpf(forward, side * (.13 + _air_rise * .06), _air_pose)
+	lift = lerpf(lift, .12 + maxf(0, side * _air_rise) * .12, _air_pose)
+	forward = lerpf(forward, side * .25, _dash_pose)
+	lift += maxf(0.0, -side) * .10 * _dash_pose
 	# Opposite lead feet sell the crossing cuts. The free leg tucks on the pivot.
 	if _attack == 0 or _attack == 1:
 		var beat := sin(PI * _attack_age / ATTACKS.length(_attack))
@@ -452,7 +491,7 @@ func _place_foot(i: int, phase: float, run: float, stance: float, cycle_length: 
 		lift += _hop * (0.28 if i == 0 else 0.50)
 	var local_step := Vector3(side * 0.124, 0.0, -forward)
 	# Keep the support leg under the same patch of ground through a turn.
-	var planted := _stride > 0.35 and phase < stance and absf(_turn) > 0.14
+	var planted := _on_ground and _dash_pose < .1 and _stride > 0.35 and phase < stance and absf(_turn) > 0.14
 	if planted:
 		if _turn_plant[i] == Vector3.INF:
 			_turn_plant[i] = to_global(local_step)

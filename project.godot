@@ -69,9 +69,14 @@ pack={
 "events": [Object(InputEventKey,"physical_keycode":82)]
 }
 
-start_wave={
+jump={
 "deadzone": 0.2,
 "events": [Object(InputEventKey,"physical_keycode":32)]
+}
+
+start_wave={
+"deadzone": 0.2,
+"events": [Object(InputEventKey,"physical_keycode":84)]
 }
 
 upgrade={
