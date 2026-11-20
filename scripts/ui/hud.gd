@@ -1,9 +1,11 @@
 class_name CinderHUD
 extends CanvasLayer
 
-const CREAM := Color("#f5e7c9")
+signal action_requested(action: StringName)
+
+const CREAM := Color("#f7e9c9")
 const MUTED := Color("#a7bfc2")
-const GOLD := Color("#ffc36c")
+const GOLD := Color("#ffce83")
 const TEAL := Color("#64e2d9")
 const PALE_RED := Color("#f08a79")
 const PANEL := Color(0.022, 0.063, 0.092, 0.9)
@@ -21,6 +23,7 @@ var _restoration_value: Label
 var _scrap: Label
 var _site: Label
 var _energy: Label
+var _reserve: ProgressBar
 var _threat: Label
 var _forecast: Label
 var _tactical: VBoxContainer
@@ -29,6 +32,7 @@ var _module_values: Array[Label] = []
 var _hint: Label
 var _hint_panel: PanelContainer
 var _keys: Label
+var _keys_panel: PanelContainer
 var _pack: ProgressBar
 var _status_panel: PanelContainer
 var _status: Label
@@ -36,12 +40,14 @@ var _overlay: CenterContainer
 var _veil: ColorRect
 var _title: Label
 var _detail: Label
-var _continue: Label
+var _buttons: Dictionary[StringName, Button] = {}
+var _modal := &""
 var _normal_card: StyleBoxFlat
 var _selected_card: StyleBoxFlat
 
 func _ready() -> void:
 	layer = 10
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	_root = Control.new()
 	_root.name = "Interface"
 	_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -62,9 +68,10 @@ func render(state: Dictionary) -> void:
 		return
 	var mode := String(state.get("mode", "Explore"))
 	var paused := bool(state.get("paused", false))
+	var settings_open := bool(state.get("settings_open", false))
 	var ended := mode == "Win" or mode == "Lose"
-	_vitals_panel.visible = not ended
-	_location_panel.visible = not ended
+	_vitals_panel.visible = not ended and not paused
+	_location_panel.visible = not ended and not paused
 	var anchored := mode in ["Prepare", "Defend", "Pack"]
 	var selected := int(state.get("selected", -1))
 	var socket := int(state.get("socket", -1))
@@ -82,7 +89,11 @@ func render(state: Dictionary) -> void:
 		site = "The valley"
 	_site.text = site
 	_energy.visible = anchored
-	_energy.text = "RESERVE   %.1f%%" % maxf(float(state.get("energy", 0.0)), 0.0)
+	var energy := maxf(float(state.get("energy", 0.0)), 0.0)
+	_energy.text = "RESERVE   %.1f%%" % energy
+	_reserve.visible = anchored
+	_reserve.max_value = maxf(float(state.get("site_energy_max", 100.0)), 1.0)
+	_reserve.value = energy
 	var threat := maxi(int(state.get("threat", 0)), 0)
 	_threat.visible = anchored
 	_threat.text = "THREAT  %d  /  %s" % [threat, _threat_label(threat)]
@@ -108,12 +119,20 @@ func render(state: Dictionary) -> void:
 	_hint.text = hint if not hint.is_empty() else _default_hint(mode, selected, socket, restoration)
 	_hint_panel.visible = not ended and not paused and not _hint.text.is_empty()
 	_keys.text = _control_hints(mode, selected)
-	_keys.visible = not ended and not paused and not _keys.text.is_empty()
+	_keys_panel.visible = not ended and not paused and not _keys.text.is_empty()
 	_pack.visible = mode == "Pack" and not paused
 	_pack.value = clampf(float(state.get("pack_progress", 0.0)), 0.0, 1.0) * 100.0
 	_status.text = String(state.get("status", "")).strip_edges()
-	_status_panel.visible = not ended and not paused and not _status.text.is_empty()
-	_show_overlay(mode, paused)
+	var repeats_forecast := _forecast.visible and _status.text.contains(forecast)
+	_status_panel.visible = not ended and not paused and not _status.text.is_empty() and not repeats_forecast
+	_show_overlay(
+		mode, paused, settings_open,
+		bool(state.get("checkpoint_available", false)),
+		String(state.get("checkpoint_hint", ""))
+	)
+
+func modal_open() -> bool:
+	return visible and _modal != &""
 
 func _build_vitals() -> void:
 	_vitals_panel = _panel(Vector2(16, 10))
@@ -127,13 +146,13 @@ func _build_vitals() -> void:
 	glyph.custom_minimum_size = Vector2(23, 24)
 	glyph.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	seal.add_child(glyph)
-	var heading := _label("CINDERTRAIL", &"Title")
+	var heading := _label("Sun shrine", &"Title")
 	heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	seal.add_child(heading)
 	_scrap = _label("0  SCRAP", &"Accent")
 	seal.add_child(_scrap)
 	_health_value = _label("100 / 100", &"Value")
-	_health = _stat(stack, "SHRINE", _health_value, &"Health")
+	_health = _stat(stack, "INTEGRITY", _health_value, &"Health")
 	_restoration_value = _label("0%", &"Value")
 	_restoration = _stat(stack, "RESTORATION", _restoration_value, &"Restoration")
 
@@ -149,13 +168,17 @@ func _build_location() -> void:
 	_energy = _label("", &"Caption")
 	_energy.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	stack.add_child(_energy)
+	_reserve = _meter(&"Restoration")
+	_reserve.custom_minimum_size.y = 4.0
+	_reserve.accessibility_name = "Site energy reserve"
+	stack.add_child(_reserve)
 	_threat = _label("", &"Value")
 	_threat.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	stack.add_child(_threat)
 	_forecast = _label("", &"Body")
 	_forecast.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_forecast.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_forecast.custom_minimum_size.x = 210.0
+	_forecast.custom_minimum_size.x = 240.0
 	stack.add_child(_forecast)
 
 func _build_controls() -> void:
@@ -168,7 +191,7 @@ func _build_controls() -> void:
 	rack.alignment = BoxContainer.ALIGNMENT_CENTER
 	for index in MODULES.size():
 		var card := PanelContainer.new()
-		card.custom_minimum_size = Vector2(129, 63)
+		card.custom_minimum_size = Vector2(158, 68)
 		card.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		card.add_theme_stylebox_override("panel", _normal_card)
 		rack.add_child(card)
@@ -176,7 +199,7 @@ func _build_controls() -> void:
 		var card_row := _horizontal(card, 7)
 		var glyph := HudGlyph.new()
 		glyph.kind = index + 1
-		glyph.custom_minimum_size = Vector2(32, 37)
+		glyph.custom_minimum_size = Vector2(42, 45)
 		glyph.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		card_row.add_child(glyph)
 		var card_text := _vertical(card_row, 0)
@@ -190,9 +213,10 @@ func _build_controls() -> void:
 	_hint = _label("", &"Body")
 	_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_hint_panel.add_child(_hint)
+	_keys_panel = _panel(Vector2(13, 5), footer)
 	_keys = _label("", &"Caption")
 	_keys.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	footer.add_child(_keys)
+	_keys_panel.add_child(_keys)
 	_pack = _meter(&"Health")
 	footer.add_child(_pack)
 
@@ -205,43 +229,104 @@ func _build_status() -> void:
 
 func _build_overlay() -> void:
 	_veil = ColorRect.new()
-	_veil.color = Color(0.012, 0.032, 0.05, 0.58)
+	_veil.color = Color(0.012, 0.032, 0.05, 0.64)
 	_veil.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_root.add_child(_veil)
 	_veil.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_veil.hide()
 	_overlay = CenterContainer.new()
 	_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_root.add_child(_overlay)
 	_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	var panel := _panel(Vector2(32, 21), _overlay)
-	panel.custom_minimum_size.x = 330
-	var stack := _vertical(panel, 7)
+	_overlay.hide()
+	var panel := _panel(Vector2(38, 26), _overlay)
+	panel.add_theme_stylebox_override("panel", _style(Color(0.025, 0.062, 0.083, 0.97), BORDER, Vector2(38, 26), 3))
+	panel.custom_minimum_size.x = 428
+	var stack := _vertical(panel, 14)
+	var ornament := HudGlyph.new()
+	ornament.kind = HudGlyph.Kind.SUN
+	ornament.custom_minimum_size.y = 43.0
+	ornament.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	stack.add_child(ornament)
 	_title = _label("", &"Ending")
 	_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	stack.add_child(_title)
 	_detail = _label("", &"Body")
 	_detail.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_detail.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	stack.add_child(_detail)
-	_continue = _label("", &"Accent")
-	_continue.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	stack.add_child(_continue)
+	var actions := _vertical(stack, 7)
+	_add_action(actions, &"resume", "Resume journey")
+	_add_action(actions, &"settings", "Settings")
+	_add_action(actions, &"checkpoint", "Retry from checkpoint")
+	_add_action(actions, &"restart", "Start a fresh journey")
+	_add_action(actions, &"title", "Return to title")
 
-func _show_overlay(mode: String, paused: bool) -> void:
-	_overlay.visible = paused or mode == "Lose" or mode == "Win"
-	_veil.visible = paused or mode == "Lose"
-	_overlay.offset_top = _root.size.y * 0.52 if mode == "Win" else 0.0
-	if mode == "Win":
-		_title.text = "The last sunrise"
-		_detail.text = "Dawn returns to the valley."
-		_continue.text = "ENTER  ·  NEW JOURNEY"
-	elif mode == "Lose":
-		_title.text = "The light went out"
-		_detail.text = "The shrine has fallen."
-		_continue.text = "ENTER  ·  TRY AGAIN"
-	elif paused:
-		_title.text = "Journey paused"
-		_detail.text = "Carry the Last Sunrise"
-		_continue.text = "ESC  ·  RESUME"
+func _add_action(container: VBoxContainer, action: StringName, text: String) -> void:
+	var button := Button.new()
+	button.name = String(action).capitalize()
+	button.text = text
+	button.custom_minimum_size.y = 44.0
+	button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	button.pressed.connect(func() -> void: action_requested.emit(action))
+	_buttons[action] = button
+	container.add_child(button)
+
+func _show_overlay(
+	mode: String, paused: bool, settings_open: bool, checkpoint_available: bool, checkpoint_hint: String
+) -> void:
+	var next := &""
+	if not settings_open:
+		match mode:
+			"Win":
+				next = &"victory"
+			"Lose":
+				next = &"defeat_checkpoint" if checkpoint_available else &"defeat"
+			_:
+				if paused:
+					next = &"pause"
+	if next == &"pause":
+		_detail.text = checkpoint_hint
+		_detail.visible = not checkpoint_hint.is_empty()
+	if next == _modal:
+		return
+	_modal = next
+	_overlay.visible = _modal != &""
+	_veil.visible = _overlay.visible and _modal != &"victory"
+	_overlay.anchor_top = 0.58 if _modal == &"victory" else 0.0
+	_overlay.offset_top = 0.0
+	var actions: Array[StringName] = []
+	match _modal:
+		&"victory":
+			_title.text = "The last sunrise"
+			_detail.text = "Dawn returns to the valley."
+			actions = [&"title"]
+		&"defeat", &"defeat_checkpoint":
+			_title.text = "The light went out"
+			_detail.text = "The shrine has fallen."
+			actions = [&"restart", &"title"]
+			if checkpoint_available:
+				actions.push_front(&"checkpoint")
+		&"pause":
+			_title.text = "Journey paused"
+			actions = [&"resume", &"settings", &"title"]
+	_detail.visible = not _detail.text.is_empty()
+	for action in _buttons:
+		_buttons[action].visible = actions.has(action)
+	if not actions.is_empty():
+		_focus_actions(actions)
+
+func _focus_actions(actions: Array[StringName]) -> void:
+	for index in actions.size():
+		var button := _buttons[actions[index]]
+		var previous := _buttons[actions[posmod(index - 1, actions.size())]]
+		var next := _buttons[actions[(index + 1) % actions.size()]]
+		button.focus_neighbor_top = button.get_path_to(previous)
+		button.focus_neighbor_bottom = button.get_path_to(next)
+		button.focus_previous = button.get_path_to(previous)
+		button.focus_next = button.get_path_to(next)
+	var first := _buttons[actions[0]]
+	first.grab_focus.call_deferred()
 
 func _default_hint(mode: String, selected: int, socket: int, restoration: float) -> String:
 	match mode:
@@ -254,19 +339,19 @@ func _default_hint(mode: String, selected: int, socket: int, restoration: float)
 				if socket >= 0:
 					return "LMB  Place %s on socket %d" % [MODULES[selected], socket + 1]
 				return "Choose a dry socket for %s." % MODULES[selected].to_lower()
-			return "SPACE  Start the wave" if mode == "Prepare" else "Defend the shrine while it draws energy."
+			return "SPACE  Start the wave" if mode == "Prepare" else ""
 		_:
 			return "Carry the restored sun to the hilltop beacon." if restoration >= 100.0 else ""
 
 func _control_hints(mode: String, selected: int) -> String:
 	match mode:
 		"Prepare", "Defend":
-			var keys := "1–3 Select  ·  U Upgrade  ·  E Repair  ·  RMB Aim shot  ·  Hold R Pack"
+			var keys := "1–3 Select  ·  U Upgrade  ·  E Repair  ·  RMB Fire  ·  Hold R Pack"
 			if selected >= 0:
 				keys += "  ·  Esc Cancel"
 			return keys
 		"Explore", "Transit":
-			return "WASD Move  ·  Mouse Look  ·  Shift Sprint  ·  E Interact  ·  LMB Fire  ·  Esc Pause"
+			return "WASD Move  ·  Ctrl Walk  ·  Shift Sprint  ·  Mouse Look  ·  E Interact  ·  LMB Fire  ·  Esc Pause"
 		_:
 			return ""
 
@@ -354,9 +439,9 @@ func _theme() -> Theme:
 	serif.font_weight = 600
 	theme.default_font = body
 	for entry in [
-		[&"Caption", 12, MUTED], [&"Module", 14, CREAM], [&"Body", 15, CREAM],
-		[&"Value", 13, CREAM], [&"Accent", 13, GOLD], [&"Title", 17, CREAM],
-		[&"Location", 23, CREAM], [&"Ending", 43, CREAM]
+		[&"Caption", 14, MUTED], [&"Module", 17, CREAM], [&"Body", 17, CREAM],
+		[&"Value", 15, CREAM], [&"Accent", 15, GOLD], [&"Title", 22, CREAM],
+		[&"Location", 27, CREAM], [&"Ending", 47, CREAM]
 	]:
 		var variation: StringName = entry[0]
 		theme.set_type_variation(variation, &"Label")
@@ -369,6 +454,19 @@ func _theme() -> Theme:
 		theme.set_type_variation(variation, &"ProgressBar")
 		theme.set_stylebox("background", variation, _style(Color("#1b3037"), Color("#547179"), Vector2.ZERO, 2))
 		theme.set_stylebox("fill", variation, _style(entry[1], Color.TRANSPARENT, Vector2.ZERO, 2))
+	var buttons := &"Button"
+	theme.set_font_size("font_size", buttons, 19)
+	theme.set_color("font_color", buttons, CREAM)
+	theme.set_color("font_focus_color", buttons, CREAM)
+	theme.set_color("font_hover_color", buttons, Color("#0b1928"))
+	theme.set_color("font_pressed_color", buttons, Color("#0b1928"))
+	theme.set_color("font_hover_pressed_color", buttons, Color("#0b1928"))
+	theme.set_stylebox("normal", buttons, _style(Color("#102c38"), BORDER, Vector2(12, 6), 3))
+	theme.set_stylebox("hover", buttons, _style(GOLD, GOLD, Vector2(12, 6), 3))
+	theme.set_stylebox("pressed", buttons, _style(Color("#c59a61"), GOLD, Vector2(12, 6), 3))
+	var focus := _style(Color.TRANSPARENT, GOLD, Vector2.ZERO, 3)
+	focus.set_border_width_all(2)
+	theme.set_stylebox("focus", buttons, focus)
 	return theme
 
 func _style(fill: Color, border: Color, margin: Vector2, radius: int = 5) -> StyleBoxFlat:

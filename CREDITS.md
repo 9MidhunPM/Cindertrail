@@ -6,6 +6,8 @@ The 18 concept images were generated during the Cindertrail design conversation.
 
 ## Authored starter resources
 
+The four opening comic panels were generated with the built-in OpenAI image tool for Cindertrail. The project keeps the cropped panels and art brief in `art/comic/`.
+
 The palette, Godot material/shader resources, procedural Blender builder, exported static starter meshes and documentation were prepared for this project. The models are editable starting points; no existing game's characters or source models are included.
 
 ## Downloaded optional surface maps
