@@ -9,6 +9,7 @@ var tactical := false
 var tactical_position := Vector3.ZERO
 var tactical_look := Vector3.ZERO
 var ending := false
+var _ending_framed := false
 var mouse_sensitivity := 1.0
 var reduced_motion := false
 ## Screen shake from 0 to 1. Offset grows with its square and decays steadily.
@@ -44,6 +45,16 @@ func show_ending(view_position: Vector3, view_target: Vector3) -> void:
 	show_site(view_position, view_target)
 	ending = true
 
+## The finale owns this camera through the final results screen.
+func frame_ending(eye: Vector3, target: Vector3, lens: float) -> void:
+	show_ending(eye, target)
+	_ending_framed = true
+	_blend = 1.0
+	trauma = 0.0
+	_view = Transform3D(Basis.IDENTITY, eye).looking_at(target)
+	camera.global_transform = _view
+	camera.fov = lens
+
 func settled() -> bool:
 	return _blend >= 0.995 if tactical else _blend <= 0.005
 
@@ -61,7 +72,7 @@ func _shake(delta: float) -> void:
 	camera.rotate_object_local(Vector3.FORWARD, sin(_shake_time * 41.0 + 0.7) * power * 0.03)
 
 func _physics_process(delta: float) -> void:
-	if player == null:
+	if player == null or _ending_framed:
 		return
 	_blend = move_toward(_blend, 1.0 if tactical else 0.0, delta / 1.02)
 	var weight := smoothstep(0.0, 1.0, _blend)
