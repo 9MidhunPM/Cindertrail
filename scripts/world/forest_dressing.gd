@@ -91,8 +91,8 @@ func _plant_town_skirt(town: Node3D) -> void:
 		return
 	for part: MeshInstance3D in [wood.mount(border, "TownSkirtBark", _bark, false),
 			canopy.mount(border, "TownSkirtCanopy", _leaf, false)]:
-		part.visibility_range_end = 87.0
-		part.visibility_range_end_margin = 11.0
+		part.visibility_range_end = 69.0
+		part.visibility_range_end_margin = 8.0
 
 func _plant_pocket(path: PackedVector3Array, fraction: float, bank: float, autumn_ratio: float) -> void:
 	if path.size() < 2:
@@ -143,15 +143,17 @@ func _plant_pocket(path: PackedVector3Array, fraction: float, bank: float, autum
 			wood.tapered(deadfall, deadfall + direction * 2.9 + Vector3.UP * .27, .20, .11, 6, Color("#654b3e"))
 	if solid.get_child_count() == 0:
 		solid.queue_free()
-	var floor_mesh := wood.mount(sector, "BarkAndDeadfall", _bark)
-	var leaf_mesh := canopy.mount(sector, "CanopyAndUnderstory", _leaf)
+	# Baked landmark trees already supply shadows. The supplemental foliage adds
+	# nearby silhouettes without sending every moving leaf through the shadow pass.
+	var floor_mesh := wood.mount(sector, "BarkAndDeadfall", _bark, false)
+	var leaf_mesh := canopy.mount(sector, "CanopyAndUnderstory", _leaf, false)
 	if floor_mesh == null and leaf_mesh == null:
 		sector.queue_free()
 		return
 	for view: MeshInstance3D in [floor_mesh, leaf_mesh]:
 		if view:
-			view.visibility_range_end = 107.0
-			view.visibility_range_end_margin = 15.0
+			view.visibility_range_end = 81.0
+			view.visibility_range_end_margin = 10.0
 
 func _tree(wood: MESH, canopy: MESH, at: Vector3, height: float, warm: bool, toward: Vector3) -> void:
 	var radius := height * .051
