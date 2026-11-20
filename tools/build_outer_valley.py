@@ -634,7 +634,7 @@ def water():
         panel(p-X*wide*.5-Z*long*.5,p+X*wide*.5-Z*long*.5,
               p+X*wide*.5+Z*long*.5,p-X*wide*.5+Z*long*.5,pal("#5fc7b6"),"Water",UP)
 
-def gltf():
+def gltf(output_path=None):
     scene={"asset":{"version":"2.0","generator":"Cindertrail authored valley baker"},
            "scene":0,"scenes":[{"nodes":[]}],"nodes":[],"meshes":[],
            "materials":[],"accessors":[],"bufferViews":[],"buffers":[]}
@@ -683,7 +683,7 @@ def gltf():
     js=json.dumps(scene,separators=(",",":")).encode()
     js+=b' '*(-len(js)%4)
     filename = f"outer_land_{layout_id}.glb" if layout_id else "outer_land.glb"
-    out = ROOT / "art/outer_valley" / filename
+    out = output_path if output_path is not None else ROOT / "art/outer_valley" / filename
     # The editor can watch this directory during a bake. Publish only complete GLBs.
     staged = out.with_suffix(".tmp")
     with staged.open("wb") as f:
