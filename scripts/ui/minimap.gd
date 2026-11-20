@@ -21,6 +21,7 @@ var radius_m := 95.0
 var full := false
 var objective := Vector3.INF
 var _roads: Array[PackedVector3Array] = []
+var _towns: Dictionary = {}
 var _lake_center := Vector3.INF
 var _bounds := Rect2()
 var _font: Font
@@ -42,10 +43,14 @@ func _ready() -> void:
 func bind(world: Node) -> void:
 	game = world
 	_roads.clear()
+	_towns.clear()
 	var grove: CinderGrove = world.get("grove_terrain")
 	_lake_center = grove.global_position if grove != null else Vector3.INF
 	var outer = world.get("outer_valley")
 	if outer != null:
+		if outer.abandoned_towns != null:
+			for key: String in CinderOuterValley.TOWN_TITLES:
+				_towns[CinderOuterValley.TOWN_TITLES[key]] = outer.junctions[key]
 		for road: PackedVector3Array in outer.roads:
 			_roads.append(road)
 	var frontier = world.get("frontier")
@@ -123,6 +128,13 @@ func _draw_map() -> void:
 		_canvas.draw_circle(middle, 21.56 * scale_px, Color(WATER, 0.45))
 	for road in _roads:
 		_polyline(road, center, scale_px, yaw, origin, Color(TRAIL, 0.85), maxf(2.6 * scale_px, 1.6), reach)
+	if full:
+		for town: String in _towns:
+			var point := _to_map(_towns[town], center, scale_px, yaw, origin)
+			var ink := Color("#abccbd")
+			_canvas.draw_polyline(PackedVector2Array([point + Vector2(-4, 2), point + Vector2(-4, -3),
+				point + Vector2(0, -6), point + Vector2(4, -3), point + Vector2(4, 2)]), ink, 1.5, true)
+			_canvas.draw_string(_font, point + Vector2(7, -5), town, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, ink)
 	# Caches, discoveries and the beacon.
 	for cache in game.get("_caches"):
 		if is_instance_valid(cache):

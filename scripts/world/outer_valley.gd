@@ -2,6 +2,11 @@ class_name CinderOuterValley
 extends Node3D
 
 const CLEARINGS := preload("res://scripts/world/outer_shrine_clearings.gd")
+const FORK_DATA := preload("res://data/outer_valley/trail_forks.json")
+const ENVIRONMENT := preload("res://scripts/world/exploration_environment.gd")
+const NETWORK := preload("res://scripts/world/trail_network.gd")
+const FORK_HUBS := {"pilgrims_cross": "cross", "orchard_pass": "saddle", "mineral_spring": "spring"}
+const TOWN_TITLES := {"ruins": "Western Arcade", "terrace": "Bellmakers’ Steps", "spring": "Mineral Ward"}
 const LANDMARKS := preload("res://data/outer_valley/landmarks.json")
 const PIGMENT := preload("res://art/outer_valley/valley_pigment.gdshader")
 const POOL := preload("res://art/materials/grove/shallows.gdshader")
@@ -26,6 +31,10 @@ const DESTINATIONS := {
 
 var layout_id := 0
 var clearing_variants: Dictionary = {}
+var journey_layout: CinderJourneyLayout
+var abandoned_towns: Node3D
+var active_forks: Dictionary = {}
+var _network := NETWORK.new()
 var _graph: Dictionary
 var sites: Array[CinderSite] = []
 var roads: Array[PackedVector3Array] = []
@@ -85,8 +94,13 @@ func _ready() -> void:
 		route.append(junctions[trail[3]])
 		roads.append(route)
 		road_names.append(trail[0])
-		_sign(route[0], route[1], DESTINATIONS[trail[3]])
-		_sign(route[-1], route[-2], DESTINATIONS[trail[1]])
+		_sign(route[0], route[1], _destination(trail[3]))
+		_sign(route[-1], route[-2], _destination(trail[1]))
+	_build_trail_network(pigment)
+	if journey_layout != null and journey_layout.version >= 2:
+		abandoned_towns = ENVIRONMENT.new()
+		add_child(abandoned_towns)
+		abandoned_towns.build(junctions, journey_layout.town_variants, roads, road_names, journey_layout.journey_seed)
 	for spec: Dictionary in LANDMARKS.data.sites:
 		_create_camp(spec)
 	for entry: Array in LANDMARKS.data.caches:
@@ -196,58 +210,65 @@ func shortcut_handle(id: String) -> Vector3:
 			return winch.handle
 	return Vector3.INF
 
-## Follow the shortest available set of authored roads between two posted junctions.
+## Follow the shortest open route, including connectors between the selected fork landings.
 func route_between_nodes(start_id: String, end_id: String) -> PackedVector3Array:
-	if not junctions.has(start_id) or not junctions.has(end_id):
-		return PackedVector3Array()
-	var distances := {start_id: 0.0}
-	var pending: Array[String] = [start_id]
-	var reached_from := {}
-	var edges := {}
-	while not pending.is_empty():
-		var here := pending[0]
-		for candidate in pending:
-			if distances[candidate] < distances[here]:
-				here = candidate
-		pending.erase(here)
-		if here == end_id:
-			break
-		for i in roads.size():
-			var record: Array = _graph.trails[i]
-			if here != record[1] and here != record[3]:
-				continue
-			if not _road_is_open(record[0]):
-				continue
-			var reverse: bool = here == record[3]
-			var next: String = record[1] if reverse else record[3]
-			var cost := float(distances[here])
-			var road := roads[i]
-			for j in range(1,road.size()):
-				cost += road[j-1].distance_to(road[j])
-			if cost >= float(distances.get(next, INF)):
-				continue
-			distances[next] = cost
-			reached_from[next] = here
-			edges[next] = -(i + 1) if reverse else i + 1
-			if not pending.has(next):
-				pending.append(next)
-	if not distances.has(end_id):
-		return PackedVector3Array()
-	var chain: Array[int] = []
-	var cursor := end_id
-	while cursor != start_id:
-		chain.push_front(edges[cursor])
-		cursor = reached_from[cursor]
-	var points := PackedVector3Array([junctions[start_id]])
-	for edge in chain:
-		var section := roads[absi(edge) - 1].duplicate()
-		if edge < 0:
-			section.reverse()
-		points.append_array(section.slice(1))
-	return points
+	return _network.between(start_id, end_id, unlocked_shortcut_ids(), junctions)
 
-func _road_is_open(road: String) -> bool:
-	for gate: Dictionary in LANDMARKS.data.gates:
-		if gate.trail == road:
-			return unlocked_shortcut_ids().has(gate.id)
-	return true
+func _destination(key: String) -> String:
+	if journey_layout != null and journey_layout.version >= 2 and TOWN_TITLES.has(key):
+		return TOWN_TITLES[key]
+	return DESTINATIONS[key]
+
+func _build_trail_network(pigment: Material) -> void:
+	var splits := {}
+	if journey_layout != null and journey_layout.version >= 2:
+		var library: Dictionary = FORK_DATA.data[str(layout_id)]
+		for fork: String in CinderJourneyLayout.FORKS:
+			var choice: int = journey_layout.fork_variants[fork]
+			var branch: Dictionary = library[fork][choice]
+			var points := PackedVector3Array()
+			for coord: Array in branch.points:
+				points.append(_point(coord))
+			var mouths := PackedStringArray()
+			var destinations := PackedStringArray()
+			for key: String in ["start", "end"]:
+				var socket: Array = branch[key]
+				var trail_index := road_names.find(socket[0])
+				var trail := roads[trail_index]
+				var knot := posmod(int(socket[1]), trail.size())
+				var id := "%s_approach" % fork if key == "start" else "%s_landing_%d" % [fork, choice]
+				junctions[id] = trail[knot]
+				if not splits.has(socket[0]):
+					splits[socket[0]] = {}
+				splits[socket[0]][knot] = id
+				mouths.append(id)
+				var original: Array = _graph.trails[trail_index]
+				destinations.append(_destination(original[3] if original[1] == FORK_HUBS[fork] else original[1]))
+			_network.add_edge(mouths[0], mouths[1], points)
+			active_forks[fork] = {"name": branch.name, "start": mouths[0], "end": mouths[1], "points": points}
+			roads.append(points)
+			road_names.append(branch.name)
+			var scene: PackedScene = load(branch.scene)
+			var bridge := scene.instantiate() as Node3D
+			bridge.name = String(branch.name).to_pascal_case()
+			for part: MeshInstance3D in bridge.find_children("*", "MeshInstance3D", true, false):
+				part.material_override = pigment
+			add_child(bridge)
+			_sign(points[0], points[1], branch.name + "\n" + destinations[1])
+			_sign(points[-1], points[-2], branch.name + "\n" + destinations[0])
+	for i in _graph.trails.size():
+		var record: Array = _graph.trails[i]
+		var points := roads[i]
+		var knots: Dictionary = splits.get(record[0], {}).duplicate()
+		knots[0] = record[1]
+		knots[points.size() - 1] = record[3]
+		var indexes := knots.keys()
+		indexes.sort()
+		for j in range(1, indexes.size()):
+			var first: int = indexes[j - 1]
+			var last: int = indexes[j]
+			var gate_id := ""
+			for gate: Dictionary in LANDMARKS.data.gates:
+				if record[0] == gate.trail and first <= int(gate.section) and int(gate.section) < last:
+					gate_id = gate.id
+			_network.add_edge(knots[first], knots[last], points.slice(first, last + 1), gate_id)
