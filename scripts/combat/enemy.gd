@@ -7,6 +7,11 @@ signal volley(origin: Vector3, target: Vector3, radius: float, damage: float)
 const TECHNIQUE := preload("res://scripts/combat/enemy_technique.gd")
 var technique: TECHNIQUE
 var warded_by: CinderEnemy
+var _lens_hits := 0
+var _lens_time := 0.0
+var _lens_power := 0.0
+var _reed_time := 0.0
+var _reed_factor := 1.0
 var counts_for_wave := false
 var award_bounty := true
 var is_roamer := false
@@ -157,6 +162,28 @@ func is_disrupted() -> bool:
 func is_warded() -> bool:
 	return is_instance_valid(warded_by) and not warded_by.fading and warded_by.health > 0.0
 
+func set_lensmark(seconds: float, hits: int, power: float) -> void:
+	_lens_time = seconds
+	_lens_hits = hits
+	_lens_power = power
+
+func lensmarked() -> bool:
+	return _lens_time > 0.0 and _lens_hits > 0 and not fading
+
+func consume_mark_bonus(source: StringName) -> float:
+	if source not in [&"spark", &"melee"] or not lensmarked():
+		return 0.0
+	_lens_hits -= 1
+	return _lens_power
+
+func reed_snare(factor: float, seconds: float) -> void:
+	_reed_time = seconds
+	_reed_factor = factor
+
+func _physics_process(delta: float) -> void:
+	_lens_time = maxf(0.0, _lens_time - delta)
+	_reed_time = maxf(0.0, _reed_time - delta)
+
 func direct_hit() -> void:
 	if technique and stats.species in [TECHNIQUE.SPLINTER, TECHNIQUE.WARDEN]:
 		technique.cancel()
@@ -172,6 +199,8 @@ func follow_trail(point: Vector3) -> void:
 		route.append(point)
 
 func advance(core: SunCore, delta: float, field_factor: float) -> bool:
+	if _reed_time > 0.0:
+		field_factor = minf(field_factor, _reed_factor)
 	var target := core.global_position
 	while step < route.size() and flat_distance(global_position, route[step]) < 0.6:
 		step += 1

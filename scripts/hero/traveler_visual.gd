@@ -10,6 +10,9 @@ const SHIN_LENGTH := 0.355
 const GESTURE_LENGTH := {
 	&"deploy": 1.05, &"pack": 1.05, &"fire": 0.30,
 	&"hurt": 0.47, &"collect": 0.64, &"deliver": 1.65, &"sheathe": 0.55,
+	&"flooded_grove": .48, &"broken_quarry": .55, &"fallen_relay": .32,
+	&"lanternwood": .7, &"sunken_aqueduct": .38, &"sunwatch": .51,
+	&"last_lantern_frontier": .47,
 }
 const ATTACKS := preload("res://scripts/hero/traveler_attacks.gd")
 const SHEATHE_DELAY := 3.2
@@ -166,6 +169,7 @@ func gesture(action: StringName, target: Node3D = null) -> void:
 	if GESTURE_LENGTH.has(action):
 		_grip_target = target.get_node_or_null("Visual/SunCenter") as Node3D if is_instance_valid(target) else null
 		_action = action
+		_idle_armed = 0.0
 		_age = 0.0
 		_duration = GESTURE_LENGTH[action]
 
@@ -199,6 +203,27 @@ func _update_gesture(delta: float) -> void:
 		&"deliver":
 			reach = Vector2(1.22, 1.31)
 			dip = 0.065
+		&"flooded_grove":
+			reach = Vector2(.82,.45)
+			dip = .17
+		&"broken_quarry":
+			reach = Vector2(-.32,1.18)
+			dip = .22
+			recoil = .16
+		&"fallen_relay":
+			reach = Vector2(1.52,-.19)
+			recoil = .14
+		&"lanternwood":
+			reach = Vector2(1.18,1.08)
+			dip = .07
+		&"sunken_aqueduct":
+			reach = Vector2(.38,-.49)
+			dip = .15
+		&"sunwatch":
+			reach = Vector2(1.58,.48)
+		&"last_lantern_frontier":
+			reach = Vector2(-.26,1.36)
+			recoil = .09
 		&"sheathe":
 			reach = Vector2(0.0, -0.55)
 			if _age >= _duration * 0.45 and drawn:

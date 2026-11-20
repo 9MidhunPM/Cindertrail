@@ -22,6 +22,8 @@ var _openness := 0.0
 var _ring_gimbals: Array[Node3D] = []
 var _solar_time := 0.0
 var _light_pulse := 0.0
+var ward_strength := 0.0
+var _ward_time := 0.0
 var _draw := preload("res://scripts/fx/site_draw.gd").new()
 var _draw_spin := 0.0
 var _fittings: Node3D
@@ -44,6 +46,16 @@ func receive_site_energy(site: CinderSite, amount: float, reduced_motion: bool) 
 	if form == Form.DEPLOYED and health > 0.0:
 		_draw.receive(site, _focal.global_position, amount, reduced_motion)
 
+func protect(amount: float, seconds: float) -> void:
+	ward_strength = amount
+	_ward_time = seconds
+
+func _physics_process(delta: float) -> void:
+	if _ward_time > 0.0:
+		_ward_time = maxf(0.0, _ward_time - delta)
+		if _ward_time <= 0.0:
+			ward_strength = 0.0
+
 func _process(delta: float) -> void:
 	var receiving := _draw.visible
 	var spin_target := 1.0 if receiving and not _draw.quiet else 0.0
@@ -64,6 +76,10 @@ func damage(amount: float) -> void:
 	if health <= 0.0 or amount <= 0.0:
 		return
 	_light_pulse = 1.0
+	if ward_strength > 0.0:
+		var absorbed := minf(amount, ward_strength)
+		ward_strength -= absorbed
+		amount -= absorbed
 	health = maxf(0.0, health - amount)
 	if health <= 0.0:
 		_draw.clear()
