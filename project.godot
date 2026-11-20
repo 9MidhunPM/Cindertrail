@@ -109,6 +109,16 @@ melee={
 "events": [Object(InputEventKey,"physical_keycode":70)]
 }
 
+cast_ability={
+"deadzone": 0.2,
+"events": [Object(InputEventKey,"physical_keycode":71)]
+}
+
+cycle_ability={
+"deadzone": 0.2,
+"events": [Object(InputEventKey,"physical_keycode":81)]
+}
+
 map={
 "deadzone": 0.2,
 "events": [Object(InputEventKey,"physical_keycode":77)]

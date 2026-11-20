@@ -484,6 +484,7 @@ func _show_controls() -> void:
 		["E", "Unfold shrine, repair, open cache, deliver"],
 		["1   2   3   ·   Left click", "Select module  /  place on socket"],
 		["Space   ·   U", "Start wave  /  upgrade pointed tower"],
+		["G   ·   Q", "Cast  /  cycle shrine abilities"],
 		["Hold R", "Recall towers and pack the shrine"],
 		["Esc   ·   F10", "Pause  /  toggle HUD"]]:
 		var row := _row(_items)

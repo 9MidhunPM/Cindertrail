@@ -68,7 +68,8 @@ func _run() -> void:
 	var anchors := {}
 	for site: CinderSite in game.sites:
 		anchors[site.checkpoint_id] = site.anchor.global_position
-	_check(saved.get("world_layout_version") == 1 and saved.get("world_layout_id") == game.layout.layout_id,
+	_check(saved.get("world_layout_version") == CinderJourneyLayout.VERSION
+		and game.layout.matches_selection(saved),
 		"New Journey saves its generated valley layout")
 	_check(saved.get("claimed", PackedStringArray()).size() == 1 and saved.get("health") == 64.0, "Checkpoint records supply pickup and core damage")
 	game.player.position = game.grove.anchor.global_position + Vector3(0, 0.12, 2)
@@ -84,6 +85,7 @@ func _run() -> void:
 	await scene_changed
 	game = current_scene
 	await _frames(15)
+	_check(game.layout.matches_selection(saved), "Retry restores the same trail forks and town blocks")
 	for site: CinderSite in game.sites:
 		_check(anchors[site.checkpoint_id] == site.anchor.global_position, "Checkpoint returns to the same " + site.label + " shrine")
 	_check(game.core.health == 64.0 and game.core.restoration == 3.5, "Retry restores health and extraction")
@@ -96,7 +98,7 @@ func _run() -> void:
 	await _press("ContinueJourney")
 	_check(game.core.restoration == 3.5 and game.hud.visible, "Continue resumes from the same checkpoint")
 	await _check_frontier()
-	var old_layout: int = game.layout.layout_id
+	var old_layout: Dictionary = game.layout.checkpoint_fields()
 	game._hud_action(&"title")
 	await scene_changed
 	game = current_scene
@@ -104,10 +106,7 @@ func _run() -> void:
 	await _press("StartNew")
 	await _press("SkipIntro")
 	await _frames(10)
-	_check(game.layout.layout_id != old_layout, "New Journey chooses a different valley")
-	for site: CinderSite in game.sites:
-		_check(anchors[site.checkpoint_id].distance_to(site.anchor.global_position) > 1,
-			"New Journey relocates " + site.label)
+	_check(not game.layout.matches_selection(old_layout), "New Journey chooses a different route, town and clearing combination")
 	quit(1 if failures else 0)
 
 func _check_frontier() -> void:

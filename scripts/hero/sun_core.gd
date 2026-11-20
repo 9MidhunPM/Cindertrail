@@ -90,6 +90,9 @@ func repair(amount: float) -> void:
 		_light_pulse = 0.65
 		health = minf(100.0, health + amount)
 
+func flare() -> void:
+	_light_pulse = 1.0
+
 func transfer(anchor: Node3D, new_form: int, duration: float = 0.0) -> void:
 	if not is_instance_valid(anchor) or new_form < Form.CARRIED or new_form > Form.DELIVERED:
 		return
