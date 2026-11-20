@@ -524,18 +524,16 @@ func start_wave() -> bool:
 	return true
 
 func _extract(delta: float) -> void:
-	var draw := minf(minf(active_site.remaining_energy, active_site.spec.rate * delta), 100.0 - core.restoration)
+	var capacity := minf(active_site.remaining_energy, 100.0 - core.restoration)
+	var draw := minf(capacity, active_site.spec.rate * delta)
+	if capacity - draw <= 0.00001:
+		draw = capacity
 	active_site.remaining_energy -= draw
-	if active_site.remaining_energy <= 0.001:
-		draw += active_site.remaining_energy
-		active_site.remaining_energy = 0.0
 	core.restoration += draw
 	core.receive_site_energy(active_site, draw, director.reduced_motion)
 	if draw > 0.0:
 		soundscape.hear_extraction()
-	if core.restoration >= 99.999:
-		core.restoration = 100.0
-	if core.restoration >= 99.999 or active_site.remaining_energy <= 0.001:
+	if core.restoration >= 100.0 or active_site.remaining_energy <= 0.0:
 		battle.hold()
 		mode = Mode.PREPARE if mode != Mode.PACK else Mode.PACK
 		_pack_source = Mode.PREPARE

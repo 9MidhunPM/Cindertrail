@@ -36,6 +36,22 @@ func _run() -> void:
 		_check(not streams.visible, id + " clears immediately during recall")
 		_check(core.get_node("Visual/SunCenter").get_child(-1).get_instance_id() == sun_id, id + " same sun")
 		site.queue_free()
+	set_meta(&"direct_journey", true)
+	var game = preload("res://scenes/main.tscn").instantiate()
+	root.add_child(game)
+	game.active_site = game.grove
+	game.core.transfer(game.grove.anchor, SunCore.Form.DEPLOYED)
+	game.core.restoration = 99.9998
+	game.grove.remaining_energy = 0.0007
+	game._extract(1.0)
+	_check(is_equal_approx(game.core.restoration, 100.0) and absf(game.grove.remaining_energy - .0005) < .000001,
+		"the last pulse only removes energy the core can receive")
+	game.core.restoration = 80.0
+	game.grove.remaining_energy = .003
+	game._extract(.2)
+	_check(is_zero_approx(game.grove.remaining_energy) and absf(game.core.restoration - 80.003) < .000001,
+		"emptying a small reserve credits the precise final pulse")
+	game.queue_free()
 	if not failures.is_empty():
 		for failure in failures:
 			push_error(failure)
