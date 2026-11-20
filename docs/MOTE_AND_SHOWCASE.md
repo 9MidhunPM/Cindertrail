@@ -21,3 +21,11 @@ The game sends a compact gameplay snapshot to the Responses API. It uses GPT-6 L
 The default loops in one window. Press **Esc** to exit. Pass `--once` for a single complete journey or `--silent-voice` for captioned narration. The showcase stays offline and uses temporary saves.
 
 It plays the illustrated prologue, walks the valley, defends four shrines, challenges Vesper, and delivers the existing core to the beacon for the full sunrise ending. [Showcase options and verification](../tools/qa/SHOWCASE.md)
+
+## Runtime checks
+
+- Native Godot 4.7.2 on Wayland and Mobile Vulkan displayed a live Luna response about the actual compass destination. The physical **H** event also produced a separate live response. The exported resource pack contains the guide and excludes `.env`. Mote's optional system speech depends on the installed voice service.
+- The two-lap headless showcase finished both runs with 65 shrine-art casts per lap. Each lap kept its core through delivery and the full finale, and the second began with a fresh core. The rendered prologue and chapter transitions were also captured in a native window. The bundled narrator clips produced audio in Godot's mixer with the Dummy driver.
+- Headless tests verified each of the seven sunlight draws and independently recovering arts, shrine landmarks, pause and resume advice, and traversal of the extended wave entrances. The farthest validated entrance extension was 3.6 m.
+- At 1920×1080, a 32-frame Grove defense sample with four enemies and the HUD averaged 43.9 ms per frame, with a 65.8 ms p95, on Intel ARL integrated graphics. The headless showcase was also running on the machine. The native QA process reported retained objects and resources on exit.
+- Exploration keeps the causeway, arch silhouettes and blue-green canopy in view. Compared with the corrected Grove stills, the defensive clearing reads darker, with less turquoise water and less visible cream masonry. The long gold draw stays legible above the lanes in that view.
