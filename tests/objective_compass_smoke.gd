@@ -29,6 +29,8 @@ func _run() -> void:
 			quit(2)
 			return
 		root.add_child(_world)
+		_check(_world.layout.version == version and _world.layout.journey_seed == seed,
+			"%d assembled the requested journey version" % seed)
 		_guide = GUIDE.new()
 		_world.add_child(_guide)
 		_guide.bind(_world)

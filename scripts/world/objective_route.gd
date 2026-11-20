@@ -31,7 +31,8 @@ func direction_to(origin: Vector3, goal: Vector3) -> Dictionary:
 		return NO_ROUTE
 	if _gate_signature != _valley.compass_crossings() or _bell_open != _world.bell_road.walkable:
 		_rebuild()
-	if _last_goal == goal and _last_origin.distance_squared_to(origin) < OPEN_DISTANCE * OPEN_DISTANCE:
+	if _last_reading.point.is_finite() and _last_goal == goal \
+			and _last_origin.distance_squared_to(origin) < OPEN_DISTANCE * OPEN_DISTANCE:
 		return _last_reading
 	var route := _walk_route(origin, goal)
 	_last_origin = origin
@@ -68,12 +69,17 @@ func _rebuild() -> void:
 		_link_to_paths(side_street[0], outside, 1.4)
 		_link_to_paths(side_street[-1], outside, 1.4)
 	for site: CinderSite in _world.sites:
-		if OUTER_CAMPS.has(site.checkpoint_id):
+		var approach: Variant = site.get(&"approach")
+		if approach is PackedVector3Array and not approach.is_empty():
+			_add_path(approach)
+			_link(approach[-1], site.anchor.global_position)
+		elif OUTER_CAMPS.has(site.checkpoint_id):
 			_link(_valley.junctions[OUTER_CAMPS[site.checkpoint_id]], site.anchor.global_position)
 	_add_districts()
 	for path: PackedVector3Array in _world.frontier.paths:
 		_add_path(path)
-	_link(_world.frontier.paths[1][-1], _world.frontier.site.anchor.global_position)
+	if _world.frontier.site != null:
+		_link(_world.frontier.paths[1][-1], _world.frontier.site.anchor.global_position)
 
 func _add_districts() -> void:
 	var grove: CinderGrove = _world.grove_terrain
