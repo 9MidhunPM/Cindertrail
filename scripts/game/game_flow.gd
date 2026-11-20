@@ -11,6 +11,7 @@ const QUARRY_REGION := preload("res://scripts/world/quarry.gd")
 const RELAY_REGION := preload("res://scripts/world/relay.gd")
 const OUTER_VALLEY := preload("res://scenes/world/outer_valley.tscn")
 const FRONTIER := preload("res://scripts/world/frontier.gd")
+const TRAIL_PACKS := preload("res://scripts/world/trail_encounters.gd")
 const CACHE_MODEL := preload("res://art/models/supply_crate.glb")
 const PACK_SECONDS := 1.7
 const OPENING := Vector3(-3.0, 0.76, 15.0)
@@ -33,6 +34,7 @@ var grove: CinderSite
 var grove_terrain: CinderGrove
 var outer_valley: CinderOuterValley
 var frontier: CinderFrontier
+var trail_packs: TRAIL_PACKS
 var landmarks: CinderCampLandmarks
 var sites: Array[CinderSite] = []
 var active_site: CinderSite
@@ -240,6 +242,9 @@ func _open_frontier(journey_seed: int) -> void:
 	_add_runtime(frontier)
 	sites.append(frontier.site)
 	outer_valley.seed_life(journey_seed)
+	trail_packs = TRAIL_PACKS.new()
+	_add_runtime(trail_packs)
+	trail_packs.configure(journey_seed, outer_valley, frontier, battle)
 
 func _reveal_mirror_cache(point: Vector3) -> void:
 	if not _claimed_caches.has(MIRROR_CACHE_ID):
@@ -257,6 +262,8 @@ func _physics_process(delta: float) -> void:
 	if mode == Mode.WIN or mode == Mode.LOSE:
 		_update_hud_clock(delta)
 		return
+	if trail_packs != null:
+		trail_packs.observe(delta, player.global_position, mode == Mode.EXPLORE or mode == Mode.TRANSIT)
 	_notice_time = maxf(0.0, _notice_time - delta)
 	if mode == Mode.DEPLOY and director.settled():
 		mode = Mode.PREPARE
@@ -352,6 +359,8 @@ func _handle_click(event: InputEventMouseButton) -> void:
 				direction = origin.direction_to(pointed + Vector3.UP * 0.41)
 		else:
 			direction.y = clampf(direction.y, -0.12, 0.18)
+		if not tactical and trail_packs != null and battle.weapon_timer <= 0.0:
+			trail_packs.provoke_by_aim(origin, direction.normalized())
 		if battle.attack(origin, direction.normalized()):
 			player.visual.gesture(&"fire")
 
@@ -472,6 +481,9 @@ func _extract(delta: float) -> void:
 		draw += active_site.remaining_energy
 		active_site.remaining_energy = 0.0
 	core.restoration += draw
+	core.receive_site_energy(active_site, draw, director.reduced_motion)
+	if draw > 0.0:
+		soundscape.hear_extraction()
 	if core.restoration >= 99.999:
 		core.restoration = 100.0
 	if core.restoration >= 99.999 or active_site.remaining_energy <= 0.001:
@@ -611,6 +623,7 @@ func _save_checkpoint() -> void:
 		"journey_seed": frontier.journey_seed, "frontier_version": CinderFrontier.LAYOUT_VERSION,
 		"frontier_discoveries": frontier.claimed_discoveries(),
 		"frontier_revealed": frontier.revealed_discoveries(),
+		"trail_packs": trail_packs.progress(),
 	}
 	if state != _checkpoint and JourneyCheckpoint.write(state):
 		_checkpoint = state
@@ -643,6 +656,7 @@ func _restore_checkpoint() -> void:
 		player.global_position = CinderFrontier.ENTRANCE + Vector3.UP * 0.10
 		player.recovery_point = player.global_position
 		player.reset_physics_interpolation()
+	trail_packs.restore_progress(_checkpoint.get("trail_packs", {}))
 	landmarks.restore_progress(_checkpoint.get("landmarks", {}))
 	for index in range(_caches.size() - 1, -1, -1):
 		if _claimed_caches.has(_caches[index].get_meta(&"checkpoint_id")):
