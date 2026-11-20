@@ -107,7 +107,7 @@ func recall() -> void:
 	for module in inventory:
 		module.socket = -1
 	for child in get_children():
-		if child is CinderShotEffect:
+		if child is CinderShotEffect and (halted or not child.is_in_group(&"hostile_volleys")):
 			child.queue_free()
 	site = null
 	held = false
@@ -467,6 +467,7 @@ func _hit(enemy: CinderEnemy, amount: float, source := &"tower") -> void:
 func _enemy_volley(origin: Vector3, target: Vector3, radius: float, damage: float) -> void:
 	var tint := Color("#d17fba")
 	var shot := _visual_shot(origin, target + Vector3.UP * 0.15, true, tint)
+	shot.add_to_group(&"hostile_volleys")
 	shot.set_blast_radius(radius)
 	shot.ring_ink.set_shader_parameter("amber", tint)
 	shot.ring_ink.set_shader_parameter("hot", Color("#ffe1e8"))
