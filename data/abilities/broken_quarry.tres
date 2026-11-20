@@ -1,15 +1,17 @@
-[gd_resource type="Resource" load_steps=2 format=3]
+[gd_resource type="Resource" load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://scripts/game/traveler_art_spec.gd" id="1"]
+[ext_resource type="Texture2D" path="res://art/ui/arts/broken_quarry.svg" id="2"]
 
 [resource]
 script = ExtResource("1")
+icon = ExtResource("2")
 site = &"broken_quarry"
 title = "Faultline"
-description = "Break the ground in a cone and knock nearby enemies back."
-cooldown = 12
-reach = 6
+description = "Fracture a wide cone of ground, dealing 24 damage and driving enemies back."
+cooldown = 7
+reach = 7
 radius = 0
-duration = 0.48
-power = 14
+duration = 0.5
+power = 24
 tint = Color(0.96, 0.61, 0.24, 1)

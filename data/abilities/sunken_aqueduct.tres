@@ -1,15 +1,17 @@
-[gd_resource type="Resource" load_steps=2 format=3]
+[gd_resource type="Resource" load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://scripts/game/traveler_art_spec.gd" id="1"]
+[ext_resource type="Texture2D" path="res://art/ui/arts/sunken_aqueduct.svg" id="2"]
 
 [resource]
 script = ExtResource("1")
+icon = ExtResource("2")
 site = &"sunken_aqueduct"
 title = "Sluice Step"
-description = "Surge three meters and push enemies aside."
-cooldown = 8
-reach = 3
+description = "Surge four meters across solid ground, staggering foes in your path."
+cooldown = 4
+reach = 4
 radius = 0.92
-duration = 0.22
+duration = 0.26
 power = 0
 tint = Color(0.24, 0.72, 0.94, 1)

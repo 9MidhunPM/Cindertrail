@@ -1,15 +1,17 @@
-[gd_resource type="Resource" load_steps=2 format=3]
+[gd_resource type="Resource" load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://scripts/game/traveler_art_spec.gd" id="1"]
+[ext_resource type="Texture2D" path="res://art/ui/arts/lanternwood.svg" id="2"]
 
 [resource]
 script = ExtResource("1")
+icon = ExtResource("2")
 site = &"lanternwood"
 title = "Mothward"
-description = "Wrap the sun in a ward that absorbs eight damage."
-cooldown = 18
+description = "Moths shelter the core for six seconds, absorbing up to 16 damage."
+cooldown = 12
 reach = 0
 radius = 0
-duration = 4
-power = 8
+duration = 6
+power = 16
 tint = Color(0.99, 0.77, 0.38, 1)

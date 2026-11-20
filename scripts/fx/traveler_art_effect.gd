@@ -74,7 +74,7 @@ func _shape() -> void:
 				_bar(tip.lerp(stem, .55), stem * 1.035 + Vector3.UP * .22, .018)
 		&"broken_quarry":
 			for branch in 5:
-				var a := -.49 + .245 * branch
+				var a := deg_to_rad(-40.0 + 20.0 * branch)
 				var axis := Vector3(sin(a),0,cos(a))
 				var p := Vector3.ZERO
 				for i in range(1, 5):

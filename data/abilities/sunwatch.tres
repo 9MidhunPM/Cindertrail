@@ -1,15 +1,18 @@
-[gd_resource type="Resource" load_steps=2 format=3]
+[gd_resource type="Resource" load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://scripts/game/traveler_art_spec.gd" id="1"]
+[ext_resource type="Texture2D" path="res://art/ui/arts/sunwatch_observatory.svg" id="2"]
 
 [resource]
 script = ExtResource("1")
+icon = ExtResource("2")
 site = &"sunwatch_observatory"
 title = "Lensmark"
-description = "Mark one foe. Your next three blade or spark hits gain four damage."
-cooldown = 14
-reach = 16
+description = "Mark a foe for seven seconds. The next four blade or sun-spark hits gain six damage each."
+cooldown = 8
+reach = 18
 radius = 0
-duration = 5
-power = 4
+duration = 7
+power = 6
+charges = 4
 tint = Color(1, 0.72, 0.24, 1)

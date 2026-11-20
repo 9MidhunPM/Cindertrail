@@ -1,19 +1,26 @@
 extends Node3D
-## The traveler keeps every recovered art. All seven draw on one shared recovery time.
+## Each recovered art has its own cooldown. A brief recovery separates consecutive casts.
+signal achievement_unlocked(title: String)
+const PROFILE := preload("res://scripts/game/art_achievements.gd")
+const CAST_RECOVERY := 0.28
+const SWORD_BUFFER := 0.20
 const SPEC := preload("res://scripts/game/traveler_art_spec.gd")
 const FX := preload("res://scripts/fx/traveler_art_effect.gd")
 const REEDS := preload("res://data/abilities/flooded_grove.tres")
 const SLUICE := preload("res://data/abilities/sunken_aqueduct.tres")
 const WICK := preload("res://data/abilities/last_lantern_frontier.tres")
-const ARTS: Array[SPEC] = [
-	REEDS, preload("res://data/abilities/broken_quarry.tres"),
-	preload("res://data/abilities/fallen_relay.tres"), preload("res://data/abilities/lanternwood.tres"),
-	SLUICE, preload("res://data/abilities/sunwatch.tres"), WICK,
-]
+const ARTS := PROFILE.ARTS
+var profile := PROFILE.new()
+var profile_enabled := true
 var reduced_motion := false
 var _owned: Array[StringName] = []
 var _selected: SPEC
-var _cooldown := 0.0
+var _cooldowns := {}
+var _cast_lock := 0.0
+var _queued_site: StringName
+var _queued_aim: Vector3
+var _queued_ground: Vector3
+var _buffer_left := 0.0
 var _available := false
 var _player: CinderPlayer
 var _battle: CinderBattle
@@ -22,7 +29,6 @@ var _snare_point := Vector3.ZERO
 var _snare_time := 0.0
 var _snare_sample := 0.0
 var _dash_dir := Vector3.ZERO
-var _dash_time := 0.0
 var _dash_hit := {}
 var _wick_pos := Vector3.ZERO
 var _wick_origin := Vector3.ZERO
@@ -33,7 +39,10 @@ var _wick_mesh: MeshInstance3D
 var _wick_hit := {}
 
 func configure(traveler: CinderPlayer, battle: CinderBattle, core: SunCore) -> void:
+	if is_instance_valid(_player) and _player.dash_segment.is_connected(_on_dash_segment):
+		_player.dash_segment.disconnect(_on_dash_segment)
 	_player = traveler
+	_player.dash_segment.connect(_on_dash_segment)
 	_battle = battle
 	_core = core
 	_available = true
@@ -41,7 +50,7 @@ func configure(traveler: CinderPlayer, battle: CinderBattle, core: SunCore) -> v
 func set_available(value: bool) -> void:
 	_available = value
 	if not value:
-		_dash_time = 0.0
+		cancel_buffer()
 
 func _definition(site: StringName) -> SPEC:
 	for spec in ARTS:
@@ -57,20 +66,40 @@ func selected_id() -> StringName:
 	return _selected.site if _selected else &""
 
 func remaining_seconds() -> float:
-	return _cooldown
+	return float(_cooldowns.get(selected_id(), 0.0))
+
+func cast_lock() -> float:
+	return _cast_lock
+
+func cooldowns() -> Dictionary:
+	return _cooldowns.duplicate()
+
+func achievements() -> Array[Dictionary]:
+	return profile.rows()
+
+func cancel_buffer() -> void:
+	_queued_site = &""
+	_buffer_left = 0.0
 
 func unlock(site: StringName) -> bool:
 	var spec := _definition(site)
 	if not spec or _owned.has(site):
 		return false
-	_owned.append(site)
-	if _selected == null:
-		_selected = spec
+	_learn(spec)
+	if profile_enabled and profile.record([spec]):
+		achievement_unlocked.emit(spec.title)
 	return true
 
-func restore(earned, equipped: StringName, remaining: float) -> void:
+func _learn(spec: SPEC) -> void:
+	_owned.append(spec.site)
+	_cooldowns[spec.site] = 0.0
+	if _selected == null:
+		_selected = spec
+
+func restore(earned, equipped: StringName, remaining: Variant = {}, lock_seconds := 0.0) -> void:
 	# Checkpoints carry mastery and recovery; in-flight attacks and protective wards end.
-	_dash_time = 0.0
+	cancel_buffer()
+	_dash_hit.clear()
 	_snare_time = 0.0
 	_wick_mesh = null
 	for effect in get_children():
@@ -82,32 +111,71 @@ func restore(earned, equipped: StringName, remaining: float) -> void:
 			enemy.set_lensmark(0.0,0,0.0)
 			enemy.reed_snare(1.0,0.0)
 	_owned.clear()
+	_cooldowns.clear()
 	_selected = null
+	var learned: Array[SPEC] = []
 	for id in earned:
-		unlock(StringName(id))
+		var spec := _definition(StringName(id))
+		if spec and not _owned.has(spec.site):
+			_learn(spec)
+			learned.append(spec)
+			# Old saves had one recovery for every learned art, regardless of equipped art.
+			var seconds: Variant = remaining.get(String(spec.site), 0.0) if remaining is Dictionary else remaining
+			_cooldowns[spec.site] = _safe_timer(seconds, spec.cooldown)
+	if profile_enabled and not learned.is_empty():
+		profile.record(learned)
 	if _owned.has(equipped):
 		_selected = _definition(equipped)
-	_cooldown = clampf(remaining, 0.0, 18.0) if _selected else 0.0
+	_cast_lock = _safe_timer(lock_seconds, CAST_RECOVERY) if _selected else 0.0
+
+func _safe_timer(value: Variant, maximum: float) -> float:
+	if (value is int or value is float) and is_finite(float(value)):
+		return clampf(float(value), 0.0, maximum)
+	return 0.0
 
 func cycle() -> bool:
 	if not _can_use() or _owned.size() < 2:
 		return false
-	var index := (_owned.find(_selected.site) + 1) % _owned.size()
-	_selected = _definition(_owned[index])
-	return true
+	cancel_buffer()
+	var index := ARTS.find(_selected)
+	for offset in range(1, ARTS.size()):
+		var next := ARTS[(index + offset) % ARTS.size()]
+		if _owned.has(next.site):
+			_selected = next
+			return true
+	return false
 
 func hud_state() -> Dictionary:
-	if not _selected:
-		return {}
-	return {"ability_name": _selected.title, "ability_id": _selected.site,
-		"ability_cooldown": _cooldown, "ability_description": _selected.description, "ability_count": _owned.size()}
+	var slots: Array[Dictionary] = []
+	for spec in ARTS:
+		var selected := _selected == spec
+		slots.append({"id": spec.site, "name": spec.title, "key": "G" if selected else "",
+			"selected": selected, "owned": _owned.has(spec.site), "description": spec.description,
+			"cooldown": float(_cooldowns.get(spec.site, 0.0)), "cooldown_max": spec.cooldown, "icon": spec.icon})
+	var state := {"ability_slots": slots, "ability_cast_lock": _cast_lock}
+	if _selected:
+		state.merge({"ability_name": _selected.title, "ability_id": _selected.site,
+			"ability_cooldown": remaining_seconds(), "ability_description": _selected.description, "ability_count": _owned.size()})
+	return state
 
 func _can_use() -> bool:
 	return _available and _selected != null and is_instance_valid(_player) and _player.move_enabled and is_instance_valid(_battle) and not _battle.halted and is_instance_valid(_core) and _core.health > 0.0 and not get_tree().paused
 
 func cast(aim_direction: Vector3, ground := Vector3.INF) -> bool:
-	if not _can_use() or _cooldown > 0.0 or not _player.visual.can_cast_art():
+	if not _can_use() or remaining_seconds() > 0.0 or _player.is_dashing() or _player.is_staggered():
 		return false
+	if _player.visual.can_cast_art() and _cast_lock <= 0.0:
+		cancel_buffer()
+		return _cast_now(aim_direction, ground)
+	if _player.visual.art_buffer_window() and _queued_site == &"":
+		_queued_site = selected_id()
+		_queued_aim = aim_direction
+		_queued_ground = ground
+		_buffer_left = SWORD_BUFFER
+		return true
+	return false
+
+func _cast_now(aim_direction: Vector3, ground: Vector3) -> bool:
 	var aim := aim_direction.slide(Vector3.UP).normalized()
 	if aim.length_squared() < .001:
 		aim = -_player.visual.global_basis.z.slide(Vector3.UP).normalized()
@@ -121,7 +189,8 @@ func cast(aim_direction: Vector3, ground := Vector3.INF) -> bool:
 		&"sunwatch_observatory": accepted = _mark(aim, ground)
 		&"last_lantern_frontier": accepted = _wick(aim)
 	if accepted:
-		_cooldown = _selected.cooldown
+		_cooldowns[_selected.site] = _selected.cooldown
+		_cast_lock = CAST_RECOVERY
 		_player.visual.gesture(_selected.site)
 		if _selected.site != &"lanternwood":
 			var facing := _dash_dir if _selected == SLUICE else aim
@@ -141,14 +210,24 @@ func _cast_sound() -> String:
 func _physics_process(delta: float) -> void:
 	if not is_instance_valid(_battle) or _battle.halted:
 		return
-	_cooldown = maxf(0.0, _cooldown-delta)
+	_cast_lock = maxf(0.0, _cast_lock - delta)
+	for id in _owned:
+		_cooldowns[id] = maxf(0.0, float(_cooldowns[id]) - delta)
+	if _queued_site != &"":
+		if not _can_use() or _queued_site != selected_id() or _player.is_dashing() or _player.is_staggered():
+			cancel_buffer()
+		elif _player.visual.can_cast_art() and _cast_lock <= 0.0 and remaining_seconds() <= 0.0:
+			cancel_buffer()
+			_cast_now(_queued_aim, _queued_ground)
+		else:
+			_buffer_left -= delta
+			if _buffer_left <= 0.0:
+				cancel_buffer()
 	if _snare_time > 0.0:
 		_snare_time = maxf(0.0, _snare_time-delta)
 		_snare_sample -= delta
 		if _snare_sample <= 0.0:
 			_snare_tick()
-	if _dash_time > 0.0:
-		_dash_tick(delta)
 	if is_instance_valid(_wick_mesh):
 		_wick_tick(delta)
 
@@ -214,11 +293,11 @@ func _fault(aim: Vector3) -> bool:
 	var count := 0
 	for e: CinderEnemy in _battle.enemies.duplicate():
 		var offset := (e.global_position-origin).slide(Vector3.UP)
-		if offset.length() > _selected.reach + e.stats.radius or (offset.length_squared() > .05 and offset.normalized().dot(aim) < cos(.59)):
+		if offset.length() > _selected.reach + e.stats.radius or (offset.length_squared() > .05 and offset.normalized().dot(aim) < cos(deg_to_rad(40.0))):
 			continue
 		if not _battle.blade_path_clear(origin,e):
 			continue
-		e.shove(aim * 8.0,.48)
+		e.shove(aim * 8.0,_selected.duration)
 		_battle.ability_hit(e,_selected.power)
 		count += 1
 	if count > 0:
@@ -231,16 +310,22 @@ func _spark(aim: Vector3, ground: Vector3) -> bool:
 		return false
 	var struck := {}
 	var points := PackedVector3Array([_source()])
-	for strength: float in [1.0,.7,.4]:
+	var damage := _selected.power
+	for jump in _selected.followup_damage.size() + 1:
 		var end := enemy.body_center()
 		points.append(end)
 		struck[enemy.get_instance_id()] = true
-		_battle.ability_hit(enemy,_selected.power*strength)
+		_battle.ability_hit(enemy, damage)
+		if jump == _selected.followup_damage.size():
+			break
 		enemy = null
+		damage = _selected.followup_damage[jump]
 		var distance := _selected.radius * _selected.radius
 		for next in _battle.enemies:
+			if next.fading or struck.has(next.get_instance_id()):
+				continue
 			var d := next.body_center().distance_squared_to(end)
-			if d < distance and not struck.has(next.get_instance_id()) and _visible_line(end,next.body_center()):
+			if d <= distance and _visible_line(end,next.body_center()):
 				enemy = next
 				distance = d
 		if enemy == null:
@@ -258,7 +343,7 @@ func _mark(aim: Vector3, ground: Vector3) -> bool:
 	var enemy := _target(aim,ground,_selected.reach)
 	if not enemy:
 		return false
-	enemy.set_lensmark(_selected.duration,3,_selected.power)
+	enemy.set_lensmark(_selected.duration, _selected.charges, _selected.power)
 	FX.glyph(self,_selected.site,enemy.body_center(),.3,_selected.tint,_selected.duration,reduced_motion,aim,enemy)
 	return true
 
@@ -268,46 +353,25 @@ func _dash(aim: Vector3) -> bool:
 		var right := _player.camera.global_basis.x.slide(Vector3.UP).normalized()
 		var back := _player.camera.global_basis.z.slide(Vector3.UP).normalized()
 		aim = (right*input.x + back*input.y).normalized()
-	if _safe_step(aim*.28) == Vector3.ZERO:
+	if not _player.begin_swept_dash(aim, _selected.reach, _selected.duration, &"sluice"):
 		return false
 	_dash_dir = aim
-	_dash_time = _selected.duration
 	_dash_hit.clear()
 	FX.glyph(self,_selected.site,_player.global_position+Vector3.UP*.065,_selected.reach,_selected.tint,.35,reduced_motion,aim)
 	return true
 
-func _safe_step(step: Vector3) -> Vector3:
-	var floor_hit := _hit_floor(_player.global_position + step,.5,.65)
-	if floor_hit.is_empty() or floor_hit.normal.y < cos(_player.floor_max_angle):
-		return Vector3.ZERO
-	var rise: float = floor_hit.position.y - _player.global_position.y
-	if absf(rise) > .36:
-		return Vector3.ZERO
-	# Keep a tiny clearance so a sweep parallel to a flat floor cannot catch the floor.
-	var motion := step + Vector3.UP * maxf(0.0, rise + .005)
-	return Vector3.ZERO if _player.test_move(_player.global_transform,motion) else motion
-
-func _dash_tick(delta: float) -> void:
-	if _player.visual.attacking():
-		_dash_time = 0.0
+func _on_dash_segment(kind: StringName, from: Vector3, to: Vector3) -> void:
+	if kind != &"sluice" or not _available or _battle.halted:
 		return
 	var spec := SLUICE
-	var portion := minf(delta,_dash_time)
-	_dash_time -= portion
-	var motion := _safe_step(_dash_dir * spec.reach * portion / spec.duration)
-	if motion == Vector3.ZERO:
-		_dash_time = 0.0
-		return
-	var from := _player.global_position
-	_player.move_and_collide(motion)
 	for e in _battle.enemies:
 		if _dash_hit.has(e.get_instance_id()) or not _battle.blade_path_clear(from,e):
 			continue
-		var d := _distance_to_segment(e.global_position,from,_player.global_position)
+		var d := _distance_to_segment(e.global_position,from,to)
 		if d <= spec.radius + e.stats.radius:
 			_dash_hit[e.get_instance_id()] = true
 			var side := (e.global_position-from).slide(Vector3.UP)
-			e.shove((_dash_dir + side.normalized()).normalized()*6.0,.36)
+			e.shove((_dash_dir + side.normalized()).normalized()*6.0,.45)
 
 func _wick(aim: Vector3) -> bool:
 	_wick_origin = _source()
