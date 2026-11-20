@@ -115,6 +115,12 @@ func _pose(delta: float, distance: float, near: bool, core_distance: float) -> v
 		var special_glow := technique.opening() if technique else 0.0
 		fissure.emission_energy_multiplier = 0.90 + 0.18 * sin(breath) + windup * 1.45 + special_glow * 0.8 + hit * 1.6
 
+func spark_radius() -> float:
+	return maxf(.85, stats.height)
+
+func combat_hit(amount: float, _source: StringName) -> void:
+	wound(amount)
+
 func wound(amount: float) -> void:
 	health -= amount
 	last_hit = 0.15

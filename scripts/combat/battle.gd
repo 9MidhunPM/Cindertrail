@@ -245,7 +245,7 @@ func attack(origin: Vector3, dir: Vector3) -> bool:
 		var distance := offset.dot(aim)
 		if distance < 0.0 or distance >= reach:
 			continue
-		if (offset - aim * distance).length() <= maxf(0.85, enemy.stats.height):
+		if (offset - aim * distance).length() <= enemy.spark_radius():
 			target = enemy
 			reach = distance
 			end = enemy.body_center()
@@ -507,7 +507,7 @@ func _hit(enemy: CinderEnemy, amount: float, source := &"tower") -> void:
 		amount += enemy.consume_mark_bonus(source)
 	var applied := amount * (0.42 if enemy.is_warded() else 1.0)
 	var before := enemy.health
-	enemy.wound(applied)
+	enemy.combat_hit(applied, source)
 	damaged.emit(enemy.body_center(), minf(before, maxf(0.0, before - enemy.health)), source, enemy.health <= 0)
 	if enemy.health <= 0:
 		enemies.erase(enemy)

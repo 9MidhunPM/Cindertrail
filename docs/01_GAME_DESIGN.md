@@ -95,7 +95,7 @@ Each connection should contain at least one choice: a short exposed path, a safe
 
 ## Win, loss and ending
 
-At full restoration, unfold the shrine on the hilltop and place carried modules around the Beacon Crown. Challenge the Vesper Colossus when ready. A blade strike or spark during its pulse wind-up opens the chest plates and protects the core. Its fractured armor calls two escorts up the summit. Packing allows retreat and resets the unfinished encounter. Defeating the guardian opens the cradle for delivery of the same sun. Core destruction offers a retry from the arrival checkpoint or a fresh journey.
+At full restoration, unfold the shrine on the hilltop and place carried modules around the Beacon Crown. Challenge the Vesper Colossus when ready. The Colossus alternates its lit shoulder. Move into the gold arc and land one blade strike, a damaging art or two sparks before the pulse to expose its chest for four seconds. Missed pulses damage the deployed sun. At 70% health, an expanding ground ring leaves a walkable gap and two Crown Husks approach on staggered lanes. At 35%, a second marked charge crosses the terrace before the next counter. A dash evades the charge and a jump clears the ring. Packing allows retreat and resets the unfinished encounter. Defeating the guardian opens the cradle for delivery of the same sun. Core destruction offers a retry from the arrival checkpoint or a fresh journey.
 
 ## Scope boundary
 

@@ -1,18 +1,33 @@
 extends CinderEnemy
 ## The guardian holds the crown. Its marked charge ends short of the cradle;
 ## only an uninterrupted ground pulse can wound the sun.
-enum Phase { MARK, CHARGE, BRACE, PULSE, OPEN, RETURN }
-const LENGTHS := [1.65, 1.25, 1.65, 0.85, 3.2, 2.3]
+enum Phase { MARK, CHARGE, STAMP, RING, OFFSET_MARK, OFFSET_CHARGE, BRACE, PULSE, OPEN, RECOVER, RETURN }
+const LENGTHS := [1.3, .65, 1.0, 1.15, 1.0, .65, 2.3, .75, 4.0, 1.0, 1.8]
+const STAGE_FLOORS := [.70, .35, 0.0]
+const PULSE_DAMAGE := [9.0, 12.0, 15.0]
+const SHOULDER_REACH := 3.65
+const SHOULDER_COS := .342 # Within 70 degrees of the lit side.
+const RING_GAP_COS := .79
 const PLATE := Color("#d492ef")
 const EXPOSED := Color("#ffe3a0")
-const INTERRUPT_POWER := 4.0
 
 signal cue_requested(cue: String)
 signal fell
 var phase := Phase.MARK
 var _east_lane := false
 var elapsed := 0.0
-var _brace_hits := 0.0
+var traveler: CinderPlayer
+var stage := 1
+var _break_points := 0
+var _stage_unsealed := false
+var _shoulder_side := 1.0
+var _contact_cooldown := 0.0
+var _charge_start: Vector3
+var _charge_end: Vector3
+var _ring: MeshInstance3D
+var _shoulder: MeshInstance3D
+var _pauldron: MeshInstance3D
+var _foot_rune: Label3D
 var _start: Vector3
 var _end: Vector3
 var _return_goal: Vector3
@@ -27,11 +42,29 @@ var _weak := 0.0
 var _delivered_blow := false
 
 func configure(spec: CinderEnemyStats, path: PackedVector3Array, camp: CinderSite) -> void:
-	super.configure(spec, path, camp)
+	super.configure(spec.duplicate(), path, camp)
 	_start = path[0] + Vector3.UP * .07
 	_end = path[-1] + Vector3.UP * .07
 	rotation.y = atan2(_end.x - _start.x, _end.z - _start.z)
-	_rail = _mark_mesh()
+	_ring = _arc(acos(RING_GAP_COS), TAU - acos(RING_GAP_COS), .90, 1.0, PLATE)
+	_shoulder = _arc(-deg_to_rad(64), deg_to_rad(64), 1.50, 1.86, EXPOSED)
+	_pauldron = MeshInstance3D.new()
+	var point := PrismMesh.new()
+	point.size = Vector3(.26, .42, .26)
+	_pauldron.mesh = point
+	_pauldron.material_override = _emission(EXPOSED)
+	add_child(_pauldron)
+	# The far-side foothold can fall behind the Colossus in the fixed camera.
+	_foot_rune = Label3D.new()
+	_foot_rune.text = "◆"
+	_foot_rune.font_size = 42
+	_foot_rune.pixel_size = .013
+	_foot_rune.outline_size = 10
+	_foot_rune.outline_modulate = Color("#513641")
+	_foot_rune.modulate = EXPOSED
+	_foot_rune.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	_foot_rune.no_depth_test = true
+	add_child(_foot_rune)
 	_pulse = MeshInstance3D.new()
 	var circle := TorusMesh.new()
 	circle.inner_radius = .91
@@ -76,11 +109,11 @@ func _emission(tint: Color) -> StandardMaterial3D:
 func _mark_mesh() -> MeshInstance3D:
 	var path_mesh := ImmediateMesh.new()
 	path_mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
-	var forward := (_end - _start).normalized()
+	var forward := (_charge_end - _charge_start).normalized()
 	var side := forward.cross(Vector3.UP).normalized()
 	# World-space chevrons point toward the precise end of this charge.
 	for i in 6:
-		var center := _start.lerp(_end, (i+.65)/6.6) + Vector3.UP * .10
+		var center := _charge_start.lerp(_charge_end, (i+.65)/6.6) + Vector3.UP * .10
 		for hand: float in [-1.0, 1.0]:
 			var outer := center + side * hand * .58
 			var inner := center + forward * .27
@@ -97,47 +130,117 @@ func _mark_mesh() -> MeshInstance3D:
 	trace.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	return trace
 
+func _arc(start_angle: float, end_angle: float, inside: float, outside: float, color: Color) -> MeshInstance3D:
+	var strip := ImmediateMesh.new()
+	strip.surface_begin(Mesh.PRIMITIVE_TRIANGLE_STRIP)
+	for i in 49:
+		var theta := lerpf(start_angle, end_angle, i / 48.0)
+		var radial := Vector3(sin(theta), 0, cos(theta))
+		strip.surface_add_vertex(radial * inside)
+		strip.surface_add_vertex(radial * outside)
+	strip.surface_end()
+	var marker := MeshInstance3D.new()
+	marker.mesh = strip
+	marker.material_override = _emission(color)
+	marker.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(marker)
+	marker.top_level = true
+	return marker
+
 func phase_name() -> String:
-	return ["Marked charge", "Charging", "Break the pulse", "Ground pulse", "Chest exposed", "Repositioning"][phase]
+	return ["Marked charge", "Charging", "Jump the ring or find the gap", "Rising ring",
+		"Sidestep the second charge", "Crossing charge", "Break the pulse", "Ground pulse",
+		"Chest exposed", "Armor resealing", "Repositioning"][phase]
+
+func shoulder_direction() -> Vector3:
+	return Vector3(0, 0, _shoulder_side)
+
+func counter_position() -> Vector3:
+	var landing := global_position
+	if phase in [Phase.MARK, Phase.CHARGE, Phase.OFFSET_MARK, Phase.OFFSET_CHARGE]:
+		landing = _charge_end
+	elif phase == Phase.RETURN:
+		landing = site_of_origin.anchor.global_position + Vector3(1.55 if _east_lane else -1.55, .07, -.35)
+	return landing + shoulder_direction() * 1.73
+
+func _set_charge(from: Vector3, to: Vector3) -> void:
+	_charge_start = from
+	_charge_end = to
+	if _rail:
+		_rail.hide()
+		_rail.queue_free()
+	_rail = _mark_mesh()
 
 func _enter(next: Phase) -> void:
 	phase = next
 	elapsed = 0.0
 	_delivered_blow = false
-	_rail.visible = phase == Phase.MARK or phase == Phase.CHARGE
-	_pulse.visible = phase == Phase.BRACE or phase == Phase.PULSE
-	if phase == Phase.MARK:
-		cue_requested.emit("vesper_charge")
-	if phase == Phase.BRACE:
-		_brace_hits = 0.0
-		cue_requested.emit("vesper_pulse")
-	if phase == Phase.OPEN:
-		cue_requested.emit("vesper_exposed")
-	if phase == Phase.RETURN:
-		_return_goal = _start
-		if health <= stats.health * .55:
+	match phase:
+		Phase.MARK:
+			_set_charge(_start, _end)
+			cue_requested.emit("vesper_charge")
+		Phase.STAMP:
+			cue_requested.emit("vesper_pulse")
+		Phase.OFFSET_MARK:
+			# The second lane is fixed at the tell so its exit stays readable.
+			var offset := 1.6 * _shoulder_side
+			_set_charge(global_position, _end + Vector3(2.5 if _east_lane else -2.5, 0, offset))
+			cue_requested.emit("vesper_charge")
+		Phase.BRACE:
+			_break_points = 0
+			cue_requested.emit("vesper_pulse")
+		Phase.OPEN:
+			_stage_unsealed = true
+			cue_requested.emit("vesper_exposed")
+		Phase.RETURN:
+			if stage < 3 and _stage_unsealed and health <= stats.health * STAGE_FLOORS[stage-1] + .001:
+				stage += 1
+				_stage_unsealed = false
+			stats.damage = PULSE_DAMAGE[stage-1]
+			_shoulder_side *= -1.0
 			_east_lane = not _east_lane
-			var next_lane := 2 if _east_lane else 0
-			_return_goal = site_of_origin.lanes[next_lane][0] + Vector3.UP * .07
+			_end = global_position
+			_return_goal = site_of_origin.lanes[2 if _east_lane else 0][0] + Vector3.UP * .07
+	_rail.visible = phase in [Phase.MARK, Phase.CHARGE, Phase.OFFSET_MARK, Phase.OFFSET_CHARGE]
+	_pulse.visible = phase in [Phase.BRACE, Phase.PULSE, Phase.STAMP]
+	_ring.visible = phase in [Phase.STAMP, Phase.RING]
+	_shoulder.visible = phase in [Phase.MARK, Phase.CHARGE, Phase.BRACE, Phase.STAMP, Phase.RING, Phase.OFFSET_MARK, Phase.OFFSET_CHARGE]
+	_pauldron.visible = _shoulder.visible
+	_foot_rune.visible = _shoulder.visible
 	_chant.text = phase_name().to_upper()
-	_chant.modulate = EXPOSED if phase == Phase.OPEN or phase == Phase.BRACE else PLATE
+	_chant.modulate = EXPOSED if phase in [Phase.OPEN, Phase.BRACE] else PLATE
+
+func _next_phase() -> Phase:
+	match phase:
+		Phase.CHARGE:
+			return Phase.BRACE if stage == 1 else Phase.STAMP
+		Phase.RING:
+			return Phase.OFFSET_MARK if stage == 3 else Phase.BRACE
+		Phase.PULSE:
+			return Phase.RECOVER
+		Phase.OPEN, Phase.RECOVER:
+			return Phase.RETURN
+		Phase.RETURN:
+			_start = _return_goal
+			_end = site_of_origin.anchor.global_position + Vector3(1.55 if _east_lane else -1.55, .07, -.35)
+			return Phase.MARK
+	return (phase + 1) as Phase
 
 func advance(core: SunCore, delta: float, field_factor: float) -> bool:
 	_fade_flash(delta)
-	elapsed += delta * (maxf(field_factor, .7) if phase == Phase.CHARGE else 1.0)
-	var duration: float = LENGTHS[phase]
-	if health <= stats.health * .55 and phase in [Phase.MARK, Phase.RETURN]:
-		duration *= .72
-	var progress := clampf(elapsed / duration, 0.0, 1.0)
+	_contact_cooldown = maxf(0.0, _contact_cooldown - delta)
+	var rushing := phase in [Phase.CHARGE, Phase.OFFSET_CHARGE]
+	elapsed += delta * (maxf(field_factor, .7) if rushing else 1.0)
+	var progress := clampf(elapsed / float(LENGTHS[phase]), 0.0, 1.0)
 	var previous := global_position
 	var desired := global_position
-	if phase == Phase.CHARGE:
-		desired = _start.lerp(_end, smoothstep(0.0, 1.0, progress))
+	if rushing:
+		desired = _charge_start.lerp(_charge_end, smoothstep(0.0, 1.0, progress))
 	elif phase == Phase.RETURN:
 		desired = _end.lerp(_return_goal, smoothstep(0.0, 1.0, progress))
 		desired.z -= sin(progress * PI) * .8
-	if phase == Phase.MARK or phase == Phase.RETURN:
-		var look := (_end - _start) if phase == Phase.MARK else (_return_goal - previous)
+	if phase in [Phase.MARK, Phase.OFFSET_MARK, Phase.RETURN]:
+		var look := (_return_goal - previous) if phase == Phase.RETURN else (_charge_end - _charge_start)
 		if look.length_squared() > .02:
 			rotation.y = lerp_angle(rotation.y, atan2(look.x, look.z), 1.0 - exp(-6.5 * delta))
 	velocity = (desired - global_position) / maxf(delta, .001)
@@ -148,7 +251,7 @@ func advance(core: SunCore, delta: float, field_factor: float) -> bool:
 	breath += delta
 	_weak = move_toward(_weak, 1.0 if phase == Phase.OPEN else 0.0, delta * 4.0)
 	var brace := sin(progress * PI * .5) if phase == Phase.BRACE else 0.0
-	var charging := sin(PI * progress) if phase == Phase.CHARGE else 0.0
+	var charging := sin(PI * progress) if rushing else 0.0
 	model.rotation.x = .14 * charging + .19 * brace - .16 * _weak
 	model.position.y = .02 + .016 * sin(breath * 2.2) - .18 * brace + minf(distance * 3.0, .09) * absf(sin(stride))
 	for i in _shutters.size():
@@ -165,27 +268,56 @@ func advance(core: SunCore, delta: float, field_factor: float) -> bool:
 			radius = lerpf(1.45, 6.0, progress)
 		_pulse.scale = Vector3(radius, .16, radius)
 		_pulse.global_position = global_position + Vector3.UP * .12
+	if _shoulder.visible:
+		_shoulder.global_position = counter_position() - shoulder_direction() * 1.73 + Vector3.UP * .10
+		_shoulder.rotation.y = 0.0 if _shoulder_side > 0.0 else PI
+		_foot_rune.global_position = counter_position() + Vector3.UP * (.39 + .09 * sin(breath * 5.0))
+		_pauldron.global_position = global_position + shoulder_direction() * .65 + Vector3.UP * (2.07 + sin(breath * 5.0) * .06)
+	var ring_radius := .62 + progress * 6.0 if phase == Phase.RING else .62
+	if _ring.visible:
+		_ring.global_position = global_position + Vector3.UP * .12
+		_ring.rotation.y = 0.0 if _shoulder_side > 0.0 else PI
+		_ring.scale = Vector3.ONE * ring_radius
+	if is_instance_valid(traveler) and _contact_cooldown <= 0.0:
+		var offset := (traveler.global_position - global_position).slide(Vector3.UP)
+		var closest := global_position
+		if rushing and previous.distance_squared_to(global_position) > .00001:
+			closest = Geometry3D.get_closest_point_to_segment(traveler.global_position, previous, global_position)
+		var struck := rushing and flat_distance(traveler.global_position, closest) < 1.05
+		if phase == Phase.RING and absf(offset.length() - ring_radius) < .38 and traveler.global_position.y < global_position.y + .52:
+			struck = offset.normalized().dot(shoulder_direction()) < RING_GAP_COS
+		if struck:
+			traveler.guardian_stagger(.4)
+			_contact_cooldown = 1.0
 	var connected := false
 	if phase == Phase.PULSE and not _delivered_blow and 1.45 + progress * 4.55 >= flat_distance(global_position, core.global_position):
 		_delivered_blow = true
 		connected = true
 	if progress >= 1.0:
-		var next := (phase + 1) % Phase.size()
-		if next == Phase.MARK and _start.distance_squared_to(_return_goal) > .1:
-			_start = _return_goal
-			_end = core.global_position + Vector3(1.55 if _east_lane else -1.55,.07,-.35)
-			_rail.queue_free()
-			_rail = _mark_mesh()
-		_enter(next as Phase)
+		_enter(_next_phase())
 	return connected
 
+## Keep sparks aimed past the tall boss able to hit the smaller escorts.
+func spark_radius() -> float:
+	return stats.radius + .20
+
+func combat_hit(amount: float, source: StringName) -> void:
+	if phase == Phase.BRACE and source in [&"spark", &"melee", &"ability"] and is_instance_valid(traveler):
+		var offset := (traveler.global_position - global_position).slide(Vector3.UP)
+		if offset.length() <= SHOULDER_REACH and offset.normalized().dot(shoulder_direction()) >= SHOULDER_COS:
+			_break_points += 1 if source == &"spark" else 2
+			if _break_points >= 2:
+				_enter(Phase.OPEN)
+			else:
+				_chant.text = "ONE MORE SPARK"
+	wound(amount)
+
 func wound(amount: float) -> void:
-	if phase == Phase.BRACE:
-		_brace_hits += amount
-		if _brace_hits >= INTERRUPT_POWER:
-			_enter(Phase.OPEN)
-	var factor := 1.0 if phase == Phase.OPEN else .35
-	super.wound(amount * factor)
+	var floor_hp: float = stats.health * STAGE_FLOORS[stage-1]
+	if not _stage_unsealed:
+		floor_hp += 1.0
+	var effective := amount * (1.0 if phase == Phase.OPEN else .25)
+	super.wound(minf(effective, maxf(0.0, health - floor_hp)))
 
 func shove(_push: Vector3, _stun: float) -> void:
 	pass
@@ -195,6 +327,10 @@ func withdraw(defeated := false) -> void:
 		return
 	_rail.hide()
 	_pulse.hide()
+	_ring.hide()
+	_shoulder.hide()
+	_pauldron.hide()
+	_foot_rune.hide()
 	_chant.hide()
 	super.withdraw(defeated)
 	if defeated:

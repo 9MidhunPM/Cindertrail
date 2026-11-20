@@ -4,7 +4,7 @@ extends Node3D
 const BOSS := preload("res://scripts/combat/vesper_colossus.gd")
 const SPEC := preload("res://data/enemies/vesper.tres")
 const SITE := preload("res://data/sites/beacon.tres")
-const CRAWLER := preload("res://data/enemies/crawler.tres")
+const ESCORT := preload("res://data/enemies/crown_husk.tres")
 signal cleared_crown
 signal sighted(text: String)
 var site := CinderSite.new()
@@ -12,11 +12,11 @@ var guardian: BOSS
 var cleared := false
 var halfway_seen := false
 var _battle: CinderBattle
-var _escort_released := false
+var _escorts_sent := 0
+var _escort_delay := 0.0
 var _apparition: Node3D
 var _sighting_time := 0.0
 var _opening_seen := false
-var _escort: CinderEnemyStats
 
 func build(beacon: Marker3D) -> void:
 	var crown := beacon.global_position
@@ -33,10 +33,8 @@ func build(beacon: Marker3D) -> void:
 	site.name = "BeaconCrown"
 	site.configure(SITE, pad, sockets, [west, stair, east], crown + Vector3(6.1,11.6,-16.0), crown + Vector3(0,.50,-2.15))
 	site.hide()
-	_escort = CRAWLER.duplicate()
-	_escort.bounty = 0
 
-func begin(battle: CinderBattle) -> bool:
+func begin(battle: CinderBattle, traveler: CinderPlayer) -> bool:
 	if cleared or is_instance_valid(guardian) or battle.enemies.size() >= CinderBattle.WAVES.active_limit:
 		return false
 	_battle = battle
@@ -44,6 +42,7 @@ func begin(battle: CinderBattle) -> bool:
 	var lane := site.lanes[0].duplicate()
 	lane[-1] += Vector3(-1.55, 0.0, -.35)
 	guardian = BOSS.new()
+	guardian.traveler = traveler
 	battle.add_child(guardian)
 	guardian.cue_requested.connect(battle.sound.emit)
 	guardian.configure(SPEC, lane, site)
@@ -53,18 +52,24 @@ func begin(battle: CinderBattle) -> bool:
 		return false
 	guardian.fell.connect(_fell)
 	site.threat = 1
-	_escort_released = false
+	_escorts_sent = 0
+	_escort_delay = 0.0
 	return true
 
-func _physics_process(_delta: float) -> void:
-	if not is_instance_valid(guardian) or guardian.fading or _battle.held or _escort_released:
+func _physics_process(delta: float) -> void:
+	if not is_instance_valid(guardian) or guardian.fading or _battle.held:
 		return
-	if guardian.health <= guardian.stats.health * .55:
-		_escort_released = true
-		site.threat = 2
-		_battle.message.emit("The carapace fractures. Shadows are climbing the dawn stair.")
-		_battle.spawn_enemy(_escort, site.lanes[1], site, 1)
-		_battle.spawn_enemy(_escort, site.lanes[0], site, 0)
+	if site.threat != guardian.stage:
+		site.threat = guardian.stage
+		_battle.message.emit("Shadows climb the dawn stair. Jump the ring or walk through its gap."
+			if site.threat == 2 else "Vesper marks a second charge. Watch for the new lane.")
+	if guardian.stage >= 2 and _escorts_sent < 2:
+		_escort_delay -= delta
+		if _escort_delay <= 0.0:
+			var lane := 1 if _escorts_sent == 0 else 0
+			if _battle.spawn_enemy(ESCORT, site.lanes[lane], site, lane):
+				_escorts_sent += 1
+				_escort_delay = 2.0
 
 func _fell() -> void:
 	cleared = true
@@ -104,7 +109,9 @@ func hint() -> String:
 	if cleared:
 		return "E   Deliver the restored sun at the beacon"
 	if is_instance_valid(guardian):
-		return "%s   •   Vesper %d%%" % [guardian.phase_name(), ceili(100.0 * guardian.health / guardian.stats.health)]
+		if guardian.phase == guardian.Phase.BRACE:
+			return "Reach the gold shoulder and strike, or land two sparks"
+		return "Phase %d   •   %s" % [guardian.stage, guardian.phase_name()]
 	return "Space   Challenge the guardian    •    E   Repair    •    Hold R   Leave"
 
 func watch(restoration: float, player_point: Vector3, camp: CinderSite, camera: Camera3D, delta: float) -> void:

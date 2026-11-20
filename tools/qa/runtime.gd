@@ -758,14 +758,17 @@ func _fight_guardian(capture := false) -> bool:
         if capture and not measurements.has("summit_defense") and _enemy_count() >= 2:
             await _capture("vesper-escorts.png")
             measurements["summit_defense"] = await _profile(150, 8)
-        var origin: Vector3 = game.player.global_position + Vector3.UP * 1.13
-        game.battle.attack(origin, origin.direction_to(boss.body_center()))
+        _steer_toward(boss.counter_position())
+        if not game.player.is_staggered():
+            var origin: Vector3 = game.player.global_position + Vector3.UP * 1.13
+            game.battle.attack(origin, origin.direction_to(boss.body_center()))
         if boss.phase_name() == "Chest exposed" and not saw_open:
             saw_open = true
             if capture:
                 await _physics_frames(12)
                 await _capture("vesper-exposed.png")
         await _physics_frames(3)
+    _steer_toward(game.player.global_position)
     if capture:
         _check(measurements.has("summit_defense"), "Profile the guardian during its escort phase")
     if not _check(game.summit.cleared and _mode() == "Prepare", "The guardian falls in live combat"):
@@ -1063,6 +1066,22 @@ func _walk_route(path: Array, label: String) -> bool:
     return _check(true, "Walked " + label)
 
 
+func _steer_toward(point: Vector3) -> void:
+    var offset: Vector3 = (point - game.player.global_position).slide(Vector3.UP)
+    var actions := ["move_left", "move_right", "move_forward", "move_back"]
+    var direction := offset.normalized() if offset.length_squared() > .07 else Vector3.ZERO
+    var right: Vector3 = game.camera.global_basis.x.slide(Vector3.UP).normalized()
+    var forward: Vector3 = -game.camera.global_basis.z.slide(Vector3.UP).normalized()
+    var dx := direction.dot(right)
+    var dz := direction.dot(forward)
+    var amounts := [-dx, dx, dz, -dz]
+    for i in actions.size():
+        if amounts[i] > 0.0:
+            Input.action_press(actions[i], amounts[i])
+        else:
+            Input.action_release(actions[i])
+
+
 func _walk_to(point: Vector3, limit := 360) -> bool:
     var actions := ["move_left", "move_right", "move_forward", "move_back"]
     for tick in limit:
@@ -1073,17 +1092,7 @@ func _walk_to(point: Vector3, limit := 360) -> bool:
                 Input.action_release(action)
             await _physics_frames(9)
             return true
-        var direction := offset.normalized()
-        var right: Vector3 = game.camera.global_basis.x.slide(Vector3.UP).normalized()
-        var forward: Vector3 = -game.camera.global_basis.z.slide(Vector3.UP).normalized()
-        var dx := direction.dot(right)
-        var dz := direction.dot(forward)
-        var amounts := [-dx, dx, dz, -dz]
-        for i in actions.size():
-            if amounts[i] > 0.0:
-                Input.action_press(actions[i], amounts[i])
-            else:
-                Input.action_release(actions[i])
+        _steer_toward(point)
         await _physics_frames(1)
     for action in actions:
         Input.action_release(action)

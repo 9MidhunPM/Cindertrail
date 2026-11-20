@@ -17,6 +17,19 @@ func _frames(count: int) -> void:
 	for i in count:
 		await physics_frame
 
+func _steer(target: Vector3) -> void:
+	var offset: Vector3 = (target - game.player.global_position).slide(Vector3.UP)
+	var direction := offset.normalized() if offset.length() > .26 else Vector3.ZERO
+	var side: Vector3 = game.camera.global_basis.x.slide(Vector3.UP).normalized()
+	var ahead: Vector3 = -game.camera.global_basis.z.slide(Vector3.UP).normalized()
+	var actions := ["move_left", "move_right", "move_forward", "move_back"]
+	var amounts := [-direction.dot(side), direction.dot(side), direction.dot(ahead), -direction.dot(ahead)]
+	for i in actions.size():
+		if amounts[i] > 0.0:
+			Input.action_press(actions[i], amounts[i])
+		else:
+			Input.action_release(actions[i])
+
 func _run() -> void:
 	if OS.get_environment("CINDERTRAIL_TEST_SAVE") != "1":
 		quit(2)
@@ -58,8 +71,17 @@ func _run() -> void:
 		"Retreat resets the unfinished guardian and packs the same sun")
 	game.interact()
 	await _frames(85)
+	game.battle.place(0, 0)
 	game.start_wave()
-	game.core.damage(999.0)
+	# Idle tower fire puts real damage into plating, but cannot break a shoulder.
+	var idle_low := 340.0
+	for i in 8000:
+		if game.mode == game.Mode.LOSE or game.summit.cleared:
+			break
+		idle_low = minf(idle_low, game.summit.guardian.health)
+		await physics_frame
+	_check(idle_low < 335.0 and not game.summit.cleared and game.mode == game.Mode.LOSE,
+		"A firing tower and idle traveler lose to the guardian's actual pulses")
 	_check(game.mode == game.Mode.LOSE and game._checkpoint.health == 77.0, "Defeat retains the pre-fight checkpoint")
 	game._hud_action(&"checkpoint")
 	await scene_changed
@@ -71,39 +93,54 @@ func _run() -> void:
 	game.interact()
 	await _frames(85)
 	game.start_wave()
-	var anchor: Vector3 = game.summit.site.anchor.global_position
-	game.player.global_position = anchor + Vector3(-.5, .12, -.5)
-	game.player.reset_physics_interpolation()
-	# Exercise a full unbroken pulse before countering the next attacks. The
-	# rest of this fight uses real free sparks, with zero scrap and no towers.
-	await _frames(320)
-	_check(game.core.health == 70.0, "An unbroken telegraphed pulse damages only the deployed core")
-	var brace := false
-	var opened := false
+	# First deliberately miss a brace at full pressure. Then use only the
+	# traveler's starter sparks, analog movement and the ring's walkable gap.
+	var pulses := 0
+	for i in 420:
+		if game.core.health < 77.0:
+			break
+		await physics_frame
+	if _check(game.core.health == 68.0, "The first missed pulse deals nine damage to the deployed sun"):
+		pulses = 1
+	var stages := {}
+	var sides := {}
+	var saw_ring := false
+	var saw_offset := false
 	var escort := false
-	var shot := false
-	for i in 7000:
+	var fight_frames := 0
+	var previous_health: float = game.core.health
+	for i in 11000:
 		if game.summit.cleared or game.mode == game.Mode.LOSE:
 			break
-		var boss: CinderEnemy = game.summit.guardian
-		if not is_instance_valid(boss):
-			break
-		var from: Vector3 = game.player.global_position + Vector3.UP * 1.13
-		var target := boss
+		var boss = game.summit.guardian
+		stages[boss.stage] = true
+		saw_ring = saw_ring or boss.phase == boss.Phase.RING
+		saw_offset = saw_offset or boss.phase == boss.Phase.OFFSET_CHARGE
+		if boss.phase == boss.Phase.OPEN:
+			sides[boss.shoulder_direction().z] = true
+		_steer(boss.counter_position())
+		var target: CinderEnemy = boss
 		for enemy in game.battle.enemies:
 			if enemy != boss:
 				escort = true
-				target = enemy
+				if boss.phase != boss.Phase.BRACE:
+					target = enemy
 				break
-		if boss.phase_name() == "Break the pulse":
-			brace = true
-			target = boss
-		if boss.phase_name() == "Chest exposed":
-			opened = true
-		shot = game.battle.attack(from, from.direction_to(target.body_center())) or shot
+		if not game.player.is_staggered():
+			var from: Vector3 = game.player.global_position + Vector3.UP * 1.13
+			game.battle.attack(from, from.direction_to(target.body_center()))
+		fight_frames += 1
+		if game.core.health < previous_health and boss.phase == boss.Phase.PULSE:
+			pulses += 1
+		previous_health = game.core.health
 		await physics_frame
-	_check(shot and brace and opened and escort, "Spark reached the exposed armor and the fractured stage released its escorts")
-	if not _check(game.summit.cleared and game.mode == game.Mode.PREPARE, "Guardian is beatable with free sparks"):
+	_steer(game.player.global_position)
+	print("Guardian starter fight %.1fs after deliberate first miss; core %.1f, pulses %d" %
+		[fight_frames / 60.0, game.core.health, pulses])
+	_check(stages.size() == 3 and sides.size() == 2 and saw_ring and saw_offset and escort,
+		"Both shoulders, the rising ring, offset charge and escort lanes appeared across three stages")
+	if not _check(game.summit.cleared and game.mode == game.Mode.PREPARE,
+		"An active traveler with zero scrap, zero installed modules and starter sparks wins"):
 		quit(1)
 		return
 	await _frames(3)
