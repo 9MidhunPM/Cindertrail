@@ -838,7 +838,6 @@ def emblem(part, angle, z, scale, lift=.006):
 
 
 emblem(PARTS['CoatHem'], math.pi, .64, 1.0)
-emblem(PARTS['SkirtR'], math.radians(40), .66, .58, .029)
 
 # The front flap crosses the belly diagonally and lifts above one knee.
 # A single sweep of teal breaks the symmetrical opening between coat panels.
