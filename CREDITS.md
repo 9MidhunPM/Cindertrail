@@ -18,6 +18,8 @@ The layered traveler and its 2K atlas were authored for Cindertrail in `scripts/
 
 The alternate valley terrain and collision meshes are original exports from `tools/build_outer_valley.py` and the three authored trail networks in `data/outer_valley/`. The Sunsteel sword choreography, blade trails, and charge and release sounds were authored on the Cindertrail traveler rig.
 
+Mote's original dialogue was voiced with Kokoro-82M. [Voice and generation credits](art/audio/mote/README.md)
+
 ## Downloaded music and sound
 
 The six valley cues are edited loops of Scott Buckley's CC BY 4.0 recordings. The foley blends CC0 sounds by Kenney and Rubberduck. See the [track credits](art/audio/score/README.md) and [recording sources](art/audio/foley/README.md).
