@@ -160,6 +160,9 @@ func trailing() -> bool:
 func attacking() -> bool:
 	return _attack >= 0
 
+func can_cast_art() -> bool:
+	return _attack < 0 and _charge <= 0.0
+
 ## World-space base and tip of the blade, used by the swing trail.
 func blade_segment() -> PackedVector3Array:
 	var basis := _weapon.global_basis

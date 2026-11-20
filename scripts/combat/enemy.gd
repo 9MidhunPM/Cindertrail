@@ -45,6 +45,7 @@ var _flash_meshes: Array[MeshInstance3D] = []
 static var _flash_material: ShaderMaterial
 
 func configure(spec: CinderEnemyStats, path: PackedVector3Array, camp: CinderSite) -> void:
+	set_physics_process(false)
 	stats = spec
 	health = stats.health
 	site_of_origin = camp
@@ -166,6 +167,7 @@ func set_lensmark(seconds: float, hits: int, power: float) -> void:
 	_lens_time = seconds
 	_lens_hits = hits
 	_lens_power = power
+	set_physics_process(_lens_time > 0.0 or _reed_time > 0.0)
 
 func lensmarked() -> bool:
 	return _lens_time > 0.0 and _lens_hits > 0 and not fading
@@ -179,10 +181,13 @@ func consume_mark_bonus(source: StringName) -> float:
 func reed_snare(factor: float, seconds: float) -> void:
 	_reed_time = seconds
 	_reed_factor = factor
+	set_physics_process(_lens_time > 0.0 or _reed_time > 0.0)
 
 func _physics_process(delta: float) -> void:
 	_lens_time = maxf(0.0, _lens_time - delta)
 	_reed_time = maxf(0.0, _reed_time - delta)
+	if _reed_time <= 0.0 and _lens_time <= 0.0:
+		set_physics_process(false)
 
 func direct_hit() -> void:
 	if technique and stats.species in [TECHNIQUE.SPLINTER, TECHNIQUE.WARDEN]:

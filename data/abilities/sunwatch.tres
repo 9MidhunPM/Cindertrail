@@ -1,0 +1,15 @@
+[gd_resource type="Resource" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/game/traveler_art_spec.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+site = &"sunwatch"
+title = "Lensmark"
+description = "Mark one foe. Your next three blade or spark hits gain four damage."
+cooldown = 14
+reach = 16
+radius = 0
+duration = 5
+power = 4
+tint = Color(1, 0.72, 0.24, 1)

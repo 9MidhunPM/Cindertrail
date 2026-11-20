@@ -1,0 +1,15 @@
+[gd_resource type="Resource" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/game/traveler_art_spec.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+site = &"flooded_grove"
+title = "Reed Snare"
+description = "Raise a ring of reeds. Enemies crossing it move at half speed."
+cooldown = 12
+reach = 9
+radius = 3.5
+duration = 3
+power = 0.5
+tint = Color(0.24, 0.86, 0.69, 1)

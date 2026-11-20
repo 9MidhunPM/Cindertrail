@@ -1,0 +1,15 @@
+[gd_resource type="Resource" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/game/traveler_art_spec.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+site = &"sunken_aqueduct"
+title = "Sluice Step"
+description = "Surge three meters and push enemies aside."
+cooldown = 8
+reach = 3
+radius = 0.92
+duration = 0.22
+power = 0
+tint = Color(0.24, 0.72, 0.94, 1)
