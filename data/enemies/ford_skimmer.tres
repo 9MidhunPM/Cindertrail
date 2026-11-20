@@ -1,0 +1,20 @@
+[gd_resource type="Resource" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/combat/enemy_stats.gd" id="1"]
+[ext_resource type="PackedScene" path="res://art/models/ford_skimmer.glb" id="2"]
+
+[resource]
+script = ExtResource("1")
+species = &"ford_skimmer"
+label = "Ford Skimmer"
+model = ExtResource("2")
+health = 32
+speed = 2.3
+damage = 3
+height = 0.67
+bounty = 2
+radius = 0.28
+stride_frequency = 5.8
+knock_factor = 0.8
+water_factor = 1.5
+home_sites = PackedStringArray("flooded_grove", "sunken_aqueduct")

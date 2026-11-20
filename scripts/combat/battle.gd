@@ -3,6 +3,8 @@ extends Node3D
 
 signal message(text: String)
 signal sound(cue: String)
+signal enemy_defeated(enemy: CinderEnemy)
+signal roamer_removed(enemy: CinderEnemy, defeated: bool)
 ## Damage dealt to a creature. source is "melee", "spark" or "tower".
 signal damaged(point: Vector3, amount: float, source: StringName, fatal: bool)
 
@@ -41,6 +43,35 @@ var _landmark_seconds := 0.0
 func bind_carried_core(carried: SunCore) -> void:
 	core = carried
 
+## The same budget covers wave enemies, trail encounters and the summit guardian.
+func register_enemy(enemy: CinderEnemy) -> bool:
+	if halted or not enemy or enemies.has(enemy) or enemies.size() >= WAVES.active_limit:
+		return false
+	enemies.append(enemy)
+	enemy.cue.connect(sound.emit)
+	enemy.volley.connect(_enemy_volley)
+	return true
+
+func spawn_enemy(spec: CinderEnemyStats, path: PackedVector3Array, camp: CinderSite = null, lane := -1) -> CinderEnemy:
+	if halted or spec == null or path.is_empty() or enemies.size() >= WAVES.active_limit:
+		return null
+	var enemy := CinderEnemy.new()
+	add_child(enemy)
+	enemy.configure(spec, path, camp)
+	enemy.origin_lane = lane
+	if not register_enemy(enemy):
+		enemy.queue_free()
+		return null
+	return enemy
+
+func spawn_roamer(spec: CinderEnemyStats, start: Vector3, approach: Vector3) -> CinderEnemy:
+	var enemy := spawn_enemy(spec, PackedVector3Array([start, approach]))
+	if enemy:
+		enemy.pursuing = true
+		enemy.award_bounty = false
+		enemy.is_roamer = true
+	return enemy
+
 func prepare(camp: CinderSite, sun: SunCore) -> void:
 	if halted or is_instance_valid(site):
 		return
@@ -68,6 +99,7 @@ func recall() -> void:
 		for enemy in enemies:
 			if not enemy.pursuing:
 				enemy.pursuing = true
+				enemy.counts_for_wave = false
 				enemy.follow_trail(site.anchor.global_position)
 	for tower in towers.values():
 		tower.queue_free()
@@ -89,7 +121,9 @@ func recall() -> void:
 func stop() -> void:
 	halted = true
 	recall()
-	for enemy in enemies:
+	for enemy in enemies.duplicate():
+		if enemy.is_roamer:
+			roamer_removed.emit(enemy, false)
 		enemy.queue_free()
 	enemies.clear()
 	set_physics_process(false)
@@ -207,7 +241,35 @@ func forecast() -> String:
 		return ""
 	var upcoming := site.threat if active_wave else site.threat + 1
 	var count := total_in_wave if active_wave else _count_for(upcoming)
-	return "%s  ·  %d hostiles  ·  %s" % ["/".join(site.lane_names), count, "brute contact" if _has_brute(upcoming) else "crawlers"]
+	var contacts := PackedStringArray()
+	for sequence in count:
+		var spec := _wave_member(upcoming, sequence, count)
+		if spec != CRAWLER and not contacts.has(spec.label):
+			contacts.append(spec.label)
+	return "%s  ·  %d hostiles  ·  %s" % ["/".join(site.lane_names), count, "crawlers" if contacts.is_empty() else ", ".join(contacts)]
+
+func _wave_member(wave: int, slot: int, count: int) -> CinderEnemyStats:
+	var escort := wave > WAVES.brute_from and slot % WAVES.brute_every == WAVES.brute_every - 2
+	if _has_brute(wave) and (slot == count - 1 or escort):
+		return BRUTE
+	if wave < WAVES.specialist_from or WAVES.specialists.is_empty():
+		return CRAWLER
+	for i in WAVES.specialists.size():
+		var native := WAVES.specialists[i]
+		if native.home_sites.has(String(site.checkpoint_id)):
+			if slot == 1:
+				return native
+			if wave >= WAVES.mixed_from and slot == 4:
+				var offset := 1 + (wave - WAVES.mixed_from) % maxi(1, WAVES.specialists.size() - 1)
+				return WAVES.specialists[(i + offset) % WAVES.specialists.size()]
+			break
+	return CRAWLER
+
+func _wave_alive() -> bool:
+	for enemy in enemies:
+		if enemy.counts_for_wave:
+			return true
+	return false
 
 func _has_brute(wave: int) -> bool:
 	return wave >= WAVES.brute_from or (site.intensity > 1.1 and wave >= WAVES.brute_from - 1)
@@ -257,21 +319,19 @@ func _advance_waves(delta: float) -> void:
 		spawn_timer -= delta
 		if spawn_timer <= 0.0 and enemies.size() < WAVES.active_limit and not site.lanes.is_empty():
 			var sequence := total_in_wave - remaining_spawns
-			var escort := site.threat > WAVES.brute_from and sequence % WAVES.brute_every == WAVES.brute_every - 2
-			var brute := _has_brute(site.threat) and (sequence == total_in_wave - 1 or escort)
+			var spec := _wave_member(site.threat, sequence, total_in_wave)
 			var lane_index := (sequence + site.threat - 1) % site.lanes.size()
-			if not brute and _landmark_seconds > 0.0:
+			if spec == CRAWLER and _landmark_seconds > 0.0:
 				lane_index = _landmark_lane
 			var lane := site.lanes[lane_index]
 			if lane.size() >= 2:
-				var enemy := CinderEnemy.new()
-				add_child(enemy)
-				enemy.configure(BRUTE if brute else CRAWLER, lane, site)
-				enemy.origin_lane = lane_index
-				enemies.append(enemy)
+				var enemy := spawn_enemy(spec, lane, site, lane_index)
+				if not enemy:
+					return
+				enemy.counts_for_wave = true
 				remaining_spawns -= 1
 				spawn_timer = WAVES.interval / clampf(site.intensity, 0.85, 1.45)
-	elif enemies.is_empty():
+	elif not _wave_alive():
 		active_wave = false
 		intermission = WAVES.breather
 		_landmark_seconds = 0.0
@@ -298,6 +358,8 @@ func _physics_process(delta: float) -> void:
 		var enemy := enemies[i]
 		if (enemy.pursuing and enemy.global_position.distance_to(core.global_position) > WAVES.leash) or enemy.global_position.y < -30.0:
 			enemies.remove_at(i)
+			if enemy.is_roamer:
+				roamer_removed.emit(enemy, false)
 			enemy.withdraw()
 			continue
 		var slow := 1.0
@@ -374,7 +436,7 @@ func melee(origin: Vector3, forward: Vector3, reach: float, half_arc: float, dam
 		if enemy.fading:
 			continue
 		var offset := (enemy.global_position - origin).slide(Vector3.UP)
-		var size := 0.45 if enemy.stats.height >= 1.0 else 0.25
+		var size := enemy.stats.radius
 		if offset.length() > reach + size or absf(enemy.global_position.y - origin.y) > 1.8:
 			continue
 		if half_arc < PI and offset.length() > 0.5 and aim.angle_to(offset.normalized()) > half_arc:
@@ -387,9 +449,32 @@ func melee(origin: Vector3, forward: Vector3, reach: float, half_arc: float, dam
 	return struck
 
 func _hit(enemy: CinderEnemy, amount: float, source := &"tower") -> void:
-	enemy.wound(amount)
-	damaged.emit(enemy.body_center(), amount, source, enemy.health <= 0)
+	if source == &"spark" or source == &"melee":
+		enemy.direct_hit()
+	var applied := amount * (0.42 if enemy.is_warded() else 1.0)
+	var before := enemy.health
+	enemy.wound(applied)
+	damaged.emit(enemy.body_center(), minf(before, maxf(0.0, before - enemy.health)), source, enemy.health <= 0)
 	if enemy.health <= 0:
 		enemies.erase(enemy)
-		scrap += enemy.stats.bounty
+		if enemy.award_bounty:
+			scrap += enemy.stats.bounty
+		enemy_defeated.emit(enemy)
+		if enemy.is_roamer:
+			roamer_removed.emit(enemy, true)
 		enemy.withdraw(true)
+
+func _enemy_volley(origin: Vector3, target: Vector3, radius: float, damage: float) -> void:
+	var tint := Color("#d17fba")
+	var shot := _visual_shot(origin, target + Vector3.UP * 0.15, true, tint)
+	shot.set_blast_radius(radius)
+	shot.ring_ink.set_shader_parameter("amber", tint)
+	shot.ring_ink.set_shader_parameter("hot", Color("#ffe1e8"))
+	shot.landed.connect(_volley_hit.bind(target, radius, damage), CONNECT_ONE_SHOT)
+
+func _volley_hit(point: Vector3, radius: float, damage: float) -> void:
+	if halted or not is_instance_valid(core):
+		return
+	if CinderEnemy.flat_distance(point, core.global_position) <= radius and absf(core.global_position.y - point.y) < 2.2:
+		core.damage(damage)
+		sound.emit("hit")

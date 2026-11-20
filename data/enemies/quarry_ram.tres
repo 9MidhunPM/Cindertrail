@@ -1,0 +1,20 @@
+[gd_resource type="Resource" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/combat/enemy_stats.gd" id="1"]
+[ext_resource type="PackedScene" path="res://art/models/quarry_ram.glb" id="2"]
+
+[resource]
+script = ExtResource("1")
+species = &"quarry_ram"
+label = "Quarry Ram"
+model = ExtResource("2")
+health = 54
+speed = 2.2
+damage = 5
+height = 1.12
+bounty = 2
+radius = 0.4
+stride_frequency = 4.7
+knock_factor = 0.55
+water_factor = 0.52
+home_sites = PackedStringArray("broken_quarry")

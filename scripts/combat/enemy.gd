@@ -1,6 +1,15 @@
 class_name CinderEnemy
 extends CharacterBody3D
 
+signal cue(name: String)
+signal volley(origin: Vector3, target: Vector3, radius: float, damage: float)
+
+const TECHNIQUE := preload("res://scripts/combat/enemy_technique.gd")
+var technique: TECHNIQUE
+var warded_by: CinderEnemy
+var counts_for_wave := false
+var award_bounty := true
+var is_roamer := false
 var stats: CinderEnemyStats
 var health: float
 var site_of_origin: CinderSite
@@ -20,9 +29,7 @@ var model: Node3D
 var base_scale := Vector3.ONE
 var last_hit := 0.0
 var separation := Vector3.ZERO
-var limbs: Array[Node3D] = []
-var phases := PackedFloat32Array()
-var rest_heights := PackedFloat32Array()
+var _articulation := preload("res://scripts/combat/enemy_pose.gd").new()
 var fissure: StandardMaterial3D
 var _disruption := 0.0
 var _fallback := Vector3.INF
@@ -39,24 +46,22 @@ func configure(spec: CinderEnemyStats, path: PackedVector3Array, camp: CinderSit
 	route = path.duplicate()
 	model = stats.model.instantiate() as Node3D
 	add_child(model)
-	base_scale = Vector3.ONE * (1.28 if stats.height < 1.0 else 1.18)
-	_rig_limbs()
+	base_scale = Vector3.ONE * stats.model_scale
+	_articulation.bind(model)
 	model.scale = base_scale
 	# Vary breathing independently from locomotion without consuming wave RNG.
 	breath = fmod(get_instance_id() * 0.63, TAU)
-	var marking := model.find_child("Cyan_fissure*" if stats.height < 1.0 else "Violet_fissure*", true, false) as MeshInstance3D
-	if marking:
-		var source := marking.get_active_material(0) as StandardMaterial3D
-		if source:
-			fissure = source.duplicate()
-			for piece in model.find_children("*fissure*", "MeshInstance3D", true, false):
-				(piece as MeshInstance3D).material_override = fissure
+	if stats.species in [TECHNIQUE.SKIMMER, TECHNIQUE.RAM, TECHNIQUE.SPLINTER, TECHNIQUE.WARDEN]:
+		technique = TECHNIQUE.new()
+		add_child(technique)
+		technique.bind(self)
+	_bind_emissive_seams()
 	collision_layer = 0
 	collision_mask = 1
 	floor_snap_length = 0.55
 	var shape := CollisionShape3D.new()
 	var capsule := CapsuleShape3D.new()
-	capsule.radius = 0.26 if stats.height < 1.0 else 0.43
+	capsule.radius = stats.radius
 	capsule.height = maxf(stats.height, capsule.radius * 2.0)
 	shape.shape = capsule
 	shape.position.y = capsule.height * 0.5 + 0.02
@@ -64,39 +69,22 @@ func configure(spec: CinderEnemyStats, path: PackedVector3Array, camp: CinderSit
 	global_position = route[0] + Vector3.UP * 0.09
 	step = 1
 
-# The starter meshes have separate rigid leg pieces. Pair them at each hip or
-# shoulder and rotate the joints in alternating phases as the creature moves.
-func _rig_limbs() -> void:
-	var crawler := stats.height < 1.0
-	if crawler:
-		_pair_limbs("Leg_upper*", "Leg_lower*", Vector3(0.22,0.42,0), true)
-	else:
-		_pair_limbs("Shin*", "Foot*", Vector3(0.3,0.68,0), false)
-		_pair_limbs("Arm*", "Fist*", Vector3(0.58,1.55,0), false)
-
-func _pair_limbs(upper_name: String, lower_name: String, joint: Vector3, crawler: bool) -> void:
-	var upper := model.find_children(upper_name, "MeshInstance3D", true, false)
-	var lower := model.find_children(lower_name, "MeshInstance3D", true, false)
-	for i in mini(upper.size(), lower.size()):
-		var segment := upper[i] as MeshInstance3D
-		var pivot := Node3D.new()
-		segment.get_parent().add_child(pivot)
-		pivot.position = Vector3(signf(segment.position.x)*joint.x, joint.y, segment.position.z - 0.04 if crawler else joint.z)
-		segment.reparent(pivot, true)
-		lower[i].reparent(pivot, true)
-		var leg_phase := PI * (i % 2)
-		if upper_name == "Arm*":
-			leg_phase += PI
-		rest_heights.append(pivot.position.y)
-		phases.append(leg_phase)
-		limbs.append(pivot)
+func _bind_emissive_seams() -> void:
+	# Each moving plate group shares its atlas and has a separate emissive vein surface.
+	for piece: MeshInstance3D in model.find_children("*", "MeshInstance3D", true, false):
+		for surface in piece.get_surface_override_material_count():
+			var source := piece.get_active_material(surface) as StandardMaterial3D
+			if source and source.emission_enabled:
+				if not fissure:
+					fissure = source.duplicate()
+				piece.set_surface_override_material(surface, fissure)
 
 func _pose(delta: float, distance: float, near: bool, core_distance: float) -> void:
-	var crawler := stats.height < 1.0
+	var crawler := stats.species in [&"crawler", TECHNIQUE.SKIMMER]
 	var gait_speed := distance / maxf(delta, 0.001)
 	gait_weight = lerpf(gait_weight, clampf(gait_speed / stats.speed, 0.0, 1.0), 1.0 - exp(-12.0 * delta))
 	# The feet advance with distance even while slowed by water or a field.
-	stride = fmod(stride + distance * (6.2 if crawler else 3.5), TAU)
+	stride = fmod(stride + distance * stats.stride_frequency, TAU)
 	breath = fmod(breath + delta * (2.9 if crawler else 1.8), TAU)
 	strike = maxf(0.0, strike - delta / (0.24 if crawler else 0.34))
 	last_hit = maxf(0.0, last_hit - delta)
@@ -110,28 +98,16 @@ func _pose(delta: float, distance: float, near: bool, core_distance: float) -> v
 	var thrust := smoothstep(0.0, 0.93, strike)
 	if near and attack_timer <= 0.09 and attack_timer >= 0.0:
 		thrust = maxf(thrust, 1.0 - smoothstep(0.0, 0.09, attack_timer))
-	for i in limbs.size():
-		var hinge := limbs[i]
-		var phase := stride + phases[i]
-		var swing := sin(phase) * gait_weight
-		var lift := pow(maxf(0.0, cos(phase)), 1.4) * gait_weight
-		if crawler:
-			var side := signf(hinge.position.x)
-			hinge.rotation.y = swing * 0.43 * side
-			hinge.rotation.z = (lift * 0.34 + windup * 0.18 - thrust * 0.23) * side
-		else:
-			var arm := i >= 2
-			hinge.position.y = rest_heights[i] + (0.0 if arm else lift * 0.13)
-			hinge.rotation.x = swing * (0.33 if arm else 0.56)
-			if arm:
-				hinge.rotation.x += 0.15 + windup * (0.38 if i == 2 else 0.83) - thrust * (0.62 if i == 2 else 1.32)
+	_articulation.advance(self, delta, thrust, hit)
 	var bob := (1.0 - cos(stride * 2.0)) * gait_weight
-	model.position.y = 0.015 + sin(breath) * 0.012 + bob * (0.026 if crawler else 0.045) - windup * 0.07
+	var brace := technique.opening() if technique and stats.species == TECHNIQUE.RAM else 0.0
+	model.position.y = 0.015 + sin(breath) * 0.012 + bob * (0.026 if crawler else 0.045) - windup * 0.07 - brace * 0.08
 	model.position.z = thrust * (0.36 if crawler else 0.24) - windup * 0.10 - hit * 0.10
-	model.rotation.x = thrust * 0.24 - windup * 0.14 - hit * 0.15
+	model.rotation.x = thrust * 0.24 - windup * 0.14 - hit * 0.15 - brace * 0.1
 	model.rotation.z = sin(stride) * gait_weight * (0.060 if crawler else 0.12) + hit * 0.12
 	if fissure:
-		fissure.emission_energy_multiplier = 1.15 + 0.25 * sin(breath) + windup * 1.8 + hit * 2.0
+		var special_glow := technique.opening() if technique else 0.0
+		fissure.emission_energy_multiplier = 0.90 + 0.18 * sin(breath) + windup * 1.45 + special_glow * 0.8 + hit * 1.6
 
 func wound(amount: float) -> void:
 	health -= amount
@@ -139,10 +115,9 @@ func wound(amount: float) -> void:
 
 ## Knock the creature away from a blade strike and stagger it briefly.
 func shove(push: Vector3, stun: float) -> void:
-	var heavy := stats.height >= 1.0
-	knock = push.slide(Vector3.UP) * (0.35 if heavy else 1.0)
-	disrupt(stun * (0.5 if heavy else 1.0))
-	if not heavy and push.length() > 6.0:
+	knock = push.slide(Vector3.UP) * stats.knock_factor
+	disrupt(stun * lerpf(0.3, 1.0, stats.knock_factor))
+	if stats.knock_factor >= 0.75 and push.length() > 6.0:
 		velocity.y = 3.2
 
 ## White hit flash drawn as a temporary overlay pass.
@@ -169,10 +144,22 @@ func _fade_flash(delta: float) -> void:
 			piece.set_instance_shader_parameter(&"flash", _flash)
 
 func disrupt(duration: float, push_back := false) -> void:
+	if technique:
+		technique.cancel()
 	_disruption = maxf(_disruption, duration)
 	attack_timer = maxf(attack_timer, duration + 0.25)
 	_fallback = route[clampi(step - 2, 0, route.size() - 2)] if push_back and route.size() > 1 else Vector3.INF
 	last_hit = 0.15
+
+func is_disrupted() -> bool:
+	return _disruption > 0.0
+
+func is_warded() -> bool:
+	return is_instance_valid(warded_by) and not warded_by.fading and warded_by.health > 0.0
+
+func direct_hit() -> void:
+	if technique and stats.species in [TECHNIQUE.SPLINTER, TECHNIQUE.WARDEN]:
+		technique.cancel()
 
 func body_center() -> Vector3:
 	return global_position + Vector3.UP * stats.height * 0.7
@@ -193,9 +180,13 @@ func advance(core: SunCore, delta: float, field_factor: float) -> bool:
 	direction.y = 0
 	var close_to_target := flat_distance(global_position, target) < 1.35 and absf(target.y - global_position.y) < 2.5
 	var near := close_to_target and step >= route.size() - 1
-	var speed := stats.speed * field_factor
-	if site_of_origin.wet_depth_at(global_position):
-		speed *= 0.53
+	var wet := is_instance_valid(site_of_origin) and site_of_origin.wet_depth_at(global_position)
+	var speed := stats.speed * field_factor * (stats.water_factor if wet else 1.0)
+	if technique:
+		technique.advance(delta, wet, field_factor, target, flat_distance(global_position, target))
+		speed *= technique.movement_factor()
+		if technique.phase == TECHNIQUE.Phase.WINDUP:
+			near = false
 	var movement := Vector3.ZERO
 	if _disruption > 0.0:
 		_disruption = maxf(0.0, _disruption - delta)
@@ -255,15 +246,17 @@ func withdraw(defeated := false) -> void:
 	if fading:
 		return
 	fading = true
+	if technique:
+		technique.cancel()
+		technique.hide()
 	var tween := create_tween()
 	if defeated:
-		var crawler := stats.height < 1.0
+		var crawler := stats.species in [&"crawler", TECHNIQUE.SKIMMER]
 		# Break the silhouette first, then let the fallen shell sink into the ground.
 		tween.set_parallel(true)
 		tween.tween_property(model, "rotation:z", 0.62 if crawler else -0.94, 0.24).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 		tween.tween_property(model, "position:y", 0.02 if crawler else -0.16, 0.24)
-		for hinge in limbs:
-			tween.tween_property(hinge, "rotation:x", -0.72 if crawler else 0.59, 0.18)
+		_articulation.collapse(tween, stats.species)
 		if fissure:
 			tween.tween_property(fissure, "emission_energy_multiplier", 0.0, 0.36)
 		tween.chain().tween_property(model, "scale", base_scale * 0.03, 0.28).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)

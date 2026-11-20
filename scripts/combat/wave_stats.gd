@@ -17,3 +17,7 @@ extends Resource
 @export var brute_every := 6
 ## Scrap awarded when a wave is held.
 @export var clear_bonus := 2
+## One local specialist appears from this wave. Later waves mix a second habitat.
+@export var specialist_from := 2
+@export var mixed_from := 4
+@export var specialists: Array[CinderEnemyStats] = []

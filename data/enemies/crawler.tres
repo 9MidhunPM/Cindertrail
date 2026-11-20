@@ -11,3 +11,4 @@ speed = 2.85
 damage = 4
 height = 0.55
 bounty = 1
+model_scale = 1.28
