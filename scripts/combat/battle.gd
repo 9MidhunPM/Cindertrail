@@ -504,6 +504,7 @@ func melee(origin: Vector3, forward: Vector3, reach: float, half_arc: float, dam
 func _hit(enemy: CinderEnemy, amount: float, source := &"tower") -> void:
 	if source == &"spark" or source == &"melee":
 		enemy.direct_hit()
+		amount += enemy.consume_mark_bonus(source)
 	var applied := amount * (0.42 if enemy.is_warded() else 1.0)
 	var before := enemy.health
 	enemy.wound(applied)
