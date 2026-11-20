@@ -22,6 +22,8 @@ var _openness := 0.0
 var _ring_gimbals: Array[Node3D] = []
 var _solar_time := 0.0
 var _light_pulse := 0.0
+var _draw := preload("res://scripts/fx/site_draw.gd").new()
+var _draw_spin := 0.0
 var _fittings: Node3D
 var _frame_band: MeshInstance3D
 var _hinges: Array[MeshInstance3D] = []
@@ -35,17 +37,27 @@ var _handle: Node3D
 @onready var _light: OmniLight3D = $Visual/SunCenter/Sunlight
 
 func _ready() -> void:
+	add_child(_draw)
 	_show_form(form)
 
+func receive_site_energy(site: CinderSite, amount: float, reduced_motion: bool) -> void:
+	if form == Form.DEPLOYED and health > 0.0:
+		_draw.receive(site, _focal.global_position, amount, reduced_motion)
+
 func _process(delta: float) -> void:
-	_solar_time += delta
+	var receiving := _draw.visible
+	var spin_target := 1.0 if receiving and not _draw.quiet else 0.0
+	_draw_spin = move_toward(_draw_spin, spin_target, delta * 3.5)
+	_solar_time += delta * (1.0 + _draw_spin * .62)
 	_light_pulse = move_toward(_light_pulse, 0.0, delta * 2.4)
-	_orbits.rotate_y(delta * (.47 if form == Form.DELIVERED else .2))
+	_orbits.rotate_y(delta * ((.47 if form == Form.DELIVERED else .2) + .86 * _draw_spin))
 	for i in _ring_gimbals.size():
 		var phase := _solar_time * (0.52 + 0.12 * i) + i * TAU / 3.0
 		_ring_gimbals[i].rotation.x = sin(phase) * (0.09 + _openness * 0.14)
 		_ring_gimbals[i].rotation.z = cos(phase * 0.82) * (0.06 + _openness * 0.10)
 	var pulse := 1.0 + 0.035 * sin(_solar_time * 2.4) + 0.31 * _light_pulse
+	if receiving:
+		pulse += .10 + _draw.arrival_glow() * .15
 	_light.light_energy = lerpf(.66, 4.4, _openness) * pulse
 
 func damage(amount: float) -> void:
@@ -54,6 +66,7 @@ func damage(amount: float) -> void:
 	_light_pulse = 1.0
 	health = maxf(0.0, health - amount)
 	if health <= 0.0:
+		_draw.clear()
 		destroyed.emit()
 
 func repair(amount: float) -> void:
@@ -66,6 +79,8 @@ func transfer(anchor: Node3D, new_form: int, duration: float = 0.0) -> void:
 		return
 	if not is_inside_tree() or not anchor.is_inside_tree():
 		return
+	_draw.clear()
+	_draw_spin = 0.0
 	if _transfer_time:
 		_transfer_time.kill()
 	if get_parent() != anchor:
@@ -133,7 +148,7 @@ func _show_form(new_form: int) -> void:
 		belt.outer_radius = .371
 		belt.rings = 18
 		belt.ring_segments = 4
-		belt.material = preload("res://art/materials/bronze.tres")
+		belt.material = preload("res://art/materials/stylized/painted_bronze.tres")
 		_frame_band.mesh = belt
 		_frame_band.scale.y = 1.45
 		_frame.add_child(_frame_band)
