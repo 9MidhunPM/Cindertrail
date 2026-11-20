@@ -50,6 +50,7 @@ export XDG_CONFIG_HOME="$scratch/config"
 export XDG_CACHE_HOME="$scratch/cache"
 export CINDERTRAIL_SHOWCASE_ISOLATED=1
 export CINDERTRAIL_GUIDE_ONLINE=0
+export CINDERTRAIL_GUIDE_VOICE=0
 export OPENAI_API_KEY=''
 run_args=(--path "$project" --script res://tools/qa/showcase.gd)
 if "$headless"; then
