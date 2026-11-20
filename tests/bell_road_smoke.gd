@@ -89,10 +89,11 @@ func _run() -> void:
 
 func _southern_shrine(start_seed: int) -> void:
 	var seed_value := start_seed
-	var layout := CinderJourneyLayout.generate(seed_value)
+	# This fixture exercises the original shrine's dry detour through the Grove.
+	var layout := CinderJourneyLayout.generate(seed_value, 2)
 	while layout.clearing(&"flooded_grove") != 1:
 		seed_value += 1
-		layout = CinderJourneyLayout.generate(seed_value)
+		layout = CinderJourneyLayout.generate(seed_value, 2)
 	var record := layout.checkpoint_fields()
 	record["restoration"] = 15.0
 	record["sites"] = {&"flooded_grove": {"reserve": 12.59, "threat": 2}}

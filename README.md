@@ -13,13 +13,13 @@ godot --path .
 
 The project uses the Mobile Vulkan renderer. Run it from Godot to play the current source milestone.
 
-The title opens on the Flooded Grove. **New journey** starts the four-panel motion comic. **Continue journey** resumes at the last safe checkpoint. A checkpoint preserves your trail position, shrine health, restoration, scrap, modules, caches, unlocked shortcuts, remaining camp reserves and local threat. The game saves when you are carrying the shrine on safe ground after breaking pursuit.
+The title opens on the Flooded Grove. **New Journey** starts the twelve-page illustrated prologue. **Continue Journey** resumes at the last safe checkpoint. A checkpoint preserves your trail position, shrine health, restoration, scrap, modules, caches, unlocked shortcuts, remaining camp reserves and local threat. The game saves when you are carrying the shrine on safe ground after breaking pursuit.
 
 The six main camps share one continuous 3D world and all use the same protected sun. Each main camp has 25 points of restoration. Expect quick attacks and a short break after each cleared wave. Drain four main camps or combine partial reserves, then bring the sun to the hilltop beacon.
 
 **New Journey** combines one of three base valleys with independently selected trail forks, shrine clearings, and town blocks. The Grove approach is your starting point. Follow the moonlit trails through Western Arcade, Bellmakers’ Steps, and Mineral Ward. Each town has a side path with a supply cache. Continue and Retry rebuild your saved valley. Older journeys retain their original routes and positions.
 
-Fully draining a shrine raises the cap of all three defenses by one level and earns that shrine's traveler ability. Use **G** to cast and **Q** to cycle. Individual tower upgrades still cost scrap. At 100% restoration the beacon opens. Press **Space** at an unfinished shrine to keep earning its local reward.
+Fully draining a shrine raises the cap of all three defenses by one level and earns that shrine's traveler ability. Use **G** to cast and **Q** to cycle. Each ability has its own cooldown in the icon dock. The first time you learn an ability, it earns a permanent achievement. Individual tower upgrades still cost scrap. At 100% restoration the beacon opens. Press **T** at an unfinished shrine to keep earning its local reward.
 
 Camp landmarks can swing a wave. Press **E** at a bell, crane, relay switch, lantern, sluice wheel, or mirror control. At Fallen Relay, aim the pointer at the lane you want to pulse. Follow the moths in Lanternwood and align the Sunwatch mirrors during exploration to prepare those defenses.
 
@@ -34,14 +34,15 @@ Hold still to watch fish school beneath the Grove crossing, deer browse in Lante
 | Splinterback | Its crystal fan opens over a marked landing zone. Interrupt the wind-up or carry the sun out of the mark. |
 | Bell Warden | The bell opens around its chime and shields an ally. Strike the Warden to break the ward. |
 
-At full restoration, take the ridge beyond Fallen Relay to the beacon. Press **E** to unfold the shrine on its summit, place any carried modules, then press **Space** to challenge the **Vesper Colossus**. Watch its marked charge, strike while it braces, and aim for the open chest. After it falls, approach the cradle and press **E** to deliver the sun and begin the painted finale. Press **Esc** or **Enter** to skip to sunrise. Folding the shrine lets you retreat and attempt the defense again. If the core falls, **Retry from checkpoint** returns to the pre-fight journey.
+At full restoration, follow the compass to the ridge beyond Fallen Relay. Press **E** to unfold the shrine on its summit, place any carried modules, then press **T** to challenge the **Vesper Colossus**. Evade its charges and ground ring. Move to the lit shoulder and strike or spark twice while it braces, then attack the open chest. After it falls, approach the cradle and press **E** to deliver the sun and begin the painted finale. Press **Esc** or **Enter** to skip to sunrise. Folding the shrine lets you retreat and attempt the defense again. If the core falls, **Retry from checkpoint** returns to the pre-fight journey.
 
 | Input | Action |
 | --- | --- |
-| **WASD**, mouse, **Shift**, **Ctrl** | Move, look, sprint and walk |
+| **WASD**, mouse, **Ctrl** | Move, look, and walk |
+| **Space**, **Shift** | Jump. Press Shift to dash and hold it to sprint |
 | **E** | Use a nearby landmark, unfold the shrine, collect supplies, repair, or deliver the restored sun |
 | **1 / 2 / 3**, left click | Select a module, then place it on an open socket |
-| **Space** | Start the attack and begin extracting restoration |
+| **T** | Start a defense or resume extraction |
 | **U** | Upgrade the tower under the pointer |
 | **G**, **Q** | Cast or cycle earned shrine abilities |
 | Left click or **F** | Tap for a draw cut, rising backhand, and leaping slam. Each strike turns toward the nearest unobstructed enemy within 4.2 m. Hold until the blade glows and chimes, then release for a spinning slash. With a module selected, left click places it |
@@ -53,7 +54,7 @@ At full restoration, take the ridge beyond Fallen Relay to the beacon. Press **E
 
 Repairs spend scrap to restore shrine health. Energy drawn from a camp advances the journey toward sunrise.
 
-See the [moonlit valley screenshots and verification](docs/MOONLIT_VALLEY_VERIFICATION.md), [Living Valley screenshots and measurements](docs/LIVING_VALLEY_VERIFICATION.md), [repeatable QA commands](tools/qa/README.md), and the original [visual fieldbook](OPEN_ME.html).
+See the [Traveler’s Reckoning screenshots and verification](docs/TRAVELER_RECKONING_VERIFICATION.md), [moonlit valley screenshots](docs/MOONLIT_VALLEY_VERIFICATION.md), [repeatable QA commands](tools/qa/README.md), and the original [visual fieldbook](OPEN_ME.html).
 
 ## Included
 
