@@ -5,6 +5,7 @@ const DATA := preload("res://data/sites/quarry.tres")
 const ARCH := preload("res://art/models/ruin_arch.glb")
 const PILLAR := preload("res://art/models/ruin_pillar.glb")
 const STONE_SHADER := preload("res://art/materials/highland/limestone.gdshader")
+const SURFACE_DETAIL := preload("res://scripts/world/valley_surface_detail.gd")
 const TREE := preload("res://art/models/orange_tree.glb")
 const GROUND := Vector3(-53, 1.15, 0)
 const TRAIL := [
@@ -605,7 +606,10 @@ func _rock(origin: Vector3, size: Vector3, color: Color) -> void:
 		var j := (i + 1) % 7
 		var out := (lower[i] + lower[j]) * .5 - origin
 		var shade := color.lerp(SEDIMENT, _rng.randf_range(.08, .32))
-		_quad(lower[i], lower[j], shoulder[j], shoulder[i], shade, out)
+		if size.y > 1.45 and size.x > .9 and i % 3 != 0:
+			SURFACE_DETAIL.quarry_cut_face(lower[i], lower[j], shoulder[j], shoulder[i], out, shade, _quad)
+		else:
+			_quad(lower[i], lower[j], shoulder[j], shoulder[i], shade, out)
 		_quad(shoulder[i], shoulder[j], cap[j], cap[i], shade.lightened(.065), (out + Vector3.UP).normalized())
 		_tri(cap[i], cap[j], origin + slope + Vector3.UP * size.y, color.lightened(.16), Vector3.UP)
 

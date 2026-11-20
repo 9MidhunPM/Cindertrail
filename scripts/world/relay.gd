@@ -3,6 +3,7 @@ extends Node3D
 
 const SITE_SPEC := preload("res://data/sites/relay.tres")
 const STONE_SHADER := preload("res://art/materials/highland/limestone.gdshader")
+const SURFACE_DETAIL := preload("res://scripts/world/valley_surface_detail.gd")
 const FLAG_SHADER := preload("res://art/materials/highland/relay_flag.gdshader")
 const CREAM := Color("#c7aa80")
 const HIGHLIGHT := Color("#e4cca0")
@@ -50,6 +51,7 @@ func _ready() -> void:
 	_collision.name = "RelayCollision"
 	add_child(_collision)
 	_ravine()
+	SURFACE_DETAIL.attach_relay(self)
 	_summit_geology()
 	_rng.seed = 84440
 	_build_plateau()

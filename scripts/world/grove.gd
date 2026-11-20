@@ -9,6 +9,7 @@ const WATER = preload("res://art/materials/grove/shallows.gdshader")
 const PALETTE = preload("res://art/materials/grove/weathered_palette.gdshader")
 const FALL = preload("res://art/materials/grove/waterfall.gdshader")
 const WILDLIFE = preload("res://scripts/world/grove_wildlife.gd")
+const SURFACE_DETAIL = preload("res://scripts/world/valley_surface_detail.gd")
 const ROUTE_PAINT = preload("res://art/textures/stylized/route_paint.png")
 const BELL_POSITION := Vector3(-3.65, 0.72, 2.60)
 const CREAM = Color("#d6b584")
@@ -49,6 +50,7 @@ func _ready() -> void:
 	_ruin_gardens()
 	_exposed_roots()
 	_bell_shrine()
+	SURFACE_DETAIL.grove_waterline(_face)
 	_finish_mesh()
 	_wildlife = WILDLIFE.new()
 	add_child(_wildlife)
@@ -283,7 +285,14 @@ func _walk(path: Array, width: float) -> void:
 				var chip := rng.randf_range(.04,.27)
 				var poly := PackedVector2Array([p0.lerp(p1,chip*.66),p1.lerp(p0,.05),p1.lerp(p2,.1),p2.lerp(p1,.06),p2.lerp(p3,.06),p3.lerp(p2,chip*.52),p3.lerp(p0,chip),p0.lerp(p3,chip*.78)])
 				var high := rng.randf_range(.642,.70)
-				_slab(poly,.38+rng.randf_range(-.13,.03),high,_stone())
+				var bed := .38 + rng.randf_range(-.13, .03)
+				var tint := _stone()
+				if (row * 2 + lane + segment) % 7 == 0:
+					var fractures := SURFACE_DETAIL.split_slab(poly)
+					_slab(fractures[0], bed, high, tint)
+					_slab(fractures[1], bed, high - .018, tint.darkened(.085))
+				else:
+					_slab(poly, bed, high, tint)
 				if rng.randf()<.27:
 					_crack((start+end)*.5+side*(x0+x1)*.5,high+.002,forward,side)
 				if lane!=1 and rng.randf()<.38:
@@ -322,6 +331,8 @@ func _architecture() -> void:
 	for p in [[-8.5,-6.8,1.9,-.22],[-13.70,-10.15,.90,-.42],[7.4,-10.2,2.18,.31],[16.6,-13.3,1.13,.22],[-5.6,-18.0,1.18,-.10],[8.45,3.35,1.91,-.64]]:
 		var ruined: bool = p[0] < -12 or p[0] > 15
 		_asset(ARCH,Vector3(p[0],.02,p[1]),Vector3.ONE*p[2],p[3],ruined)
+		if not ruined:
+			SURFACE_DETAIL.grove_arch_chips(Vector3(p[0], .02, p[1]), float(p[3]), float(p[2]), _face)
 		var arch_scale := float(p[2])
 		var axis := Vector3(cos(float(p[3])),0,-sin(float(p[3])))
 		for end in [-1.0,1.0]:
