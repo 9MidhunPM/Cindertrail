@@ -6,6 +6,7 @@ const FORK_DATA := preload("res://data/outer_valley/trail_forks.json")
 const ENVIRONMENT := preload("res://scripts/world/exploration_environment.gd")
 const NETWORK := preload("res://scripts/world/trail_network.gd")
 const FORK_HUBS := {"pilgrims_cross": "cross", "orchard_pass": "saddle", "mineral_spring": "spring"}
+const TOWN_WALKS := preload("res://scripts/world/town_cache_walks.gd")
 const TOWN_TITLES := {"ruins": "Western Arcade", "terrace": "Bellmakers’ Steps", "spring": "Mineral Ward"}
 const LANDMARKS := preload("res://data/outer_valley/landmarks.json")
 const PIGMENT := preload("res://art/outer_valley/valley_pigment.gdshader")
@@ -34,6 +35,7 @@ var clearing_variants: Dictionary = {}
 var journey_layout: CinderJourneyLayout
 var abandoned_towns: Node3D
 var active_forks: Dictionary = {}
+var town_side_paths: Dictionary = {}
 var _network := NETWORK.new()
 var _graph: Dictionary
 var sites: Array[CinderSite] = []
@@ -106,6 +108,8 @@ func _ready() -> void:
 	for entry: Array in LANDMARKS.data.caches:
 		cache_ids.append(entry[0])
 		caches.append(junctions[entry[1]] + _point(entry[2]))
+	if abandoned_towns != null:
+		TOWN_WALKS.install(self, journey_layout)
 	for entry: Dictionary in LANDMARKS.data.gates:
 		var trail := roads[road_names.find(entry.trail)]
 		var start := trail[int(entry.section)]

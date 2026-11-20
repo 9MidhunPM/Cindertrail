@@ -22,6 +22,7 @@ var full := false
 var objective := Vector3.INF
 var _roads: Array[PackedVector3Array] = []
 var _towns: Dictionary = {}
+var _side_streets: Array[PackedVector3Array] = []
 var _lake_center := Vector3.INF
 var _bounds := Rect2()
 var _font: Font
@@ -44,11 +45,13 @@ func bind(world: Node) -> void:
 	game = world
 	_roads.clear()
 	_towns.clear()
+	_side_streets.clear()
 	var grove: CinderGrove = world.get("grove_terrain")
 	_lake_center = grove.global_position if grove != null else Vector3.INF
 	var outer = world.get("outer_valley")
 	if outer != null:
 		if outer.abandoned_towns != null:
+			_side_streets.assign(outer.town_side_paths.values())
 			for key: String in CinderOuterValley.TOWN_TITLES:
 				_towns[CinderOuterValley.TOWN_TITLES[key]] = outer.junctions[key]
 		for road: PackedVector3Array in outer.roads:
@@ -128,6 +131,9 @@ func _draw_map() -> void:
 		_canvas.draw_circle(middle, 21.56 * scale_px, Color(WATER, 0.45))
 	for road in _roads:
 		_polyline(road, center, scale_px, yaw, origin, Color(TRAIL, 0.85), maxf(2.6 * scale_px, 1.6), reach)
+	if not full:
+		for lane in _side_streets:
+			_polyline(lane, center, scale_px, yaw, origin, Color(TRAIL, .54), 1.35, reach)
 	if full:
 		for town: String in _towns:
 			var point := _to_map(_towns[town], center, scale_px, yaw, origin)
