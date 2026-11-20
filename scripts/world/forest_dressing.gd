@@ -34,7 +34,7 @@ var _bark: ShaderMaterial
 var _leaf: ShaderMaterial
 var _planted := PackedVector3Array()
 
-func build(roads: Array, labels: PackedStringArray, forbidden: PackedVector3Array, seed_value: int) -> void:
+func build(roads: Array, labels: PackedStringArray, forbidden: PackedVector3Array, seed_value: int, settlements: Array) -> void:
 	_roads = roads
 	_excluded = forbidden
 	_rng.seed = 73183 ^ seed_value
@@ -47,7 +47,52 @@ func build(roads: Array, labels: PackedStringArray, forbidden: PackedVector3Arra
 		var route := labels.find(record[0])
 		if route >= 0:
 			_plant_pocket(_roads[route], record[1], record[2], record[3])
+	for town: Node3D in settlements:
+		_plant_town_skirt(town)
 	_roads = []
+
+func _plant_town_skirt(town: Node3D) -> void:
+	var border := Node3D.new()
+	border.name = "TownForestSkirt"
+	border.position = town.position
+	add_child(border)
+	var wood := MESH.new()
+	var canopy := MESH.new()
+	var count := 0
+	var forward := -town.global_basis.z
+	for local: Vector2 in [Vector2(-6.8, 7.5), Vector2(7.2, 8.5), Vector2(-8.7, -10.5),
+			Vector2(8.8, -10.0), Vector2(-11.8, -12.9), Vector2(12.5, -14.0),
+			Vector2(-11.9, -.6), Vector2(11.1, 2.9), Vector2(-8.8, -18.4), Vector2(9.8, -20.1),
+			Vector2(-9.5, 11.4), Vector2(10.15, 12.8), Vector2(-14.65, -4.8), Vector2(14.8, -7.3)]:
+		var at := town.to_global(Vector3(local.x, 0, local.y))
+		if _distance_to_roads(at) < 4.55 or _has_neighbor(at, 3.12):
+			continue
+		var ground := _ground(at)
+		if ground == Vector3.INF:
+			continue
+		var center := border.to_local(ground)
+		var warm := count % 3 == 0
+		_tree(wood, canopy, center, _rng.randf_range(3.85, 5.65), warm, forward)
+		_planted.append(ground)
+		for cluster in 3:
+			var bit := ground + Vector3(sin(cluster * 2.2), 0, cos(cluster * 2.2)) * 1.15
+			if _distance_to_roads(bit) < 2.65:
+				continue
+			var floor_at := _ground(bit)
+			if floor_at != Vector3.INF:
+				var seedling := border.to_local(floor_at)
+				_fern(canopy, seedling, _rng.randf_range(.57, .92), warm)
+				canopy.facets(seedling + Vector3.UP * .18, Vector3(.35, .16, .31), 7, Color("#465d48"))
+		count += 1
+		if count >= 7:
+			break
+	if count == 0:
+		border.queue_free()
+		return
+	for part: MeshInstance3D in [wood.mount(border, "TownSkirtBark", _bark, false),
+			canopy.mount(border, "TownSkirtCanopy", _leaf, false)]:
+		part.visibility_range_end = 87.0
+		part.visibility_range_end_margin = 11.0
 
 func _plant_pocket(path: PackedVector3Array, fraction: float, bank: float, autumn_ratio: float) -> void:
 	if path.size() < 2:
@@ -162,7 +207,7 @@ func _ground(at: Vector3) -> Vector3:
 	if hit.is_empty() or (hit.normal as Vector3).y < .75:
 		return Vector3.INF
 	var body := hit.collider as Node3D
-	if body != null and body.get_parent() is DEN:
+	if body != null and (body.get_parent() is DEN or body.name == "TownShellCollisions"):
 		return Vector3.INF
 	return hit.position
 

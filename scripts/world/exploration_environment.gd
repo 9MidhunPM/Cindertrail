@@ -30,7 +30,7 @@ func build(junctions: Dictionary, town_variants: Dictionary, roads: Array, road_
 	var forest := FOREST.new()
 	forest.name = "ForestDressing"
 	add_child(forest)
-	forest.build(roads, road_names, clearings, journey_seed)
+	forest.build(roads, road_names, clearings, journey_seed, _towns.values())
 
 func settlement_at(id: StringName) -> TOWN:
 	return _towns.get(id)

@@ -239,6 +239,54 @@ func _house(at: Vector3, half: Vector2, h: float, wall: Color, tiles: Color, dam
 		_stone.facets(p, Vector3(.17, .11, .15) * _rng.randf_range(.49, 1.34), 6, wall.darkened(.13))
 	var climbing_side := -1.0 if damage == 1 else 1.0
 	_ivy(at + Vector3(climbing_side * (x - .21), h - .09, z + .23), h * .71)
+	_street_facade(at, half, courses, wall, damage)
+
+func _street_facade(at: Vector3, half: Vector2, courses: int, wall: Color, damage: int) -> void:
+	var x := half.x
+	var z := half.y
+	var hand := -1.0 if at.x > 0.0 else 1.0
+	var flank := at + Vector3(hand * (x + .146), 0, 0)
+	var plaster := wall.lerp(SAND, .29)
+	# Varied ashlar rises above the original courses without changing the house collision.
+	for course in courses:
+		var y := .20 + .41 * course
+		var seam := .28 if course % 2 == 0 else .57
+		var beside := -z + .08
+		var index := 0
+		while beside < z - .04:
+			var width := seam if index == 0 else .65 + .15 * sin(index * 3.3 + course)
+			var next := minf(z - .025, beside + width)
+			if next - beside > .06:
+				var base := flank + Vector3(0, y - .182, beside)
+				var upper := base + Vector3.UP * (.354 - .015 * (index % 2))
+				var edge := Vector3.BACK * (next - beside - .024)
+				var tint := plaster.lightened(.094 * sin(index * 2.75 + course * 1.82))
+				_stone.panel(base, base + edge, upper + edge, upper, tint, Vector3.RIGHT * hand)
+			index += 1
+			beside = next + .017
+	var ledge := flank + Vector3(hand * .012, .21, 0)
+	_stone.block(ledge, Vector3(.11, .104, z + .09), SHALE.lerp(wall, .43))
+	_stone.block(ledge + Vector3.BACK * (z + .22), Vector3(.27, .090, .24), SHALE.lerp(wall, .50), .055)
+	for bay in 2:
+		var window := flank + Vector3(hand * .016, .98 + .115 * bay, -.55 + 1.04 * bay)
+		_stone.block(window, Vector3(.032, .33, .24), STONE.darkened(.16))
+		_stone.block(window + Vector3.RIGHT * hand * .061, Vector3(.014, .239, .164), NIGHT)
+		_stone.block(window + Vector3(hand * .07, -.32, .012), Vector3(.082, .055, .30), STONE)
+		if (bay + damage) % 2 == 0:
+			_stone.tapered(window + Vector3(hand * .086, -.19, .074),
+				window + Vector3(hand * .086, .21, -.086), .026, .019, 4, WOOD)
+	if damage != 2:
+		var eave := flank + Vector3(hand * .10, courses * .41 + .017, 0)
+		_stone.block(eave, Vector3(.105, .081, z + .226), WOOD)
+		for brace in 3:
+			var bracket := flank + Vector3(hand * .047, courses * .41 - .35, -.72 + .69 * brace)
+			_stone.tapered(bracket, bracket + Vector3(hand * .26, .37, .065), .067, .044, 4, WOOD.lightened(.15))
+	# The corner catches ivy and crumbling stone rather than hiding a portal.
+	_ivy(flank + Vector3(hand * .059, courses * .41 - .19, z * .75), .93)
+	for i in 4:
+		var toe := flank + Vector3(hand * (.20 + .13 * i), .014, z * .74 + .14 * sin(i * 4.20))
+		_stone.facets(toe, Vector3(.18, .10 + .024 * i, .18), 5, plaster.darkened(.15 + .03 * i))
+		_leaf(toe + Vector3(hand * .14, .014, .06), i * 1.37)
 
 func tint_stone(tint: Color) -> Color:
 	return tint.lerp(STONE, .53).lightened(.063)
