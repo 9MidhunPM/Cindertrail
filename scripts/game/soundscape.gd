@@ -7,6 +7,13 @@ var _foot := false
 var _draw: AudioStreamPlayer
 var _draw_time := 0.0
 var _last_call: Dictionary[String, int] = {}
+var _ending: AudioStreamPlayer
+var _ending_fade: Tween
+var _ending_mark := -1.0
+
+const SUNRISE_SCORE := "res://art/audio/valley/last_sunrise.ogg"
+const ENDING_MARKS := {&"handoff": 0.0, &"arch": 4.0, &"ford": 9.0,
+		&"relay": 15.0, &"return": 21.0, &"settled": 26.0}
 
 const CREATURE_CALLS := {
 	"skimmer_wake": preload("res://art/audio/valley/skimmer_wake.wav"),
@@ -63,6 +70,51 @@ func _exit_tree() -> void:
 	if _ambient != null:
 		_ambient.stop()
 		_ambient.stream = null
+	if _ending != null:
+		_ending.stop()
+		_ending.stream = null
+
+func ending_cue(section: StringName) -> void:
+	if _ambient == null or not ENDING_MARKS.has(section):
+		return
+	var mark: float = ENDING_MARKS[section]
+	if is_equal_approx(mark, _ending_mark):
+		return
+	if section == &"settled":
+		_ending_mark = mark
+		if _ending == null:
+			return
+		if _ending_fade:
+			_ending_fade.kill()
+		_ending_fade = create_tween().set_parallel()
+		_ending_fade.tween_property(_ending, "volume_db", -56.0, .24)
+		_ending_fade.tween_callback(_ending.stop).set_delay(.24)
+		_ending_fade.tween_property(_ambient, "volume_db", -20.0, .72)
+		return
+	if mark < _ending_mark and section != &"handoff":
+		return
+	if _ending == null:
+		var score := load(SUNRISE_SCORE) as AudioStreamOggVorbis
+		if score == null:
+			return
+		_ending = AudioStreamPlayer.new()
+		_ending.name = "LastSunriseScore"
+		_ending.stream = score
+		add_child(_ending)
+	if section == &"handoff" or not _ending.playing:
+		if _ending_fade:
+			_ending_fade.kill()
+		_ending_fade = create_tween()
+		_ending_fade.tween_property(_ambient, "volume_db", -33.0, .48)
+		_draw.stop()
+		_draw_time = 0.0
+		set_process(false)
+		_ending.volume_db = -5.0
+		_ending.play(mark)
+	elif absf(_ending.get_playback_position() - mark) > .65:
+		# The following shot can jump ahead when the cinematic is fast-forwarded.
+		_ending.seek(mark)
+	_ending_mark = mark
 
 func toll_bell(world_position: Vector3, submerged: bool) -> void:
 	if _effects.is_empty():
