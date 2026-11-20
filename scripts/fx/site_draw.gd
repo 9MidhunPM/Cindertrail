@@ -43,6 +43,7 @@ var _uvs := PackedVector2Array()
 var _width_phase := PackedVector2Array()
 var _indices := PackedInt32Array()
 var quiet := false
+var _sky_direction := Vector3.FORWARD
 
 func _ready() -> void:
 	name = "SiteEnergyStreams"
@@ -60,6 +61,8 @@ func receive(site: CinderSite, focus: Vector3, amount: float, reduced_motion: bo
 		clear()
 		return
 	if _site_id != site.checkpoint_id:
+		var far_side := (site.view_target - site.view_position).slide(Vector3.UP)
+		_sky_direction = far_side.normalized() if far_side.length_squared() > .01 else Vector3.FORWARD
 		_site_id = site.checkpoint_id
 		global_transform = site.habitat_frame
 		_build(to_local(focus))
@@ -85,7 +88,7 @@ func arrival_glow() -> float:
 	# Same packet phase as the fragment shader at x = 1.
 	var pulse := 0.0
 	for i in 3:
-		var distance_to_head := absf(fposmod(1.22 - _clock * .73 + i * .28 + .5, 1.0) - .5)
+		var distance_to_head := absf(fposmod(2.0 - _clock * .64 + i * .26 + .5, 1.0) - .5)
 		pulse = maxf(pulse, exp(-distance_to_head * 14.0))
 	return pulse
 
@@ -141,7 +144,36 @@ func _build(focus: Vector3) -> void:
 					var radius := .39 + .32 * arc
 					ripple.append(source + (across * cos(a) + toward * sin(a) * .79) * radius)
 				_strip(ripple, .069, .0, .19, i * .28)
+	_add_sky_draw(focus)
 	_build_surface()
+
+## The distant sources stay fixed in the world. Use the camp's authored tactical
+## bearing, so a rotated or roaming clearing keeps the fan behind its defenses.
+func _add_sky_draw(focus: Vector3) -> void:
+	var skyward := (global_basis.inverse() * _sky_direction).normalized()
+	var across := skyward.cross(Vector3.UP).normalized()
+	# Keep the main shaft and its two broken-off filaments asymmetrical.
+	var spans := [Vector3(-13.8, 9.2, 25.0), Vector3(-5.5, 13.2, 31.5), Vector3(12.7, 8.1, 22.5)]
+	for i in spans.size():
+		var span: Vector3 = spans[i]
+		var source := focus + skyward * span.z + across * span.x + Vector3.UP * span.y
+		var high_bend := focus + skyward * span.z * .55 + across * span.x * .67 + Vector3.UP * span.y * .63
+		var lower_bend := focus + skyward * 5.4 + across * span.x * .24 + Vector3.UP * (2.4 + i * .24)
+		var lip := focus + skyward * .81 + across * span.x * .043 + Vector3.UP * .61
+		var arc := _curve(PackedVector3Array([source, high_bend, lower_bend, lip, focus]))
+		var width: float = [.56, .38, .27][i]
+		_strip(arc, width, .02, 1.0, 2.0 + i * .26)
+		var filament := PackedVector3Array()
+		for step in arc.size():
+			var t := float(step) / (arc.size() - 1)
+			var lift := sin(PI * t) * (.20 + .12 * i)
+			var twist := TAU * t + .9 * i
+			filament.append(arc[step] + (across * sin(twist) + Vector3.UP * cos(twist)) * lift)
+		_strip(filament, width * .37, .02, 1.0, 3.0 + i * .26)
+	# A sharp little glint on the one sun's near rim as the packets reach it.
+	var rim := focus - skyward * .27 + across * .13 + Vector3.UP * .27
+	for axis in [across * .41, (Vector3.UP + across * .36).normalized() * .34]:
+		_strip(PackedVector3Array([rim - axis, rim, rim + axis]), .087, .05, .95, 4.0)
 
 func _curve(keys: PackedVector3Array) -> PackedVector3Array:
 	var points := PackedVector3Array()

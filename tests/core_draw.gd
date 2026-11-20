@@ -25,6 +25,7 @@ func _run() -> void:
 		_check(not streams.visible, id + " zero transfer")
 		core.receive_site_energy(site, .005, false)
 		_check(streams.visible and streams.mesh.get_surface_count() == 1, id + " emitted a shared stream surface")
+		_check_sky_reach(streams, core.get_node("Visual/SunCenter").global_position, id)
 		_check(core.restoration == 0.0 and site.remaining_energy == site.spec.energy, id + " VFX independent of economy")
 		core.receive_site_energy(site, .005, true)
 		_check(streams.get("quiet") and is_zero_approx(streams.call("arrival_glow")), id + " steady trace")
@@ -58,6 +59,23 @@ func _run() -> void:
 	else:
 		print("CORE_DRAW_OK seven camps, interrupted/reduced/zero draw, recall and sun identity")
 	quit(0 if failures.is_empty() else 1)
+
+func _check_sky_reach(streams: MeshInstance3D, focal: Vector3, id: String) -> void:
+	var arrays := streams.mesh.surface_get_arrays(0)
+	var points: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var track: PackedVector2Array = arrays[Mesh.ARRAY_TEX_UV2]
+	var uv: PackedVector2Array = arrays[Mesh.ARRAY_TEX_UV]
+	var sources := 0
+	var arrivals := 0
+	for vertex in range(0, points.size(), 2):
+		if track[vertex].y < 2.0 or track[vertex].y >= 3.0:
+			continue
+		var point := streams.to_global(points[vertex])
+		if uv[vertex].x < .03 and point.distance_to(focal) >= 22.0 and point.y - focal.y >= 7.0:
+			sources += 1
+		if uv[vertex].x > .999 and point.distance_to(focal) < .02:
+			arrivals += 1
+	_check(sources >= 3 and arrivals == 3, id + " draws three elevated distant shafts into the one sun")
 
 func _check(condition: bool, detail: String) -> void:
 	if not condition:
