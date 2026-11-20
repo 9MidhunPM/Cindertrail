@@ -19,6 +19,7 @@ var _tactical := false
 var _reduced_motion := false
 var _clock := 0.0
 var _speech := 0.0
+var _speech_remaining := 0.0
 var _tuck := 0.0
 
 func _ready() -> void:
@@ -48,10 +49,14 @@ func set_presence(active: bool, tactical: bool, reduced_motion: bool) -> void:
 		_pose()
 	if not active:
 		_speech = 0.0
+		stop_speech()
 
-func speak() -> void:
+func speak(duration := 0.65) -> void:
 	if visible and not _reduced_motion:
-		_speech = 1.0
+		_speech_remaining = duration
+
+func stop_speech() -> void:
+	_speech_remaining = 0.0
 
 func _physics_process(_delta: float) -> void:
 	if not is_instance_valid(_player) or not is_instance_valid(_camera):
@@ -76,7 +81,8 @@ func _process(delta: float) -> void:
 	_tuck = lerpf(_tuck, float(_tactical), weight)
 	if not _reduced_motion:
 		_clock = fmod(_clock + delta, TAU * 100.0)
-	_speech = move_toward(_speech, 0.0, delta * 1.33)
+	_speech_remaining = maxf(_speech_remaining - delta, 0.0)
+	_speech = move_toward(_speech, float(_speech_remaining > 0.0), delta * 6.0)
 	_pose()
 
 func _desired_position() -> Vector3:
@@ -91,7 +97,7 @@ func _heading() -> float:
 	return atan2(-forward.x, -forward.z) - .3
 
 func _pose() -> void:
-	var voice := 0.0 if _reduced_motion else sin(_speech * PI)
+	var voice := 0.0 if _reduced_motion else _speech * (0.63 + 0.28 * sin(_clock * TAU * 3.7))
 	var flutter := 0.0 if _reduced_motion else sin(_clock * TAU * 5.5)
 	var wing := lerpf(.34, 1.12, _tuck) + flutter * lerpf(.52, .12, _tuck)
 	_wings[0].rotation.z = wing + voice * .17

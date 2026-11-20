@@ -4,6 +4,8 @@ extends Node
 
 signal answered(text: String)
 signal automatic_answered(text: String)
+signal voice_started(text: String, duration: float)
+signal voice_finished(text: String)
 
 const RESPONSES := preload("res://scripts/companion/mote_responses.gd")
 const VOICE := preload("res://scripts/companion/mote_voice.gd")
@@ -153,14 +155,20 @@ func cancel() -> void:
 		_request = null
 
 
-func speak(line: String) -> void:
+func speak(line: String) -> bool:
 	if not is_inside_tree() or DisplayServer.get_name() == "headless" or not _configuration.get("voice", false):
-		return
+		return false
 	if _voice == null:
 		_voice = VOICE.new()
-		_voice.enabled = true
 		add_child(_voice)
-	_voice.say(line)
+		_voice.playback_started.connect(voice_started.emit)
+		_voice.playback_finished.connect(voice_finished.emit)
+		_voice.playback_failed.connect(voice_finished.emit)
+	return _voice.speak(line)
+
+
+func voice_pending() -> bool:
+	return _voice != null and _voice.is_synthesizing()
 
 
 func stop_voice() -> void:

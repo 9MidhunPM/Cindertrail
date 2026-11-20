@@ -66,6 +66,7 @@ var _reward_name: Label
 var _reward_effect: Label
 var _reward_detail: Label
 var _guide_panel: PanelContainer
+var _guide_speaker: Label
 var _guide_text: Label
 var _guide_seconds := 0.0
 var _reward_seconds := 0.0
@@ -292,9 +293,33 @@ func announce_ability(title: String, icon: Texture2D, cap: int, first_achievemen
 
 ## A persistent line stays until the guide replaces or clears it. A modal suspends reading time.
 func guide_line(text: String, persistent := false) -> void:
+	guide_voice_finished()
 	_guide_text.text = text.strip_edges()
-	_guide_seconds = -1.0 if persistent else clampf(2.5 + text.length() / 15.0, 4.5, 10.0)
+	_guide_seconds = -1.0 if persistent else _guide_reading_time()
 	_guide_panel.visible = overlay.visible and _reward_seconds <= 0.0 and not _guide_text.text.is_empty()
+
+func guide_caption_visible(text: String) -> bool:
+	return _guide_text.text == text and _guide_panel.is_visible_in_tree()
+
+func hold_guide_caption(seconds: float) -> void:
+	if _guide_seconds > 0.0:
+		_guide_seconds = maxf(_guide_seconds, seconds)
+
+func guide_voice_started(text: String, duration: float) -> bool:
+	if not guide_caption_visible(text):
+		return false
+	_guide_speaker.text = "Mote · AI voice"
+	if _guide_seconds > 0.0:
+		_guide_seconds = maxf(_guide_reading_time(), duration + 0.8)
+	return true
+
+func _guide_reading_time() -> float:
+	return clampf(2.5 + _guide_text.text.length() / 15.0, 4.5, 10.0)
+
+func guide_voice_finished() -> void:
+	_guide_speaker.text = "Mote"
+	if _guide_seconds > 0.0:
+		_guide_seconds = minf(_guide_seconds, _guide_reading_time())
 
 func art_feedback(reason: String) -> void:
 	_art_dock.show_feedback(reason)
@@ -446,9 +471,9 @@ func _build_controls() -> void:
 	guide_style.border_width_left = 3
 	_guide_panel.add_theme_stylebox_override("panel", guide_style)
 	var guide_words := _vertical(_guide_panel, 1)
-	var speaker := _label("Mote", &"Accent")
-	speaker.add_theme_color_override("font_color", TEAL)
-	guide_words.add_child(speaker)
+	_guide_speaker = _label("Mote", &"Accent")
+	_guide_speaker.add_theme_color_override("font_color", TEAL)
+	guide_words.add_child(_guide_speaker)
 	_guide_text = _label("", &"Body")
 	_guide_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	guide_words.add_child(_guide_text)

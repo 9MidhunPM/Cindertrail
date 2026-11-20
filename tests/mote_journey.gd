@@ -37,12 +37,16 @@ func _run() -> void:
 	_expect(game.hud._guide_text.text.contains("Ford bell") and game.hud._guide_text.text.contains("Press E"),
 		"H explains the Grove's landmark during a wave")
 	var wave_tip: String = game.hud._guide_text.text
+	_expect(not game.hud.guide_voice_started("Outdated advice", 9.0), "Audio cannot replace a newer subtitle")
+	_expect(game.hud.guide_voice_started(wave_tip, 12.0) and game.hud._guide_seconds >= 12.8
+		and game.hud._guide_speaker.text == "Mote · AI voice", "Matching speech holds the caption through its measured duration")
 	game._set_paused(true)
 	_ask(game)
 	_expect(not game.mote.visible and not game.hud._guide_panel.is_visible_in_tree()
 		and game.hud._guide_text.text == wave_tip, "Pause hides Mote and suspends the current subtitle")
 	game._set_paused(false)
-	_expect(game.mote.visible and game.hud._guide_panel.is_visible_in_tree(), "Mote and the current subtitle return after resume")
+	_expect(game.mote.visible and game.hud._guide_panel.is_visible_in_tree() and game.hud._guide_speaker.text == "Mote",
+		"Mote and the current subtitle return without restarting interrupted audio")
 
 	root.remove_child(game)
 	game.free()

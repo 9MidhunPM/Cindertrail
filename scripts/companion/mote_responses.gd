@@ -34,10 +34,11 @@ static func configuration() -> Dictionary:
 		if OS.has_environment(name):
 			settings[name] = OS.get_environment(name).strip_edges()
 	var key: String = settings.get("OPENAI_API_KEY", "")
+	var has_key := _valid_key(key)
 	return {
-		"key": key if _valid_key(key) else "",
+		"key": key if has_key else "",
 		"automatic": settings.get("CINDERTRAIL_GUIDE_ONLINE", local_default) == "1",
-		"voice": settings.get("CINDERTRAIL_GUIDE_VOICE") == "1",
+		"voice": settings.get("CINDERTRAIL_GUIDE_VOICE", "1") == "1",
 	}
 
 

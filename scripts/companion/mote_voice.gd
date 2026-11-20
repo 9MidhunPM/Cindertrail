@@ -1,46 +1,146 @@
 class_name CinderMoteVoice
 extends Node
-## Optional system speech for the same line that appears in Mote's subtitle.
+## Plays the exact caption from a recorded line or the same local voice model.
 
-const SPEECH_VOLUME := 72.0
+signal playback_started(text: String, duration: float)
+signal playback_finished(text: String)
+signal playback_failed(text: String)
 
-var enabled := false:
-	set(value):
-		if enabled and not value:
-			stop()
-		enabled = value
+const LINES := "res://art/audio/mote/lines.json"
+const SYNTHESIZER := "tools/mote_voice/synthesize.sh"
+const TIMEOUT_SECONDS := 12.0
+const CACHE_SIZE := 16
+const MAX_AUDIO_BYTES := 1024 * 1024
 
-var _voice := ""
-var _checked_voices := false
-var _issued_line := false
-
-
-func available() -> bool:
-	if not _checked_voices:
-		_checked_voices = true
-		if DisplayServer.has_feature(DisplayServer.FEATURE_TEXT_TO_SPEECH) and _has_system_service():
-			var english := DisplayServer.tts_get_voices_for_language("en")
-			if not english.is_empty():
-				_voice = english[0]
-	return not _voice.is_empty()
+var _player: AudioStreamPlayer
+var _lines: Dictionary = {}
+var _clips: Dictionary[String, AudioStream] = {}
+var _speaking := ""
+var _pending := ""
+var _job := ""
+var _worker := -1
+var _deadline := 0
 
 
-func say(text: String) -> void:
-	if not enabled or text.strip_edges().is_empty():
-		return
-	var volume := roundi(SPEECH_VOLUME * _bus_gain(&"Master") * _bus_gain(&"Effects"))
-	if volume <= 0 or not available():
-		return
-	# Some system synthesizers interpret SSML. Speak dialogue as plain text.
-	var line := text.replace("<", " ").replace(">", " ").replace("&", " and ")
-	DisplayServer.tts_speak(line, _voice, volume, 1.12, 1.05, 0, true)
-	_issued_line = true
+func _ready() -> void:
+	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(LINES)) if FileAccess.file_exists(LINES) else {}
+	if parsed is Dictionary:
+		_lines = parsed
+	_player = AudioStreamPlayer.new()
+	_player.name = "MoteSpeechPlayer"
+	_player.bus = &"Effects"
+	_player.volume_db = 2.0
+	_player.finished.connect(_on_playback_finished)
+	add_child(_player)
+	set_process(false)
+
+
+func speak(text: String) -> bool:
+	stop()
+	if not is_node_ready() or text.is_empty():
+		return false
+	if _clips.has(text):
+		_play(text, _clips[text])
+		return true
+	var asset := str(_lines.get(text, ""))
+	if not asset.is_empty() and ResourceLoader.exists(asset):
+		var clip := load(asset) as AudioStream
+		if clip != null:
+			_play(text, clip)
+			return true
+
+	if not OS.has_feature("linux"):
+		return false
+	var base := OS.get_executable_path().get_base_dir() if OS.has_feature("template") else ProjectSettings.globalize_path("res://")
+	var launcher := base.path_join(SYNTHESIZER)
+	if not FileAccess.file_exists(launcher):
+		return false
+
+	_job = ProjectSettings.globalize_path("user://mote-speech/%d-%d" % [OS.get_process_id(), Time.get_ticks_usec()])
+	if DirAccess.make_dir_recursive_absolute(_job) != OK:
+		_job = ""
+		return false
+	var input := _job.path_join("line.txt")
+	var file := FileAccess.open(input, FileAccess.WRITE)
+	if file == null:
+		_clear_job()
+		return false
+	file.store_string(text)
+	file.close()
+	_worker = OS.create_process("/bin/bash", [launcher, input, _job.path_join("line.wav")])
+	if _worker <= 0:
+		_clear_job()
+		return false
+	_pending = text
+	_deadline = Time.get_ticks_msec() + roundi(TIMEOUT_SECONDS * 1000)
+	set_process(true)
+	return true
+
+
+func _process(_delta: float) -> void:
+	var output := _job.path_join("line.wav")
+	if FileAccess.file_exists(output):
+		var file := FileAccess.open(output, FileAccess.READ)
+		var clip: AudioStreamWAV
+		if file != null and file.get_length() <= MAX_AUDIO_BYTES:
+			clip = AudioStreamWAV.load_from_buffer(file.get_buffer(file.get_length()))
+			file.close()
+		var text := _pending
+		_worker = -1
+		_clear_job()
+		if clip == null or clip.get_length() <= 0.0:
+			playback_failed.emit(text)
+			return
+		if _clips.size() >= CACHE_SIZE:
+			_clips.erase(_clips.keys()[0])
+		_clips[text] = clip
+		_play(text, clip)
+	elif not OS.is_process_running(_worker) or Time.get_ticks_msec() >= _deadline:
+		var text := _pending
+		_clear_job()
+		playback_failed.emit(text)
+
+
+func _clear_job() -> void:
+	set_process(false)
+	if _worker > 0 and OS.is_process_running(_worker):
+		OS.kill(_worker)
+	_worker = -1
+	_pending = ""
+	if not _job.is_empty():
+		var dir := DirAccess.open(_job)
+		if dir != null:
+			for name in dir.get_files():
+				dir.remove(name)
+			DirAccess.remove_absolute(_job)
+		_job = ""
 
 
 func stop() -> void:
-	if _issued_line:
-		DisplayServer.tts_stop()
-		_issued_line = false
+	_clear_job()
+	_speaking = ""
+	if _player != null:
+		_player.stop()
+		_player.stream = null
+
+
+func is_synthesizing() -> bool:
+	return _worker > 0
+
+
+func _play(text: String, clip: AudioStream) -> void:
+	_speaking = text
+	_player.stream = clip
+	_player.play()
+	playback_started.emit(text, clip.get_length())
+
+
+func _on_playback_finished() -> void:
+	var text := _speaking
+	_speaking = ""
+	_player.stream = null
+	if not text.is_empty():
+		playback_finished.emit(text)
 
 
 func _notification(what: int) -> void:
@@ -50,33 +150,3 @@ func _notification(what: int) -> void:
 
 func _exit_tree() -> void:
 	stop()
-
-
-func _has_system_service() -> bool:
-	if not OS.has_feature("linux") and not OS.has_feature("bsd"):
-		return true
-	# Avoid Speech Dispatcher's startup retry on systems that ship only its client library.
-	var address := OS.get_environment("SPEECHD_ADDRESS")
-	if not address.is_empty() and not address.begins_with("unix_socket"):
-		return false
-	var socket := address.trim_prefix("unix_socket:")
-	if address.is_empty() or address == "unix_socket" or socket.is_empty():
-		var runtime_dir := OS.get_environment("XDG_RUNTIME_DIR")
-		socket = runtime_dir.path_join("speech-dispatcher/speechd.sock") if not runtime_dir.is_empty() else ""
-	if socket.is_absolute_path():
-		var directory := DirAccess.open(socket.get_base_dir())
-		if directory != null and directory.file_exists(socket.get_file()):
-			return true
-	for directory in OS.get_environment("PATH").split(":", false):
-		if directory.is_absolute_path() and FileAccess.file_exists(directory.path_join("speech-dispatcher")):
-			return true
-	return false
-
-
-func _bus_gain(bus: StringName) -> float:
-	var index := AudioServer.get_bus_index(bus)
-	if index < 0:
-		return 1.0
-	if AudioServer.is_bus_mute(index):
-		return 0.0
-	return clampf(db_to_linear(AudioServer.get_bus_volume_db(index)), 0.0, 1.0)

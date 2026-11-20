@@ -83,6 +83,7 @@ var _left_site: CinderSite
 var _first_ability_award := false
 var _guide_context: Dictionary = {}
 var _guide_question_context := ""
+var _guide_voice_context := ""
 var _guide_next_online := 0
 var _guide_mode := -1
 
@@ -142,6 +143,8 @@ func _ready() -> void:
 	_add_runtime(mote_guide)
 	mote_guide.answered.connect(_mote_answered)
 	mote_guide.automatic_answered.connect(_show_mote_line)
+	mote_guide.voice_started.connect(_mote_voice_started)
+	mote_guide.voice_finished.connect(_mote_voice_finished)
 	_checkpoint_enabled = not _direct_launch()
 	arts.profile_enabled = _checkpoint_enabled
 	if not _checkpoint_enabled:
@@ -487,7 +490,7 @@ func _notification(what: int) -> void:
 		arts.cancel_buffer()
 		if is_instance_valid(mote_guide):
 			mote_guide.cancel()
-			mote_guide.stop_voice()
+			_stop_mote_voice()
 
 func _unhandled_input(event: InputEvent) -> void:
 	if _front_active or _settings_open or finale != null:
@@ -509,6 +512,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if event.is_action_pressed("toggle_hud") and hud != null:
 		hud.toggle_gameplay_hud()
+		_stop_mote_voice()
 		return
 	if event.is_action_pressed("cancel"):
 		if _selected != -1 and not _paused:
@@ -763,6 +767,7 @@ func _unlock_site_reward(site: CinderSite) -> void:
 			icon = row.get("icon") as Texture2D
 			description = String(row.get("description", ""))
 			break
+	_stop_mote_voice()
 	hud.announce_ability(arts.ability_name(site.checkpoint_id), icon, battle.upgrade_cap, _first_ability_award, description)
 
 func _can_pack() -> bool:
@@ -1073,6 +1078,8 @@ func _render_hud(elapsed := 0.0) -> void:
 	hud.render(state)
 	if _mote_in_journey():
 		_refresh_mote_context(state, local_site)
+		if not _guide_voice_context.is_empty() and _guide_voice_context != _mote_context_signature():
+			_stop_mote_voice()
 		if elapsed > 0.0:
 			_show_mote_line(mote_guide.observe(_guide_context, elapsed))
 
@@ -1089,7 +1096,7 @@ func _sync_mote() -> void:
 		hud.guide_line("")
 	if changed or not present:
 		mote_guide.cancel()
-		mote_guide.stop_voice()
+		_stop_mote_voice()
 
 func _refresh_mote_context(state: Dictionary, local_site: CinderSite) -> void:
 	var guardian := summit.guide_state()
@@ -1116,7 +1123,8 @@ func _refresh_mote_context(state: Dictionary, local_site: CinderSite) -> void:
 
 func _mote_context_signature() -> String:
 	var guardian: Dictionary = _guide_context.get("guardian_state", {})
-	return "%s/%s/%s/%s" % [_guide_context.get("mode"), _guide_context.get("site_id"), guardian.get("phase"),
+	return "%s/%s/%s/%s/%s" % [_guide_context.get("mode"), _guide_context.get("site_id"),
+		_guide_context.get("wave_active", false), guardian.get("phase"),
 		float(_guide_context.get("health", 100)) <= 30.0]
 
 func _ask_mote() -> void:
@@ -1125,26 +1133,53 @@ func _ask_mote() -> void:
 	_render_hud()
 	const QUESTION := "What should I do right now, and how?"
 	if mote_guide.is_busy():
-		_show_mote_line(mote_guide.advice(_guide_context, QUESTION))
+		_show_mote_line(mote_guide.advice(_guide_context, QUESTION), false)
 		return
 	var now := Time.get_ticks_msec()
 	var online := now >= _guide_next_online and mote_guide.online_available()
 	_guide_question_context = _mote_context_signature()
 	if online:
 		_guide_next_online = now + 12000
-		_show_mote_line(mote_guide.advice(_guide_context, QUESTION))
+		_show_mote_line(mote_guide.advice(_guide_context, QUESTION), false)
 	mote_guide.ask(QUESTION, _guide_context, online)
 
 func _mote_answered(text: String) -> void:
 	if _guide_question_context == _mote_context_signature():
 		_show_mote_line(text)
 
-func _show_mote_line(text: String) -> void:
+func _show_mote_line(text: String, narrate := true) -> void:
 	if text.is_empty() or not _mote_in_journey():
 		return
+	var context := _mote_context_signature()
+	if _guide_voice_context == context and hud.guide_caption_visible(text):
+		return
+	_stop_mote_voice()
 	hud.guide_line(text)
 	mote.speak()
-	mote_guide.speak(text)
+	if narrate and hud.guide_caption_visible(text):
+		_guide_voice_context = context
+		if mote_guide.speak(text):
+			if mote_guide.voice_pending():
+				hud.hold_guide_caption(MOTE_GUIDE.VOICE.TIMEOUT_SECONDS + 0.5)
+		else:
+			_guide_voice_context = ""
+
+func _mote_voice_started(text: String, duration: float) -> void:
+	if (not _mote_in_journey() or _guide_voice_context != _mote_context_signature()
+			or not hud.guide_voice_started(text, duration)):
+		_stop_mote_voice()
+		return
+	mote.speak(duration)
+
+func _mote_voice_finished(_text: String) -> void:
+	_guide_voice_context = ""
+	hud.guide_voice_finished()
+	mote.stop_speech()
+
+func _stop_mote_voice() -> void:
+	mote_guide.stop_voice()
+	if is_instance_valid(hud) and is_instance_valid(mote):
+		_mote_voice_finished("")
 
 ## Objective, wave, shop and hover details for the interface.
 func _interface_state() -> Dictionary:
