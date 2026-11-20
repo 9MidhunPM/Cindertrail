@@ -13,13 +13,13 @@
       "file": "ruin_pillar.glb",
       "static": true,
       "rigged": false,
-      "vertices": 152
+      "vertices": 336
     },
     {
       "file": "ruin_arch.glb",
       "static": true,
       "rigged": false,
-      "vertices": 232
+      "vertices": 472
     },
     {
       "file": "stone_stairs.glb",
@@ -31,67 +31,67 @@
       "file": "teal_tree.glb",
       "static": true,
       "rigged": false,
-      "vertices": 100
+      "vertices": 1172
     },
     {
       "file": "orange_tree.glb",
       "static": true,
       "rigged": false,
-      "vertices": 100
+      "vertices": 1172
     },
     {
       "file": "supply_crate.glb",
       "static": true,
       "rigged": false,
-      "vertices": 96
+      "vertices": 808
     },
     {
       "file": "sun_shrine_deployed.glb",
       "static": true,
       "rigged": false,
-      "vertices": 534
+      "vertices": 894
     },
     {
       "file": "sun_shrine_restored.glb",
       "static": true,
       "rigged": false,
-      "vertices": 534
+      "vertices": 894
     },
     {
       "file": "sun_shrine_folded.glb",
       "static": true,
       "rigged": false,
-      "vertices": 486
+      "vertices": 610
     },
     {
       "file": "bolt_turret.glb",
       "static": true,
       "rigged": false,
-      "vertices": 196
+      "vertices": 758
     },
     {
       "file": "slowing_emitter.glb",
       "static": true,
       "rigged": false,
-      "vertices": 228
+      "vertices": 576
     },
     {
       "file": "mortar.glb",
       "static": true,
       "rigged": false,
-      "vertices": 208
+      "vertices": 796
     },
     {
       "file": "crawler_static.glb",
       "static": true,
       "rigged": false,
-      "vertices": 156
+      "vertices": 776
     },
     {
       "file": "brute_static.glb",
       "static": true,
       "rigged": false,
-      "vertices": 252
+      "vertices": 872
     }
   ]
 }

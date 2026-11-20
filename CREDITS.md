@@ -10,6 +10,8 @@ The four opening comic panels were generated with the built-in OpenAI image tool
 
 The palette, Godot material/shader resources, procedural Blender builder, exported static starter meshes and documentation were prepared for this project. The models are editable starting points; no existing game's characters or source models are included.
 
+The living valley uses authored brush grain in the Blender-generated models and a tileable procedural surface mask. The terrain, map assets, and shared textures are reproducible through the builders in `scripts/` and `tools/`.
+
 ## Downloaded optional surface maps
 
 ambientCG: `PavingStones036`, `Metal032`, `Fabric030`, `WoodFloor050`. These downloads use CC0 1.0 Universal. Exact downloaded files, source URLs, dates and SHA-256 checksums are in `art/textures/third_party/ambientCG/SOURCE_MANIFEST.json`, with companion `CREDITS.md`.
