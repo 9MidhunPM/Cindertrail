@@ -29,6 +29,9 @@ var _rise: Tween
 var _echo: Tween
 var _tolled := false
 
+func compass_path() -> PackedVector3Array:
+	return global_transform * _deck_profile if walkable else PackedVector3Array()
+
 func configure(journey_seed: int, shrine_local := Vector3(0, .73, 0)) -> void:
 	if not route.is_empty():
 		return

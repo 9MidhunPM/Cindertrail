@@ -30,6 +30,7 @@ const BEACON_TRAIL := [Vector3(16, 4.8, -56), Vector3(20, 5.4, -62),
 var site: CinderSite
 var layout_id := 0
 var randomized_layout := false
+var build_site := true
 var clearing_variant := 0
 var _pad := CENTER
 var beacon: Marker3D
@@ -73,6 +74,9 @@ func _ready() -> void:
 	_beacon_summit()
 	_guardian_terrace()
 	_finish_terrain()
+	if not build_site:
+		_relocate(CinderDistricts.offset("relay", layout_id))
+		return
 	site = CinderSite.new()
 	site.name = "FallenRelaySite"
 	add_child(site)
@@ -97,18 +101,30 @@ func _ready() -> void:
 ## Geometry is authored around the old origin; move it out along the valley.
 func _relocate(shift: Vector3) -> void:
 	position = shift
-	site.shift_world(shift)
+	if site != null:
+		site.shift_world(shift)
 	for i in caches.size():
 		caches[i] += shift
 
 func world_landmark() -> Vector3:
 	return landmark_position + position
 
+func habitat_transform() -> Transform3D:
+	return global_transform.translated_local(CENTER + Vector3.UP * .04)
+
 func map_paths() -> Array[PackedVector3Array]:
 	return [global_transform * PackedVector3Array(APPROACH),
 		global_transform * PackedVector3Array(BEACON_TRAIL),
 		global_transform * PackedVector3Array([Vector3(4, 1.6, -34), Vector3(.5, 1.81, -37),
 			Vector3(-2.1, 2.03, -40.5)])]
+
+func compass_paths() -> Array[PackedVector3Array]:
+	var paths := map_paths()
+	paths.append(global_transform * PackedVector3Array(EAST))
+	paths.append(PackedVector3Array([to_global(CENTER), to_global(BEACON_TRAIL[0])]))
+	if site != null:
+		paths.append(PackedVector3Array([to_global(CENTER), site.anchor.global_position]))
+	return paths
 
 func _ravine() -> void:
 	# Fill beneath the exposed bridge piers with a descending, non-walkable ravine.

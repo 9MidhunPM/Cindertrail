@@ -10,6 +10,9 @@ const LENGTH := 12.4
 var code: String
 var title: String
 var opened := false
+var walkable: bool:
+	get:
+		return opened and (_motion == null or not _motion.is_running())
 var handle: Vector3
 var _hinge := AnimatableBody3D.new()
 var _crank := Node3D.new()

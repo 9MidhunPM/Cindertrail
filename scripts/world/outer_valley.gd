@@ -103,8 +103,9 @@ func _ready() -> void:
 		abandoned_towns = ENVIRONMENT.new()
 		add_child(abandoned_towns)
 		abandoned_towns.build(junctions, journey_layout.town_variants, roads, road_names, journey_layout.journey_seed)
-	for spec: Dictionary in LANDMARKS.data.sites:
-		_create_camp(spec)
+	if journey_layout == null or journey_layout.version < 3:
+		for spec: Dictionary in LANDMARKS.data.sites:
+			_create_camp(spec)
 	for entry: Array in LANDMARKS.data.caches:
 		cache_ids.append(entry[0])
 		caches.append(junctions[entry[1]] + _point(entry[2]))
@@ -145,6 +146,14 @@ func _create_camp(definition: Dictionary) -> void:
 	if layout_id > 0:
 		site.mark_clearing()
 	sites.append(site)
+
+func habitat_transform(id: StringName) -> Transform3D:
+	var junction := "west"
+	if id == &"sunken_aqueduct":
+		junction = "south"
+	elif id == &"sunwatch_observatory":
+		junction = "east"
+	return Transform3D(Basis.IDENTITY, junctions[junction] + Vector3.UP * .05)
 
 func _sign(origin: Vector3, next: Vector3, label: String) -> void:
 	var along := origin.direction_to(next)
@@ -218,6 +227,34 @@ func shortcut_handle(id: String) -> Vector3:
 func route_between_nodes(start_id: String, end_id: String) -> PackedVector3Array:
 	return _network.between(start_id, end_id, unlocked_shortcut_ids(), junctions)
 
+## A closed drawbridge only removes its span. The paths to both landings remain walkable.
+func compass_paths() -> Array[PackedVector3Array]:
+	var paths := roads.duplicate()
+	for i in _winches.size():
+		var winch := _winches[i]
+		if winch.walkable:
+			continue
+		var gate: Dictionary = LANDMARKS.data.gates[i]
+		var road_index := road_names.find(gate.trail)
+		var road := roads[road_index]
+		var section: int = gate.section
+		var center := road[section].lerp(road[section + 1], .5)
+		var near_side := road.slice(0, section + 1)
+		var far_side := road.slice(section + 1)
+		var span := WINCH.LENGTH * .5 + 1.4
+		near_side.append(center.move_toward(road[section], span))
+		far_side.insert(0, center.move_toward(road[section + 1], span))
+		paths[road_index] = near_side
+		paths.append(far_side)
+	return paths
+
+func compass_crossings() -> PackedStringArray:
+	var active := PackedStringArray()
+	for winch in _winches:
+		if winch.walkable:
+			active.append(winch.code)
+	return active
+
 func _destination(key: String) -> String:
 	if journey_layout != null and journey_layout.version >= 2 and TOWN_TITLES.has(key):
 		return TOWN_TITLES[key]
@@ -260,6 +297,8 @@ func _build_trail_network(pigment: Material) -> void:
 			add_child(bridge)
 			_sign(points[0], points[1], branch.name + "\n" + destinations[1])
 			_sign(points[-1], points[-2], branch.name + "\n" + destinations[0])
+	if journey_layout != null and journey_layout.version >= 3:
+		_add_parcel_spurs(splits)
 	for i in _graph.trails.size():
 		var record: Array = _graph.trails[i]
 		var points := roads[i]
@@ -276,3 +315,27 @@ func _build_trail_network(pigment: Material) -> void:
 				if record[0] == gate.trail and first <= int(gate.section) and int(gate.section) < last:
 					gate_id = gate.id
 			_network.add_edge(knots[first], knots[last], points.slice(first, last + 1), gate_id)
+
+func _add_parcel_spurs(splits: Dictionary) -> void:
+	for parcel: Dictionary in CinderJourneyLayout.parcel_definitions(layout_id):
+		var road_index := road_names.find(parcel.road)
+		var road := roads[road_index]
+		var knot := int(parcel.road_index)
+		var original: Array = _graph.trails[road_index]
+		var junction: String = original[1] if knot == 0 else original[3]
+		if knot > 0 and knot < road.size() - 1:
+			if not splits.has(parcel.road):
+				splits[parcel.road] = {}
+			var entries: Dictionary = splits[parcel.road]
+			junction = entries.get(knot, "%s_trailhead" % parcel.id)
+			entries[knot] = junction
+			junctions[junction] = road[knot]
+		var path := PackedVector3Array([road[knot]])
+		for point: Array in parcel.access:
+			var at := _point(point)
+			if at.distance_squared_to(path[-1]) > .001:
+				path.append(at)
+		junctions[parcel.id] = path[-1]
+		_network.add_edge(junction, parcel.id, path)
+		roads.append(path)
+		road_names.append(parcel.id.capitalize())
