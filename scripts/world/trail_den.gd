@@ -2,7 +2,10 @@ extends Node3D
 ## A walkable shelf beside a through-road. Local +X points away from the safe road.
 ## Dormant silhouettes live here until the traveling core draws the pack out.
 
-const ROCK := preload("res://art/materials/vertex_palette_material.tres")
+const ROCK_SHADER := preload("res://art/outer_valley/valley_pigment.gdshader")
+const LIMESTONE := preload("res://art/textures/stylized/route_paint.png")
+const BRUSH := preload("res://art/textures/stylized/valley_brush.png")
+static var _stone: ShaderMaterial
 const BEDS := [Vector2(7.0, 0.15), Vector2(6.0, -1.65), Vector2(7.8, 1.8)]
 const RIM := [Vector2(.65, -1.22), Vector2(3.05, -1.78), Vector2(5.1, -3.3),
 	Vector2(8.2, -3.4), Vector2(9.35, -2.1), Vector2(9.55, 1.2), Vector2(8.53, 3.3),
@@ -62,7 +65,12 @@ func build(id: String, origin: Vector3, outward: Vector3, grade: float,
 		for face in 3:
 			_triangle(stonework, base[face], base[(face+1)%3], peak, tint.darkened(.17 * face),
 				((base[face] + base[(face+1)%3]) * .5 - p).slide(Vector3.UP))
-	stonework.set_material(ROCK)
+	if _stone == null:
+		_stone = ShaderMaterial.new()
+		_stone.shader = ROCK_SHADER
+		_stone.set_shader_parameter("route_paint", LIMESTONE)
+		_stone.set_shader_parameter("brush_detail", BRUSH)
+	stonework.set_material(_stone)
 	var artwork := MeshInstance3D.new()
 	artwork.mesh = stonework.commit()
 	add_child(artwork)
