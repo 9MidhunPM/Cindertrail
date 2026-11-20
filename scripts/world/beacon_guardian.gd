@@ -100,18 +100,19 @@ func health_percent() -> float:
 		return maxf(0.0, 100.0 * guardian.health / guardian.stats.health)
 	return 0.0 if cleared else 100.0
 
+func guide_state() -> Dictionary:
+	return guardian.guide_state() if is_instance_valid(guardian) else {}
+
 func phase_name() -> String:
 	if is_instance_valid(guardian):
-		return guardian.phase_name()
+		return guardian.guide_heading()
 	return "Crown secured" if cleared else "Awaiting challenge"
 
 func hint() -> String:
 	if cleared:
 		return "E   Deliver the restored sun at the beacon"
 	if is_instance_valid(guardian):
-		if guardian.phase == guardian.Phase.BRACE:
-			return "Reach the gold shoulder and strike, or land two sparks"
-		return "Phase %d   •   %s" % [guardian.stage, guardian.phase_name()]
+		return guardian.guide_action()
 	return "T   Challenge the guardian    •    E   Repair    •    Hold R   Leave"
 
 func watch(restoration: float, player_point: Vector3, camp: CinderSite, camera: Camera3D, delta: float) -> void:
