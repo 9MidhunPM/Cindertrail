@@ -46,7 +46,7 @@ At full restoration, take the ridge beyond Fallen Relay to the beacon. Press **E
 
 Repairs spend scrap to restore shrine health. Energy drawn from a camp advances the journey toward sunrise.
 
-See the [polish milestone report](docs/POLISH_VERIFICATION.md), [repeatable QA commands](tools/qa/README.md) and the original [visual fieldbook](OPEN_ME.html).
+See the [Living Valley screenshots and measurements](docs/LIVING_VALLEY_VERIFICATION.md), [earlier polish report](docs/POLISH_VERIFICATION.md), [repeatable QA commands](tools/qa/README.md), and the original [visual fieldbook](OPEN_ME.html).
 
 ## Included
 
