@@ -4,9 +4,24 @@ extends Node
 var _effects: Dictionary = {}
 var _ambient: AudioStreamPlayer
 var _foot := false
+var _draw: AudioStreamPlayer
+var _draw_time := 0.0
+var _last_call: Dictionary[String, int] = {}
+
+const CREATURE_CALLS := {
+	"skimmer_wake": preload("res://art/audio/valley/skimmer_wake.wav"),
+	"ram_stamp": preload("res://art/audio/valley/ram_stamp.wav"),
+	"splinter_rattle": preload("res://art/audio/valley/splinter_rattle.wav"),
+	"warden_chime": preload("res://art/audio/valley/warden_chime.wav"),
+	"vesper_call": preload("res://art/audio/valley/vesper_call.wav"),
+	"vesper_charge": preload("res://art/audio/valley/vesper_charge.wav"),
+	"vesper_pulse": preload("res://art/audio/valley/vesper_pulse.wav"),
+	"vesper_exposed": preload("res://art/audio/valley/vesper_exposed.wav"),
+}
 
 func _ready() -> void:
 	if DisplayServer.get_name() == "headless":
+		set_process(false)
 		return
 	_effects = {
 		"footstep": _stream(0.15, [96.0, 171.0], 0.24, 700),
@@ -25,6 +40,15 @@ func _ready() -> void:
 		"slam": _sweep(0.42, 420.0, 70.0, 0.75, 223),
 		"impact": _stream(0.11, [118.0, 176.0], 0.62, 227),
 	}
+	_effects.merge(CREATURE_CALLS)
+	var hum := preload("res://art/audio/valley/extraction.wav").duplicate() as AudioStreamWAV
+	hum.loop_mode = AudioStreamWAV.LOOP_FORWARD
+	hum.loop_end = roundi(hum.get_length() * hum.mix_rate)
+	_draw = AudioStreamPlayer.new()
+	_draw.stream = hum
+	_draw.volume_db = -60.0
+	add_child(_draw)
+	set_process(false)
 	_ambient = AudioStreamPlayer.new()
 	_ambient.stream = _ambience()
 	_ambient.volume_db = -20
@@ -39,6 +63,11 @@ func _exit_tree() -> void:
 func cue(cue_name: String) -> void:
 	if _effects.is_empty():
 		return
+	if CREATURE_CALLS.has(cue_name):
+		var now := Time.get_ticks_msec()
+		if now - _last_call.get(cue_name, -1000) < 160:
+			return
+		_last_call[cue_name] = now
 	var sound: AudioStreamWAV = _effects.get(cue_name, _effects["build"])
 	var effect := AudioStreamPlayer.new()
 	effect.stream = sound
@@ -46,6 +75,23 @@ func cue(cue_name: String) -> void:
 	add_child(effect)
 	effect.finished.connect(effect.queue_free)
 	effect.play()
+
+func hear_extraction() -> void:
+	if _draw == null:
+		return
+	_draw_time = 0.12
+	if not _draw.playing:
+		_draw.volume_db = -48.0
+		_draw.play()
+	set_process(true)
+
+func _process(delta: float) -> void:
+	_draw_time = maxf(0.0, _draw_time - delta)
+	var target_db := -16.0 if _draw_time > 0.0 else -60.0
+	_draw.volume_db = move_toward(_draw.volume_db, target_db, delta * 120.0)
+	if _draw.volume_db <= -59.0:
+		_draw.stop()
+		set_process(false)
 
 func footfall(_running: bool) -> void:
 	_foot = not _foot
