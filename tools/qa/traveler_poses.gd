@@ -3,6 +3,7 @@ extends SceneTree
 ## godot --script tools/qa/traveler_poses.gd -- --out=/absolute/folder
 
 const TRAVELER := preload("res://scenes/player/traveler_visual.tscn")
+const ATTACKS := preload("res://scripts/hero/traveler_attacks.gd")
 const SIZE := Vector2i(640, 720)
 
 var out := ""
@@ -58,9 +59,16 @@ func _run() -> void:
 			await process_frame
 		await _save(viewport, "model-" + view)
 	_aim(camera, -0.55, 4.6)
-	for swing in 3:
+	for swing in ATTACKS.COUNT + 1:
+		if swing == ATTACKS.SPIN:
+			for tick in 48:
+				traveler.set_charge(minf(1.0, (tick + 1) / 39.0))
+				traveler.animate(1.0 / 60.0, 0.0, false)
+			await _save(viewport, "charge-ready")
 		traveler.attack(swing)
 		var stamps := [0.0, 0.08, 0.15, 0.24, 0.42] if swing < 2 else [0.0, 0.14, 0.3, 0.42, 0.6]
+		if swing == ATTACKS.SPIN:
+			stamps = [0.12, 0.245, 0.31, 0.375, 0.50, 0.58]
 		var elapsed := 0.0
 		for stamp: float in stamps:
 			while elapsed < stamp:

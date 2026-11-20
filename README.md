@@ -11,9 +11,13 @@ godot --headless --editor --path . --import
 godot --path .
 ```
 
+The Linux release uses the same Godot Mobile Vulkan renderer. Run the exported executable with `./build/Cindertrail-remix.x86_64`.
+
 The title opens on the Flooded Grove. **New journey** starts the four-panel motion comic. **Continue journey** resumes at the last safe checkpoint. A checkpoint preserves your trail position, shrine health, restoration, scrap, modules, caches, unlocked shortcuts, remaining camp reserves and local threat. The game saves when you are carrying the shrine on safe ground after breaking pursuit.
 
 The six main camps share one continuous 3D world and all use the same protected sun. Each main camp has 25 points of restoration. Expect quick attacks and a short break after each cleared wave. Drain four main camps or combine partial reserves, then bring the sun to the hilltop beacon.
+
+**New Journey** selects one of three valley trail networks and a shrine clearing for each of the seven extraction camps. The Grove approach is your starting point. Use the map to find the other districts and their connecting trails. Continue and checkpoint retry rebuild the saved routes and clearings. Journeys started before this update retain their original valley.
 
 Camp landmarks can swing a wave. Press **E** at a bell, crane, relay switch, lantern, sluice wheel, or mirror control. At Fallen Relay, aim the pointer at the lane you want to pulse. Follow the moths in Lanternwood and align the Sunwatch mirrors during exploration to prepare those defenses.
 
@@ -37,7 +41,7 @@ At full restoration, take the ridge beyond Fallen Relay to the beacon. Press **E
 | **1 / 2 / 3**, left click | Select a module, then place it on an open socket |
 | **Space** | Start the attack and begin extracting restoration |
 | **U** | Upgrade the tower under the pointer |
-| Left click or **F** | Sunsteel sword. Tap again for the three-strike combo (draw cut, rising arc, leaping slam). In defense, it swings toward the pointer unless a tower is selected |
+| Left click or **F** | Tap for a draw cut, rising backhand, and leaping slam. Each strike turns toward the nearest unobstructed enemy within 4.2 m. Hold until the blade glows and chimes, then release for a spinning slash. With a module selected, left click places it |
 | Right click | Sun spark, a weak ranged shot toward the camera or pointer |
 | **M** | Open the full valley map. The corner minimap turns with the camera and pins your objective to its rim |
 | **Hold R** | Recall modules and fold the shrine near its pad |
@@ -46,7 +50,7 @@ At full restoration, take the ridge beyond Fallen Relay to the beacon. Press **E
 
 Repairs spend scrap to restore shrine health. Energy drawn from a camp advances the journey toward sunrise.
 
-See the [Living Valley screenshots and measurements](docs/LIVING_VALLEY_VERIFICATION.md), [earlier polish report](docs/POLISH_VERIFICATION.md), [repeatable QA commands](tools/qa/README.md), and the original [visual fieldbook](OPEN_ME.html).
+See the [valley remix and sword verification](docs/VALLEY_REMIX_VERIFICATION.md), the [Living Valley screenshots and measurements](docs/LIVING_VALLEY_VERIFICATION.md), [repeatable QA commands](tools/qa/README.md), and the original [visual fieldbook](OPEN_ME.html).
 
 ## Included
 

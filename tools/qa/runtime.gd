@@ -60,6 +60,15 @@ func _run() -> void:
     for argument in OS.get_cmdline_user_args():
         if argument.begins_with("--case="):
             route_case = argument.trim_prefix("--case=")
+        elif argument.begins_with("--seed="):
+            var seed_text := argument.trim_prefix("--seed=")
+            if not seed_text.is_valid_int():
+                push_error("Supply an integer for --seed")
+                quit(2)
+                return
+            set_meta(&"journey_seed", seed_text.to_int())
+            set_meta(&"world_layout_version", 1)
+            measurements["journey_seed"] = seed_text.to_int()
         elif argument.begins_with("--out="):
             output_dir = argument.trim_prefix("--out=")
         elif argument == "--record-transition":
@@ -176,8 +185,8 @@ func _shift(points: Array, offset: Vector3) -> Array:
 
 
 func _build_routes() -> void:
-    var q := CinderDistricts.offset("quarry")
-    var r := CinderDistricts.offset("relay")
+    var q := CinderDistricts.offset("quarry", game.layout.layout_id)
+    var r := CinderDistricts.offset("relay", game.layout.layout_id)
     var west: PackedVector3Array = game.outer_valley.route_between_nodes("grove_west", "quarry_gate")
     var north: PackedVector3Array = game.outer_valley.route_between_nodes("grove_north", "relay_gate")
     QUARRY_PATH = QUARRY_PATH_BASE.slice(0, 2) + Array(west) + _shift(QUARRY_PATH_BASE.slice(3), q)
@@ -615,14 +624,30 @@ func _campaign(use_quarry: bool) -> void:
         if not await _walk_route(QUARRY_SOUTH, "Quarry's southern gallery"):
             return
         junction = "quarry"
-    elif not await _walk_route(GROVE_SOUTH, "Grove's southern causeway"):
-        return
+    else:
+        var exit_path: PackedVector3Array = game.grove_terrain.map_paths()[0]
+        exit_path.reverse()
+        if not await _walk_route(Array(exit_path), "Grove's southern causeway"):
+            return
     var destinations := PackedStringArray(["west", "east"] if use_quarry else ["west", "south", "east"])
-    var sites_by_junction := {"west": "Lanternwood", "south": "Sunken Aqueduct", "east": "Sunwatch Observatory"}
     for next in destinations:
         if not await _walk_outer(junction, next):
             return
-        if not await _campaign_defense(_find_site(sites_by_junction[next]), route_summary):
+        var court: Vector3 = game.outer_valley.junctions[next]
+        var site: CinderSite
+        for candidate: CinderSite in game.outer_valley.get_sites():
+            if not site or candidate.anchor.global_position.distance_squared_to(court) < site.anchor.global_position.distance_squared_to(court):
+                site = candidate
+        if game.layout.version > 0:
+            for cache: Node3D in game._caches.duplicate():
+                var offset := cache.global_position - court
+                if offset.length() > 11:
+                    continue
+                var approach := cache.global_position - offset.normalized() * 1.6
+                if not await _walk_to(approach):
+                    return
+                game.interact()
+        if not await _campaign_defense(site, route_summary):
             return
         junction = next
     measurements["route"] = route_summary
@@ -665,10 +690,18 @@ func _outer_profile() -> void:
 
 
 func _campaign_defense(site: CinderSite, route_summary: Array[Dictionary]) -> bool:
-    if site == null or not await _interact_at_pad():
+    if not _check(site != null, "Camp on chosen road") or not await _walk_to(site.anchor.global_position):
+        return false
+    if not await _interact_at_pad() or not _check(game.active_site == site, "Deployed at " + site.label):
         return false
     for index in site.sockets.size():
-        game.battle.place(index, 2 if index == 1 else 0)
+        var kind := 2 if index == 1 else 0
+        if game.layout.version > 0 and index == 2:
+            kind = 1
+        game.battle.place(index, kind)
+    while game.core.health < 90.0 and game.battle.repair():
+        pass
+    print("CINDERTRAIL_CAMP ", site.label, " ", _snapshot(site))
     if not game.start_wave() or not await _wait_mode("Defend", 90):
         return false
     if not await _defend_site(site, false) or not await _pack():
@@ -913,7 +946,8 @@ func _defend_site(site: Variant, last_site: bool) -> bool:
     # Repair, upgrade, and start subsequent waves through the same gameplay APIs used by the HUD.
     var capture_taken := false
     var frame_budget := 42000
-    for frame in range(0, frame_budget, 30):
+    var step := 8 if game.layout.version > 0 else 30
+    for frame in range(0, frame_budget, step):
         if _mode() == "Lose":
             return _check(false, "Survived defenses at " + site.label)
         if game.core.restoration >= 99.999 or site.remaining_energy <= 0.001:
@@ -926,7 +960,7 @@ func _defend_site(site: Variant, last_site: bool) -> bool:
             if game.battle.scrap >= 30:
                 game.battle.upgrade(0)
             game.start_wave()
-        elif game.core.health < 75.0:
+        elif game.core.health < 85.0:
             game.battle.repair()
         for index in site.sockets.size():
             if not game.battle.towers.has(index) and game.battle.scrap >= 8:
@@ -934,13 +968,16 @@ func _defend_site(site: Variant, last_site: bool) -> bool:
             elif game.battle.towers.has(index) and game.battle.scrap >= 24 and game.battle.towers[index].level < 3:
                 game.battle.upgrade(index)
         _assist_target()
+        if game.layout.version > 0 and game.player.global_position.distance_to(site.anchor.global_position) > 2.6:
+            if not await _walk_to(site.anchor.global_position):
+                return false
         if use_window and not capture_taken and _enemy_count() >= 6:
             var shot_name: String = site.label.to_lower().replace(" ", "-")
             if last_site:
                 measurements["relay_defense"] = await _profile(180, 0)
             await _capture(shot_name + "-defense.png")
             capture_taken = true
-        await _physics_frames(30)
+        await _physics_frames(step)
     return _check(false, "Extraction finished within time budget at " + site.label)
 
 
@@ -959,6 +996,8 @@ func _assist_target() -> void:
     if closest != null:
         var target: Vector3 = closest.body_center()
         game.battle.attack(origin, origin.direction_to(target))
+        if game.layout.version > 0 and closest_distance < 6.5:
+            game.melee.request(target - origin)
 
 
 func _restart() -> void:
@@ -990,7 +1029,10 @@ func _interact_at_pad() -> bool:
 
 
 func _cross_grove() -> bool:
-    for point in [Vector3(-2.7, 0.7, 10), Vector3(0, 0.7, 5), Vector3(0, 0.7, 2.0)]:
+    var approach := PackedVector3Array([Vector3(-2.7, 0.7, 10), Vector3(0, 0.7, 5), Vector3(0, 0.7, 2)])
+    if game.layout.version > 0:
+        approach = game.grove_terrain.map_paths()[0].slice(2)
+    for point in approach:
         if not await _walk_to(point):
             return false
     return _check(game.player.global_position.y > 0.55 and game.player.is_on_floor(),
@@ -1008,7 +1050,8 @@ func _collect_grove_supplies() -> bool:
 func _walk_route(path: Array, label: String) -> bool:
     Input.action_press("sprint")
     for point: Vector3 in path:
-        if not await _walk_to(point):
+        var travel_frames := ceili(game.player.global_position.distance_to(point) / 4.5 * 60) + 120
+        if not await _walk_to(point, maxi(travel_frames, 360)):
             Input.action_release("sprint")
             return false
         if not _check(absf(game.player.global_position.y - point.y) < 0.75, "Walkable elevation at %s" % point):

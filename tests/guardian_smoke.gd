@@ -1,6 +1,6 @@
 extends SceneTree
-## Writes a version-1 endgame save and retries it through the normal title and
-## defeat actions. Use a temporary XDG_DATA_HOME and CINDERTRAIL_TEST_SAVE=1.
+## Retries an endgame save through normal title and defeat actions. Pass -- --generated
+## to use a newly rolled layout. Use a temporary XDG_DATA_HOME and CINDERTRAIL_TEST_SAVE=1.
 var game: Node
 var failures := 0
 
@@ -26,13 +26,23 @@ func _run() -> void:
 	await scene_changed
 	game = current_scene
 	var entered := CinderRelay.SUMMIT + Vector3(0, .23, 1.6)
-	JourneyCheckpoint.write({"restoration": 100.0, "health": 77.0, "scrap": 0,
-		"position": entered, "inventory": [{"socket": -1, "kind": 0, "level": 2}]})
+	var endgame := {"restoration": 100.0, "health": 77.0, "scrap": 0,
+		"position": entered, "inventory": [{"socket": -1, "kind": 0, "level": 2}]}
+	var generated := OS.get_cmdline_user_args().has("--generated")
+	if generated:
+		game._begin_journey()
+		entered = game.beacon.global_position + Vector3(0, .23, 1.6)
+		game._store_checkpoint(entered)
+		var fresh := JourneyCheckpoint.read()
+		endgame.position = entered
+		fresh.merge(endgame, true)
+		endgame = fresh
+	JourneyCheckpoint.write(endgame)
 	game._hud_action(&"checkpoint")
 	await scene_changed
 	game = current_scene
 	await _frames(15)
-	_check(game.core.restoration == 100.0 and not game.summit.cleared, "Legacy save restores the sun and leaves the required summit ahead")
+	_check(game.core.restoration == 100.0 and not game.summit.cleared, "Loaded journey restores the sun and leaves the required summit ahead")
 	game.interact()
 	await _frames(85)
 	_check(game.active_site == game.summit.site and game.mode == game.Mode.PREPARE, "Beacon opens tactical preparation before delivery")

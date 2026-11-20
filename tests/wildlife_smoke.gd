@@ -24,6 +24,9 @@ func _initialize() -> void:
 func _run() -> void:
 	set_meta(&"direct_journey", true)
 	for arg: String in OS.get_cmdline_user_args():
+		if arg.begins_with("--seed="):
+			set_meta(&"world_layout_version", 1)
+			set_meta(&"journey_seed", arg.trim_prefix("--seed=").to_int())
 		if arg.begins_with("--capture="):
 			_capture_dir = arg.trim_prefix("--capture=")
 	change_scene_to_file("res://scenes/main.tscn")
@@ -99,7 +102,8 @@ func _check_deer(deer: ANIMAL) -> void:
 		"Deer return to grazing after the traveler moves away")
 
 	var site := _find_camp(&"lanternwood")
-	_player.global_position = site.anchor.global_position + Vector3.BACK * 1.4
+	var approach := (site.anchor.global_position - deer.home).slide(Vector3.UP).normalized()
+	_player.global_position = site.anchor.global_position + approach * 1.4
 	_game.interact()
 	await _frames(88)
 	_check(deer.activity == A.CALM and _game.active_site == site and _game.start_wave(),

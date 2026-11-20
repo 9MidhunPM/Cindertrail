@@ -50,7 +50,11 @@ func _run() -> void:
 	await _frames(120)
 	_check(front.get("stage") == &"hidden" and game.hud.visible, "Comic skip enters the world")
 	_check(game.player.is_on_floor() and not JourneyCheckpoint.read().is_empty(), "First checkpoint is saved on safe ground")
-	game.player.position = Vector3(-4.08, 0.84, 9)
+	var grove_cache: Node3D = game._caches[-1]
+	for cache: Node3D in game._caches:
+		if cache.global_position.distance_to(game.player.global_position) < grove_cache.global_position.distance_to(game.player.global_position):
+			grove_cache = cache
+	_place(grove_cache.global_position + Vector3.RIGHT)
 	await _frames(20)
 	game.interact()
 	game.grove.threat = 4
@@ -61,6 +65,11 @@ func _run() -> void:
 	var scrap: int = game.battle.scrap
 	game._save_checkpoint()
 	var saved := JourneyCheckpoint.read()
+	var anchors := {}
+	for site: CinderSite in game.sites:
+		anchors[site.checkpoint_id] = site.anchor.global_position
+	_check(saved.get("world_layout_version") == 1 and saved.get("world_layout_id") == game.layout.layout_id,
+		"New Journey saves its generated valley layout")
 	_check(saved.get("claimed", PackedStringArray()).size() == 1 and saved.get("health") == 64.0, "Checkpoint records supply pickup and core damage")
 	game.player.position = game.grove.anchor.global_position + Vector3(0, 0.12, 2)
 	await _frames(8)
@@ -75,6 +84,8 @@ func _run() -> void:
 	await scene_changed
 	game = current_scene
 	await _frames(15)
+	for site: CinderSite in game.sites:
+		_check(anchors[site.checkpoint_id] == site.anchor.global_position, "Checkpoint returns to the same " + site.label + " shrine")
 	_check(game.core.health == 64.0 and game.core.restoration == 3.5, "Retry restores health and extraction")
 	_check(game.grove.threat == 4 and game.grove.remaining_energy == saved.sites[game.grove.checkpoint_id].reserve, "Retry restores finite reserve and threat")
 	_check(game.battle.scrap == scrap and game.battle.inventory.size() == 1 and game.battle.inventory[0].level == 2, "Retry restores the upgraded packed module and economy")
@@ -85,6 +96,18 @@ func _run() -> void:
 	await _press("ContinueJourney")
 	_check(game.core.restoration == 3.5 and game.hud.visible, "Continue resumes from the same checkpoint")
 	await _check_frontier()
+	var old_layout: int = game.layout.layout_id
+	game._hud_action(&"title")
+	await scene_changed
+	game = current_scene
+	await _press("NewJourney")
+	await _press("StartNew")
+	await _press("SkipIntro")
+	await _frames(10)
+	_check(game.layout.layout_id != old_layout, "New Journey chooses a different valley")
+	for site: CinderSite in game.sites:
+		_check(anchors[site.checkpoint_id].distance_to(site.anchor.global_position) > 1,
+			"New Journey relocates " + site.label)
 	quit(1 if failures else 0)
 
 func _check_frontier() -> void:
@@ -122,11 +145,12 @@ func _check_frontier() -> void:
 	Input.action_release("pack")
 	_check(game.core.form == SunCore.Form.CARRIED and game.core.get_instance_id() == sun_id,
 		"Packing carries the original sun out of the frontier camp")
-	_place(CinderFrontier.FORK)
+	var frontier_fork: Vector3 = expedition.paths[0][-1]
+	_place(frontier_fork)
 	await _frames(130)
 	game._save_checkpoint()
 	var saved := JourneyCheckpoint.read()
-	_check(saved.get("position", Vector3.ZERO).z > CinderFrontier.ENTRANCE.z,
+	_check(Vector3(saved.get("position", Vector3.ZERO)).distance_to(frontier_fork) < 1.0,
 		"Checkpoint can be taken on safe ground inside the frontier")
 	game._hud_action(&"title")
 	await scene_changed

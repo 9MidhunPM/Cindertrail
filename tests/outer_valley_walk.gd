@@ -19,9 +19,18 @@ func _init() -> void:
 
 func _run() -> void:
 	root.add_child(GROVE.new())
-	root.add_child(QUARRY.new())
-	root.add_child(RELAY.new())
+	var layout_id := 0
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--layout="):
+			layout_id = arg.trim_prefix("--layout=").to_int()
+	var quarry := QUARRY.new()
+	var relay := RELAY.new()
+	quarry.layout_id = layout_id
+	relay.layout_id = layout_id
+	root.add_child(quarry)
+	root.add_child(relay)
 	var valley: CinderOuterValley = REGION.instantiate()
+	valley.layout_id = layout_id
 	root.add_child(valley)
 	pawn.visual = TRAVELER.instantiate()
 	pawn.add_child(pawn.visual)
@@ -70,16 +79,16 @@ func _run() -> void:
 			measured += distance
 		print("Reverse " if reverse else "Forward ", valley.road_names[index], "  ", snappedf(distance,.1), " m")
 	# Cross all three seams from inside the original districts.
-	var q := CinderDistricts.offset("quarry")
-	var r := CinderDistricts.offset("relay")
+	var q := CinderDistricts.offset("quarry", layout_id)
+	var r := CinderDistricts.offset("relay", layout_id)
 	var entrances: Array[PackedVector3Array] = [
-		PackedVector3Array([Vector3(-1,.68,19), Vector3(-1,.68,24.7), Vector3(-1,.90,32)]),
-		PackedVector3Array([Vector3(-36,.92,2) + q, Vector3(-36,.92,6.5) + q, Vector3(-185,1,13)]),
-		PackedVector3Array([Vector3(23.4,4.4,-51.4) + r, Vector3(28,3.88,-51.4) + r, Vector3(75,4,-201)]),
-		PackedVector3Array([Vector3(-15,.7,1), Vector3(-24.5,.68,1), Vector3(-32,.8,0)]),
-		PackedVector3Array([Vector3(0,.7,-19), Vector3(0,.68,-24.5), Vector3(1,.8,-33)]),
-		PackedVector3Array([Vector3(-166,.95,1.5), Vector3(-174,.68,1), Vector3(-28,.68,1) + q, Vector3(-39,1.0,2) + q]),
-		PackedVector3Array([Vector3(40,.8,-166), Vector3(40,.68,-174), Vector3(0,.68,-27) + r, Vector3(4,1.6,-34) + r]),
+		PackedVector3Array([Vector3(-1,.68,19), Vector3(-1,.68,24.7), _onto_road(valley, "grove")]),
+		PackedVector3Array([Vector3(-36,.92,2) + q, Vector3(-36,.92,6.5) + q, _onto_road(valley, "quarry")]),
+		PackedVector3Array([Vector3(23.4,4.4,-51.4) + r, Vector3(28,3.88,-51.4) + r, _onto_road(valley, "relay")]),
+		PackedVector3Array([Vector3(-15,.7,1), Vector3(-24.5,.68,1), _onto_road(valley, "grove_west")]),
+		PackedVector3Array([Vector3(0,.7,-19), Vector3(0,.68,-24.5), _onto_road(valley, "grove_north")]),
+		PackedVector3Array([_onto_road(valley, "quarry_gate"), Vector3(-24,.68,1) + q, Vector3(-28,.68,1) + q, Vector3(-39,1.0,2) + q]),
+		PackedVector3Array([_onto_road(valley, "relay_gate"), Vector3(0,.68,-24) + r, Vector3(0,.68,-27) + r, Vector3(4,1.6,-34) + r]),
 	]
 	for seam in entrances:
 		pawn.position = seam[0] + Vector3.UP * .32
@@ -118,6 +127,15 @@ func _run() -> void:
 				failures.append("missing socket terrain in " + site.label)
 	print("Outer valley ", snappedf(measured,.01), " m / ", valley.roads.size(), " trails / ", valley.sites.size(), " camps. Failures ", failures)
 	quit(1 if not failures.is_empty() else 0)
+
+func _onto_road(valley: CinderOuterValley, node_id: String) -> Vector3:
+	var start: Vector3 = valley.junctions[node_id]
+	for road in valley.roads:
+		if start.is_equal_approx(road[0]):
+			return start.move_toward(road[1], 6)
+		if start.is_equal_approx(road[-1]):
+			return start.move_toward(road[-2], 6)
+	return Vector3.INF
 
 func _walk(point: Vector3) -> bool:
 	var initial := pawn.position.distance_to(point)

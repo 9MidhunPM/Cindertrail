@@ -18,6 +18,10 @@ func frames(count: int) -> void:
 func _run() -> void:
 	set_meta(&"direct_journey", true)
 	set_meta(&"journey_seed", 945)
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--seed="):
+			set_meta(&"world_layout_version", 1)
+			set_meta(&"journey_seed", arg.trim_prefix("--seed=").to_int())
 	change_scene_to_file("res://scenes/main.tscn")
 	await scene_changed
 	await frames(5)
