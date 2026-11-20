@@ -39,7 +39,30 @@ import_script/path=""
 materials/extract=0
 materials/extract_format=0
 materials/extract_path=""
-_subresources={}
+_subresources={
+"materials": {
+"brass": {
+"use_external/enabled": true,
+"use_external/fallback_path": "res://art/materials/stylized/painted_brass.tres",
+"use_external/path": "res://art/materials/stylized/painted_brass.tres"
+},
+"bronze": {
+"use_external/enabled": true,
+"use_external/fallback_path": "res://art/materials/stylized/painted_bronze.tres",
+"use_external/path": "res://art/materials/stylized/painted_bronze.tres"
+},
+"bronze_dark": {
+"use_external/enabled": true,
+"use_external/fallback_path": "res://art/materials/stylized/painted_bronze_dark.tres",
+"use_external/path": "res://art/materials/stylized/painted_bronze_dark.tres"
+},
+"wood": {
+"use_external/enabled": true,
+"use_external/fallback_path": "res://art/materials/stylized/painted_wood.tres",
+"use_external/path": "res://art/materials/stylized/painted_wood.tres"
+}
+}
+}
 gltf/naming_version=2
 gltf/embedded_image_handling=3
 gltf/texture_map_mode=1

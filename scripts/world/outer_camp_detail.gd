@@ -1,9 +1,9 @@
 extends Node3D
 
-const BRONZE := preload("res://art/materials/bronze.tres")
-const BRASS := preload("res://art/materials/brass.tres")
-const STONE := preload("res://art/materials/stone_cream.tres")
-const WOOD := preload("res://art/materials/wood.tres")
+const BRONZE := preload("res://art/materials/stylized/painted_bronze.tres")
+const BRASS := preload("res://art/materials/stylized/painted_brass.tres")
+const STONE := preload("res://art/materials/stylized/painted_stone_cream.tres")
+const WOOD := preload("res://art/materials/stylized/painted_wood.tres")
 const FALL := preload("res://art/materials/grove/waterfall.gdshader")
 
 var _lamps: Array[Node3D] = []

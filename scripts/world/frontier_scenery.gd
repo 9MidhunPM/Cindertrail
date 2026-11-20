@@ -13,9 +13,9 @@ const PAINT := preload("res://art/materials/grove/weathered_palette.gdshader")
 var _random := RandomNumberGenerator.new()
 var _ground := StaticBody3D.new()
 var _stone: ShaderMaterial
-var _bronze: StandardMaterial3D
+var _bronze: Material
 var _lantern: StandardMaterial3D
-var _wood: StandardMaterial3D
+var _wood: Material
 var _rock_mesh := CylinderMesh.new()
 var _slab_mesh := BoxMesh.new()
 var _batches: Dictionary = {}
@@ -32,8 +32,11 @@ func initialize(scenery_seed: int) -> void:
 	_rock_mesh.radial_segments = 6
 	_stone = ShaderMaterial.new()
 	_stone.shader = PAINT
-	_bronze = _tint(Color("#695540"), .5)
-	_wood = _tint(Color("#695545"), .94)
+	_stone.set_shader_parameter("route_paint", preload("res://art/textures/stylized/route_paint.png"))
+	_stone.set_shader_parameter("brush_detail", preload("res://art/textures/stylized/valley_brush.png"))
+	_stone.set_shader_parameter("waterline", -.5)
+	_bronze = preload("res://art/materials/stylized/painted_bronze.tres")
+	_wood = preload("res://art/materials/stylized/painted_wood.tres")
 	_lantern = _tint(Color("#ffd08d"), .58)
 	_lantern.emission_enabled = true
 	_lantern.emission = Color("#f2914d")
@@ -45,6 +48,7 @@ func surroundings() -> void:
 	plane.size = Vector2(265, 340)
 	var water := ShaderMaterial.new()
 	water.shader = WATER
+	water.set_shader_parameter("brush_detail", preload("res://art/textures/stylized/valley_brush.png"))
 	_instance(plane, Vector3(52, -.5, 378), water, false)
 	for i in 27:
 		var z := 235.0 + 12.5 * i
@@ -198,7 +202,7 @@ func discovery(kind: int, start: Vector3, end: Vector3, facing: Vector3) -> Dict
 			add_child(cradle)
 			_attach(cradle, Vector3.ZERO, Vector3(1.14, .33, .78), _bronze)
 			for x in [-.45, .45]:
-				_attach(cradle, Vector3(x, .43, 0), Vector3(.031, .86, .031), _wood)
+				_attach(cradle, Vector3(x, .43, 0), Vector3(.031, .86, .031), preload("res://art/materials/stylized/painted_rope.tres"))
 			machinery = cradle
 		2:
 			_road_lantern(start, false)
@@ -209,7 +213,7 @@ func discovery(kind: int, start: Vector3, end: Vector3, facing: Vector3) -> Dict
 			disk.radial_segments = 12
 			var mirror := MeshInstance3D.new()
 			mirror.mesh = disk
-			mirror.material_override = _tint(Color("#d5b779"), .12)
+			mirror.material_override = preload("res://art/materials/stylized/painted_glazed_mirror.tres")
 			mirror.position = Vector3.UP * 1.38
 			mirror.rotation.x = PI * .46
 			machinery.add_child(mirror)

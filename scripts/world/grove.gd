@@ -12,9 +12,9 @@ const WILDLIFE = preload("res://scripts/world/grove_wildlife.gd")
 const SURFACE_DETAIL = preload("res://scripts/world/valley_surface_detail.gd")
 const ROUTE_PAINT = preload("res://art/textures/stylized/route_paint.png")
 const BELL_POSITION := Vector3(-3.65, 0.72, 2.60)
-const CREAM = Color("#d6b584")
-const LIGHT = Color("#f4d8a5")
-const SHADE = Color("#827d73")
+const CREAM = Color("#c5beab")
+const LIGHT = Color("#edddbe")
+const SHADE = Color("#849298")
 const MOSS = Color("#687e51")
 const REED = Color("#597f58")
 const BARK = Color("#534840")
@@ -204,6 +204,7 @@ func _pool() -> void:
 	water.mesh = plane
 	var mat := ShaderMaterial.new()
 	mat.shader = WATER
+	mat.set_shader_parameter("brush_detail", preload("res://art/textures/stylized/valley_brush.png"))
 	water.material_override = mat
 	water.position.y = .245
 	water.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -774,6 +775,12 @@ func _slab(poly: PackedVector2Array, low: float, high: float, color: Color) -> v
 		a = a.lerp(mid,.020)
 		b = b.lerp(mid,.020)
 		_face(a,b,mid,color,Vector3.UP)
+		# Each paving fan runs from the rim to its centre. Existing alpha ranges below
+		# .91 identify timber and foliage; this narrow range paints stone joints.
+		if high >= .35 and center.distance_to(p) > .26:
+			for vertex_index in range(points.size()-3, points.size()):
+				if not points[vertex_index].is_equal_approx(mid):
+					colors[vertex_index].a = .922
 		_face(outer_a,outer_b,b,color.darkened(.035),Vector3.UP*.6+(outer_a-mid).normalized()*.4)
 		_face(outer_a,b,a,color.darkened(.035),Vector3.UP*.6+(outer_a-mid).normalized()*.4)
 		var foot := Vector3(p.x,low,p.y)
@@ -855,6 +862,10 @@ func _collect_mesh(node: Node, parent: Transform3D, output: Array) -> void:
 		for s in node.mesh.get_surface_count():
 			var mat: Material = node.get_active_material(s)
 			var tint: Color = mat.albedo_color if mat is BaseMaterial3D else CREAM
+			if mat is ShaderMaterial:
+				var painted: Variant = mat.get_shader_parameter("tint")
+				if painted is Color:
+					tint = painted
 			var data: Array = node.mesh.surface_get_arrays(s)
 			var vs: PackedVector3Array = data[Mesh.ARRAY_VERTEX]
 			var ns: PackedVector3Array = data[Mesh.ARRAY_NORMAL]
@@ -876,6 +887,7 @@ func _finish_mesh() -> void:
 	var mat := ShaderMaterial.new()
 	mat.shader = PALETTE
 	mat.set_shader_parameter("route_paint", ROUTE_PAINT)
+	mat.set_shader_parameter("brush_detail", preload("res://art/textures/stylized/valley_brush.png"))
 	var arrays := []
 	arrays.resize(Mesh.ARRAY_MAX)
 	arrays[Mesh.ARRAY_VERTEX] = points

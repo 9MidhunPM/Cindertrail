@@ -39,7 +39,25 @@ import_script/path=""
 materials/extract=0
 materials/extract_format=0
 materials/extract_path=""
-_subresources={}
+_subresources={
+"materials": {
+"leaves_gold": {
+"use_external/enabled": true,
+"use_external/fallback_path": "res://art/materials/stylized/painted_leaves_gold.tres",
+"use_external/path": "res://art/materials/stylized/painted_leaves_gold.tres"
+},
+"leaves_orange": {
+"use_external/enabled": true,
+"use_external/fallback_path": "res://art/materials/stylized/painted_leaves_orange.tres",
+"use_external/path": "res://art/materials/stylized/painted_leaves_orange.tres"
+},
+"wood": {
+"use_external/enabled": true,
+"use_external/fallback_path": "res://art/materials/stylized/painted_wood.tres",
+"use_external/path": "res://art/materials/stylized/painted_wood.tres"
+}
+}
+}
 gltf/naming_version=2
 gltf/embedded_image_handling=3
 gltf/texture_map_mode=1

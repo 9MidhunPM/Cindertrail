@@ -574,6 +574,7 @@ func _finish_terrain() -> void:
 	var material := ShaderMaterial.new()
 	material.shader = STONE_SHADER
 	material.set_shader_parameter("route_paint", preload("res://art/textures/stylized/route_paint.png"))
+	material.set_shader_parameter("brush_detail", preload("res://art/textures/stylized/valley_brush.png"))
 	material.set_shader_parameter("mineral_tint", Vector3(1.04, 1.05, 1.12))
 	geometry.mesh = _visual.commit()
 	geometry.material_override = material

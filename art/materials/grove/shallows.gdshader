@@ -1,5 +1,6 @@
 shader_type spatial;
 render_mode cull_disabled;
+uniform sampler2D brush_detail : filter_linear_mipmap, repeat_enable;
 uniform sampler2D scene_color : hint_screen_texture, repeat_disable, filter_linear;
 uniform sampler2D scene_depth : hint_depth_texture, repeat_disable, filter_nearest;
 uniform vec4 deep : source_color = vec4(0.009,0.31,0.44,1.0);
@@ -56,6 +57,8 @@ void fragment(){
 	bed=mix(ground_color*vec3(.41,1.10,1.05),bed,.34+.27*pool);
 	float caustic=sin(p.x*4.1+p.y*1.8+sin(p.y*2.5+TIME*.41)*.92)
 		+.82*sin(p.y*5.1-p.x*1.3+sin(p.x*2.05-TIME*.38)*.78);
+	float net=texture(brush_detail,p*.18+vec2(TIME*.009,-TIME*.005)).b;
+	bed+=vec3(.020,.108,.072)*net*smoothstep(.27,.76,pool);
 	bed+=vec3(.027,.098,.061)*(1.-smoothstep(.035,.145,abs(caustic)))*smoothstep(.31,.72,pool);
 	vec3 sky=mix(vec3(.009,.065,.10),vec3(.031,.129,.162),pool);
 	vec3 reflected=reflection(VERTEX+n*.075,reflect_ray,PROJECTION_MATRIX,INV_PROJECTION_MATRIX,sky);

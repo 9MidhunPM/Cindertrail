@@ -395,6 +395,7 @@ func _install_ore_cradle(tip: Vector3) -> void:
 	rope_mesh.rings = 1
 	rope_mesh.height = 1.0
 	_rope = _crane_part(_cradle_pivot, rope_mesh, Vector3.ZERO, IRON)
+	_rope.material_override = preload("res://art/materials/stylized/painted_rope.tres")
 	_cradle = Node3D.new()
 	_cradle.name = "OreCradle"
 	_cradle_pivot.add_child(_cradle)
@@ -667,6 +668,7 @@ func _finish_geometry() -> void:
 	var material := ShaderMaterial.new()
 	material.shader = STONE_SHADER
 	material.set_shader_parameter("route_paint", preload("res://art/textures/stylized/route_paint.png"))
+	material.set_shader_parameter("brush_detail", preload("res://art/textures/stylized/valley_brush.png"))
 	material.set_shader_parameter("mineral_tint", Vector3(1.17, 1.02, .78))
 	mesh.material_override = material
 	add_child(mesh)

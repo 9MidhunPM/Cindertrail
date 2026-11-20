@@ -1,8 +1,8 @@
 class_name CinderSite
 extends Node3D
 
-const BRONZE := preload("res://art/materials/bronze.tres")
-const BRASS := preload("res://art/materials/brass.tres")
+const BRONZE := preload("res://art/materials/stylized/painted_bronze.tres")
+const BRASS := preload("res://art/materials/stylized/painted_brass.tres")
 
 var spec: CinderSiteSpec
 var anchor: Marker3D

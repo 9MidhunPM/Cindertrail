@@ -38,15 +38,25 @@ func _ready() -> void:
 	var pigment := ShaderMaterial.new()
 	pigment.shader = PIGMENT
 	pigment.set_shader_parameter("route_paint", ROUTE_PAINT)
+	pigment.set_shader_parameter("brush_detail", preload("res://art/textures/stylized/valley_brush.png"))
 	var leaf_pigment := pigment.duplicate() as ShaderMaterial
 	leaf_pigment.set_shader_parameter("moves_in_wind", true)
+	var soil := pigment.duplicate() as ShaderMaterial
+	soil.set_shader_parameter("family", 1)
+	var bark := pigment.duplicate() as ShaderMaterial
+	bark.set_shader_parameter("family", 2)
 	var channel := ShaderMaterial.new()
 	channel.shader = POOL
+	channel.set_shader_parameter("brush_detail", preload("res://art/textures/stylized/valley_brush.png"))
 	for piece: MeshInstance3D in land.find_children("*", "MeshInstance3D", true, false):
 		if str(piece.name).begins_with("Water"):
 			piece.material_override = channel
 		elif str(piece.name).begins_with("Leaves"):
 			piece.material_override = leaf_pigment
+		elif str(piece.name).begins_with("Ground"):
+			piece.material_override = soil
+		elif str(piece.name).begins_with("Trunks"):
+			piece.material_override = bark
 		elif not str(piece.name).begins_with("Lantern"):
 			piece.material_override = pigment
 	for key: String in TRAILS.data.nodes:

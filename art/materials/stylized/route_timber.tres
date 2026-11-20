@@ -1,11 +1,17 @@
-[gd_resource type="ShaderMaterial" load_steps=3 format=3]
+[gd_resource type="ShaderMaterial" load_steps=5 format=3]
 
 [ext_resource type="Shader" path="res://art/materials/stylized/route_surface.gdshader" id="1"]
 [ext_resource type="Texture2D" path="res://art/textures/stylized/route_paint.png" id="2"]
 
+[ext_resource type="Texture2D" path="res://art/textures/stylized/valley_brush.png" id="3"]
+[ext_resource type="Texture2D" path="res://art/textures/stylized/workshop_trim.png" id="4"]
+
 [resource]
 shader = ExtResource("1")
 shader_parameter/paint_masks = ExtResource("2")
+shader_parameter/brush_detail = ExtResource("3")
+shader_parameter/trim_sheet = ExtResource("4")
+shader_parameter/trim_row = 2
 shader_parameter/tint = Color(0.29, 0.16, 0.075, 1)
 shader_parameter/surface_kind = 1
 shader_parameter/tiles_per_meter = 1.14

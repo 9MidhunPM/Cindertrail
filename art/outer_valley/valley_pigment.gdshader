@@ -2,6 +2,8 @@ shader_type spatial;
 render_mode cull_disabled;
 
 uniform sampler2D route_paint : filter_linear_mipmap, repeat_enable;
+uniform sampler2D brush_detail : filter_linear_mipmap, repeat_enable;
+uniform int family : hint_enum("Masonry","Soil","Bark") = 0;
 uniform bool moves_in_wind = false;
 
 varying vec3 world_point;
@@ -32,14 +34,19 @@ void vertex() {
 }
 
 void fragment() {
-	vec2 p = world_point.xz + world_point.y * vec2(.57,.74);
-	float marbling = pigment(p*1.3) * .55 + pigment(p*.32) * .45;
-	float grain = pigment(p*8.3);
-	vec3 brush = texture(route_paint, p * .29).rgb;
-	float moss = smoothstep(.64,.86,marbling) * smoothstep(.34,.95,up_normal.y);
-	vec3 paint = COLOR.rgb * (.77 + marbling*.26 + grain*.055 + mix(brush.r, brush.g, float(moves_in_wind))*.15);
-	moss *= mix(.70, 1.18, brush.b);
-	ALBEDO = mix(paint, paint*vec3(.64,.82,.60), moss*.68);
-	ROUGHNESS = .92;
-	SPECULAR = .17;
+	vec3 axis = abs(normalize(up_normal));
+	vec2 plane = axis.y > max(axis.x,axis.z) ? world_point.xz :
+		(axis.x > axis.z ? world_point.zy : world_point.xy);
+	vec2 uv = plane*.27;
+	vec4 mineral = texture(route_paint,uv);
+	vec4 brush = texture(brush_detail,uv*1.18);
+	float broad = pigment(world_point.xz*.36 + world_point.y*.09);
+	float stroke = family == 2 ? mineral.g : (family == 1 ? brush.g : mineral.r);
+	if (moves_in_wind) { stroke = brush.r; }
+	vec3 paint = COLOR.rgb*(.65+.65*stroke)*(.88+.22*broad);
+	float moss = smoothstep(.56,.82,mineral.b*.63+broad*.37) * smoothstep(.25,.88,up_normal.y);
+	paint=mix(paint,paint*vec3(.64,.92,.67),moss*(moves_in_wind ? .19 : .55));
+	ALBEDO = paint;
+	ROUGHNESS = .91;
+	SPECULAR = .18;
 }
