@@ -1,5 +1,5 @@
 extends "res://tools/qa/runtime.gd"
-## Native 1080p. Pass --out=/absolute/folder and optionally --light-only or --towns-only.
+## Native 1080p. Pass --out=/absolute/folder and optionally --light-only or --towns-only. Add --repeat to repeat town timings in reverse order.
 
 const LAYOUT := preload("res://scripts/world/journey_layout.gd")
 const TOWNS := [&"western_arcade", &"bellmakers_steps", &"mineral_ward"]
@@ -135,6 +135,16 @@ func _settlement_pair(id: StringName, district: Node3D) -> void:
 		"p95_change_percent": 100.0 * (after.p95_frame_ms / before.p95_frame_ms - 1.0),
 		"traveler": var_to_str(game.player.global_position), "camera": var_to_str(game.camera.global_position)
 	}
+	if OS.get_cmdline_user_args().has("--repeat"):
+		# Reverse the sampling order to expose heat, compositor load or a first-frame hitch.
+		var repeated_after := await _profile(48, 48)
+		district.hide()
+		var repeated_before := await _profile(48, 48)
+		district.show()
+		measurements[String(id)]["repeat_with"] = repeated_after
+		measurements[String(id)]["repeat_without"] = repeated_before
+		measurements[String(id)]["repeat_p95_change_percent"] = 100.0 * (
+			repeated_after.p95_frame_ms / repeated_before.p95_frame_ms - 1.0)
 	_check(game.camera.global_transform.is_equal_approx(pose), "Matched camera transform for " + String(id))
 	game._set_paused(false)
 	game.hud.hide()
