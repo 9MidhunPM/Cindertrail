@@ -2,9 +2,9 @@ class_name CinderRelay
 extends Node3D
 
 const SITE_SPEC := preload("res://data/sites/relay.tres")
-const STONE_SHADER := preload("res://art/materials/grove/weathered_palette.gdshader")
-const CREAM := Color("#b9a180")
-const HIGHLIGHT := Color("#d8c3a1")
+const STONE_SHADER := preload("res://art/materials/highland/limestone.gdshader")
+const CREAM := Color("#c7aa80")
+const HIGHLIGHT := Color("#e4cca0")
 const STONE_DARK := Color("#796e63")
 const CLIFF := Color("#746d66")
 const COPPER := Color("#a36b3d")
@@ -41,6 +41,7 @@ func _ready() -> void:
 	_collision.name = "RelayCollision"
 	add_child(_collision)
 	_ravine()
+	_summit_geology()
 	_rng.seed = 84440
 	_build_plateau()
 	_passage(APPROACH, 4.1, true, 4)
@@ -59,7 +60,7 @@ func _ready() -> void:
 		PackedVector3Array([Vector3(5.4, 4.82, -55.4), Vector3(12.2, 4.82, -56.1),
 			Vector3(14.3, 4.82, -50.0), Vector3(6.4, 4.82, -49.7)]),
 		[PackedVector3Array(WEST), PackedVector3Array(NORTH), PackedVector3Array(EAST)],
-		Vector3(18.5, 19.6, -31.0), Vector3(10, 3.5, -54.4))
+		Vector3(17.5, 16.9, -30.0), Vector3(10, 4.05, -54.4))
 
 func _ravine() -> void:
 	# Fill beneath the exposed bridge piers with a descending, non-walkable ravine.
@@ -93,6 +94,105 @@ func _ravine() -> void:
 		var scale_factor := _rng.randf_range(.63, 1.32)
 		_ravine_tree(origin, scale_factor, tree % 8 == 0)
 
+## Build the terraced bedrock underneath the original navigation and masonry.
+## The strata follow each ridge, so a causeway reads as an exposed stone trail.
+func _summit_geology() -> void:
+	const TOURMALINE := Color("#40575b")
+	const SHALE := Color("#6e736f")
+	const MARL := Color("#aa9273")
+	for spine: Array in [APPROACH, WEST, NORTH, EAST, BEACON_TRAIL]:
+		for i in range(spine.size()-1):
+			var a: Vector3 = spine[i]
+			var b: Vector3 = spine[i+1]
+			var flat := Vector3(b.x-a.x,0,b.z-a.z)
+			var along := flat.normalized()
+			var across := along.cross(Vector3.UP)
+			var count := ceili(flat.length()/2.7)
+			for j in count:
+				var base := a.lerp(b,(j+.5)/count)
+				var reach := _rng.randf_range(2.2,3.55)
+				for hand: float in [-1.,1.]:
+					var shoulders := base+across*hand*_rng.randf_range(1.38,2.)
+					_outcrop(shoulders-Vector3.UP*.78,reach,.87,2.65,along,MARL)
+					_outcrop(shoulders+across*hand*.59-Vector3.UP*2.35,reach*1.26,1.80,3.15,along,SHALE)
+					_outcrop(shoulders+across*hand*1.09-Vector3.UP*4.30,reach*1.46,2.60,4.80,along,TOURMALINE)
+	# Jagged shoulders spread the round built court and the beacon into natural spurs.
+	for deck in [[CENTER,7.65,6.8],[SUMMIT,4.45,3.88]]:
+		var center: Vector3 = deck[0]
+		var count := 24 if center==CENTER else 15
+		for i in count:
+			var a := TAU*(i+.14)/count
+			var radial := Vector3(cos(a),0,sin(a))
+			var tangent := radial.cross(Vector3.UP)
+			var lip := center+Vector3(radial.x*float(deck[1]),0,radial.z*float(deck[2]))
+			var reach := _rng.randf_range(1.35,2.0)
+			var top := lip-Vector3.UP*_rng.randf_range(.25,.7)
+			_outcrop(top,reach,1.2,1.85,tangent,MARL.lightened(.10))
+			_outcrop(top+radial*.65-Vector3.UP*1.45,reach*1.38,1.61,2.61,tangent,MARL.darkened(.13))
+			_outcrop(top+radial*1.1-Vector3.UP*3.3,reach*1.7,2.28,3.09,tangent,SHALE)
+			_outcrop(top+radial*1.6-Vector3.UP*5.7,reach*2.0,2.9,maxf(3.9,center.y),tangent,TOURMALINE)
+			if i%3==1:
+				_grass(top+radial*.62,16)
+	for approach in [[WEST[0],Vector3.LEFT],[NORTH[0],Vector3.FORWARD],[EAST[0],Vector3.RIGHT]]:
+		var end: Vector3 = approach[0]
+		var forward: Vector3 = approach[1]
+		var side := forward.cross(Vector3.UP)
+		for i in 4:
+			var shoulder := end+forward*(1.1+i*1.3)+side*sin(i*.8)*.65
+			var crest := shoulder-Vector3.UP*(.38+i*.71)
+			_outcrop(crest,3.05+i*.35,1.95+i*.17,4.6,side,MARL.lerp(SHALE,i/4.0))
+			if i%2==1:
+				_grass(crest+side*1.45,17)
+	var timberline := [[-9.,-55.8,.94],[-12.,-53.,1.26],[.0,-62.5,.84],[1.6,-59.3,.93],
+		[28.5,-55.,.93],[31.,-50.,1.13],[2.,-42.3,.82],[21.3,-65.,.77],[-5.1,-44.4,.82]]
+	for stand in timberline:
+		var x := float(stand[0])
+		var z := float(stand[1])
+		var y := _ravine_height(x,z)
+		_ravine_tree(Vector3(x,y,z),float(stand[2]),true)
+	for ledge in [[3.1,3.70,-48.9,.70],[13.8,3.7,-46.2,.85],[20.8,3.68,-54.0,.72],
+		[17.5,5.75,-70.,.84],[15.8,9.8,-84.3,.93],[4.7,1.38,-38.4,.82],[-.3,1.58,-36.5,.58]]:
+		_russet_shrub(Vector3(ledge[0],ledge[1],ledge[2]),float(ledge[3]))
+	for i in 100:
+		var x := _rng.randf_range(-35.,46.)
+		var z := _rng.randf_range(-102.,-38.)
+		if absf(x-10.)<18. and z> -77.: continue
+		var origin := Vector3(x,_ravine_height(x,z)-.35,z)
+		_ravine_tree(origin,_rng.randf_range(.71,1.40),i%11==0)
+
+func _outcrop(top: Vector3, length: float, breadth: float, depth: float, along: Vector3, stone: Color) -> void:
+	var side := along.cross(Vector3.UP)
+	var cap := PackedVector3Array()
+	var breakline := PackedVector3Array()
+	var base := PackedVector3Array()
+	var tint := stone.lerp(HIGHLIGHT,_rng.randf_range(.01,.16))
+	for i in 8:
+		var a := TAU*(i+.21)/8.
+		var p := along*cos(a)*length+side*sin(a)*breadth
+		cap.append(top+p*_rng.randf_range(.83,1.05)-Vector3.UP*_rng.randf_range(.03,.26))
+		breakline.append(top+p*_rng.randf_range(.94,1.12)-Vector3.UP*depth*_rng.randf_range(.23,.47))
+		base.append(top+p*_rng.randf_range(1.17,1.46)-Vector3.UP*depth)
+	for i in 8:
+		var j := (i+1)%8
+		var out := cap[i]+cap[j]-top*2
+		_face(top,cap[i],cap[j],Vector3.UP,tint.lightened(.06))
+		_quad(cap[i],cap[j],breakline[j],breakline[i],out,tint.darkened(_rng.randf_range(.0,.12)))
+		_quad(breakline[i],breakline[j],base[j],base[i],out,tint.darkened(_rng.randf_range(.11,.27)))
+
+func _russet_shrub(base: Vector3, size: float) -> void:
+	for branch in 10:
+		var a := branch*2.39996
+		var arm := Vector3(cos(a),_rng.randf_range(.54,1.08),sin(a))*size
+		_beam(base,base+arm,.027*size,Color("#884c2d"),4)
+		for i in 18:
+			var mid := base + arm*_rng.randf_range(.3,1.03)
+			var tilt := a + _rng.randf_range(-1.0,1.0)
+			var shoot := Vector3(cos(tilt),.16+sin(i),sin(tilt))*size*_rng.randf_range(.22,.49)
+			var side := Vector3(-shoot.z,.03,shoot.x)*.28
+			var tint := Color("#cf6329").lerp(Color("#e2a047"),_rng.randf())
+			var leaf_center := mid+shoot*.58
+			_quad(mid,leaf_center+side,mid+shoot,leaf_center-side,Vector3.UP,tint)
+
 func _ravine_height(x: float, z: float) -> float:
 	var rise := smoothstep(27.0, 43.0, absf(z))
 	var shelf := 4.2 * exp(-pow((x - 12.0) / 32.0, 2.0))
@@ -102,7 +202,7 @@ func _ravine_height(x: float, z: float) -> float:
 func _ravine_tree(origin: Vector3, scale_factor: float, orange: bool) -> void:
 	var trunk_top := origin + Vector3.UP * scale_factor * 2.2
 	_beam(origin, trunk_top, .17 * scale_factor, Color("#575246"), 5)
-	var tone := Color("#98562d") if orange else Color("#1b5d58")
+	var tone := Color("#c16b2c") if orange else Color("#1b5d58")
 	for i in 5:
 		var theta := TAU * (i + _rng.randf_range(-.15, .15)) / 5.0
 		var arm := Vector3(cos(theta) * .94, _rng.randf_range(-.4, .42), sin(theta) * .94)
@@ -126,7 +226,7 @@ func _build_plateau() -> void:
 		var a := TAU * i / count
 		var multiplier := _rng.randf_range(0.93, 1.09)
 		base.append(CENTER + Vector3(cos(a) * 8.1, 0, sin(a) * 7.5) * multiplier)
-	_plate(base, 6.1, CLIFF, true)
+	_plate(base, 1.10, CREAM, true)
 	var previous := 1.05
 	for row in 4:
 		var radius := [2.45, 3.9, 5.35, 7.25][row] as float
@@ -249,6 +349,23 @@ func _generator() -> void:
 	_disc(base + Vector3.UP * 1.10, .89, 12, .51, COPPER, true)
 	_disc(base + Vector3.UP * 1.23, .81, 12, .18, GOLD, false)
 	_disc(base + Vector3.UP * 1.48, .61, 12, .24, BRONZE, false)
+	# Copper dome has a solid drum behind the emissive service windows.
+	for tier in 7:
+		var t := (tier+.5)/7.
+		var rad := sqrt(1.-t*t)*.94
+		_disc(base+Vector3.UP*(1.49+t*.82),rad,20,.17,COPPER.lightened(t*.12),false)
+	for i in 10:
+		var angle := TAU*i/10.
+		var radial := Vector3(cos(angle),0,sin(angle))
+		var aperture := MeshInstance3D.new()
+		var slat := BoxMesh.new()
+		slat.size=Vector3(.12,.43,.035)
+		aperture.mesh=slat
+		aperture.material_override=preload("res://art/materials/sun_amber.tres")
+		aperture.position=base+radial*.902+Vector3.UP*.94
+		aperture.rotation.y=atan2(radial.x,radial.z)
+		aperture.cast_shadow=GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		add_child(aperture)
 	for i in 12:
 		var theta := i * TAU / 12
 		var at := base + Vector3(cos(theta) * .78, .64, sin(theta) * .78)
@@ -261,7 +378,7 @@ func _generator() -> void:
 	lamp.name = "RelayLamps"
 	lamp.position = base + Vector3(0, 1.3, 1.15)
 	lamp.light_color = Color("#f6aa5e")
-	lamp.light_energy = .64
+	lamp.light_energy = 2.2
 	lamp.omni_range = 6.2
 	add_child(lamp)
 	var west := Vector3(5.5, 4.81, -60.8)
@@ -282,7 +399,7 @@ func _beacon_summit() -> void:
 		var edge := SUMMIT + Vector3(cos(angle) * radius, 0, sin(angle) * radius)
 		edge.z = minf(edge.z, -81.1)
 		summit.append(edge)
-	_plate(summit, 12.6, CLIFF, true)
+	_plate(summit, 1.1, CREAM, true)
 	_disc(SUMMIT + Vector3.UP * .026, 2.95, 18, .17, CREAM, false)
 	_disc(SUMMIT + Vector3.UP * .044, 1.78, 14, .13, STONE_DARK, false)
 	_disc(SUMMIT + Vector3.UP * .068, 1.28, 14, .15, HIGHLIGHT, false)
@@ -291,7 +408,14 @@ func _beacon_summit() -> void:
 	_arch(center, 2.05, .37, .39, HIGHLIGHT, 24, 0, TAU)
 	_arch(center + Vector3.BACK * .244, 1.79, .11, .11, GOLD.lerp(COPPER, .31), 24, 0, TAU)
 	_arch(center + Vector3.FORWARD * .244, 1.79, .11, .11, GOLD, 24, 0, TAU)
+	# Luminous inscriptions mark the empty cradle from below the ridge.
+	var inlay := Color("#f9bb58")
+	inlay.a=.48
+	for side: float in [-1.0,1.0]:
+		var facing := center + Vector3.BACK*.307*side
+		_arch(facing,1.79,.086,.020,inlay,20,.14,PI-.14)
 	_block(center + Vector3.UP * 2.08, Vector3(.32, .63, .70), .0, COPPER)
+	_block(center + Vector3.UP * 2.42, Vector3(.24, .11, .49), .0, inlay)
 	for side in [-1, 1]:
 		var foot := SUMMIT + Vector3(float(side) * 2.39, 0, 0)
 		_obelisk(foot, 2.95, .73)

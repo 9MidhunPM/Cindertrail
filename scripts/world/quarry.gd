@@ -4,6 +4,7 @@ extends Node3D
 const DATA := preload("res://data/sites/quarry.tres")
 const ARCH := preload("res://art/models/ruin_arch.glb")
 const PILLAR := preload("res://art/models/ruin_pillar.glb")
+const STONE_SHADER := preload("res://art/materials/highland/limestone.gdshader")
 const TREE := preload("res://art/models/orange_tree.glb")
 const GROUND := Vector3(-53, 1.15, 0)
 const TRAIL := [
@@ -15,7 +16,7 @@ const LIMESTONE := Color("#cbb28b")
 const CHALK := Color("#ead4a9")
 const SEDIMENT := Color("#796b60")
 const SOIL := Color("#8f7962")
-const TIMBER := Color("#63442d")
+const TIMBER := Color("#976b44")
 const BRONZE := Color("#936438")
 const IRON := Color("#443e40")
 const COPPER := Color("#bc652a")
@@ -35,8 +36,9 @@ func _ready() -> void:
 	_build_trail()
 	_build_court()
 	_build_cut_faces()
+	_extraction_gallery()
 	_build_crane(Vector3(-60.0, 1.15, -4.75), -0.66, 1.16)
-	_build_crane(Vector3(-50.0, 2.55, -7.65), 0.48, 0.8)
+	_build_crane(Vector3(-50.0, 5.70, -7.65), 0.48, 0.8)
 	_finish_geometry()
 	_configure_site()
 
@@ -52,7 +54,7 @@ func _configure_site() -> void:
 		Vector3(-61.0, 1.15, 0.15), Vector3(-57.5, 1.15, -0.6), GROUND,
 	])
 	site.configure(DATA, GROUND, sockets, [lane],
-		Vector3(-58.7, 13.4, 16.1), Vector3(-55.6, 0.93, 0.0))
+		Vector3(-64.0, 13.6, 16.8), Vector3(-55.6, 1.48, 0.0))
 	add_child(site)
 
 func _build_trail() -> void:
@@ -150,7 +152,8 @@ func _build_cut_faces() -> void:
 	_asset(PILLAR, Vector3(-58.55, 1.15, -4.42), Vector3(1.12, 1.57, 1.12), .07)
 	_asset(PILLAR, Vector3(-46.76, 1.15, -3.77), Vector3(1.1, 1.36, 1.1), .17)
 	_asset(TREE, Vector3(-43.1, 1.15, -5.55), Vector3.ONE * 1.32, 1.8)
-	_asset(TREE, Vector3(-64.3, 1.2, 7.3), Vector3.ONE * 1.17, .4)
+	_rock(Vector3(-64.3,-2.0,7.30),Vector3(2.6,3.2,2.15),SEDIMENT)
+	_burnished_tree(Vector3(-64.3,1.15,7.3),1.0)
 
 func _build_scree() -> void:
 	# Below the carved terraces, broad sloping slabs connect the tall faces to the valley.
@@ -171,6 +174,10 @@ func _rock_wall(west: float, east: float, z: float, height: float, width: float)
 		var varied_height := height * _rng.randf_range(.66, 1.16)
 		var offset_z := _rng.randf_range(-.27, .27)
 		var origin := Vector3(x, .6, z + offset_z)
+		if is_equal_approx(z,-6.25) and x> -55.6 and x< -49.9:
+			# The quarrymen cut back this section to accommodate the loading stage.
+			origin.z-=2.25
+			varied_height*=.65
 		_rock(origin, Vector3(1.40, varied_height, width), _stone())
 		_box_shape(origin + Vector3.UP * (varied_height * .42), Vector3(2.14, varied_height, width * 1.66))
 		if height > 4.3:
@@ -179,6 +186,90 @@ func _rock_wall(west: float, east: float, z: float, height: float, width: float)
 		if i % 2 == 0:
 			var split := origin + Vector3(.52, .08, -signf(z) * width * .65)
 			_rock(split, Vector3(.68, varied_height * .55, width * .57), SEDIMENT.lerp(LIMESTONE, .58))
+
+## Rectangular quarry benches, unfinished stone and the elevated timber winch
+## distinguish the cut faces from the natural scree below the road.
+func _extraction_gallery() -> void:
+	for i in 13:
+		var x := -68.5+i*1.97
+		var z := -7.4+.38*sin(i*.74)
+		var top := 3.6+(.54 if i%4 in [1,2] else .1)+.8*cos(i*.69)
+		_slab(Vector3(x,top,z),Vector2(2.02,3.48),top-1.05,LIMESTONE.darkened(.08*(i%3)))
+		_slab(Vector3(x+.12,top+1.84,z-1.28),Vector2(2.39,2.22),2.04,_stone())
+		if i%2==0:
+			for k in 4:
+				var start := Vector3(x-.52+k*.24,top-.12,z+1.745)
+				_bar(start,start+Vector3(.04,-.55-_rng.randf_range(.0,.28),.0),.019,SEDIMENT)
+	for i in 3:
+		var step := Vector3(-60.4+i*1.10,1.15+i*.21,-4.98)
+		_slab(step,Vector2(1.33,1.12),.82,_stone())
+	for i in 7:
+		var x := -48.6+(i%3)*.74
+		var z := -4.5-(i/3)*.86
+		var high := 1.70+(.32 if i in [2,6] else .0)
+		_slab(Vector3(x,high,z),Vector2(.69,.77),high-1.12,_stone())
+	for i in 5:
+		var x := -54.7+i*1.05
+		_slab(Vector3(x,3.81,-5.93),Vector2(1.02,1.62),.19,TIMBER)
+	for x: float in [-54.6,-52.55,-50.65]:
+		for z: float in [-5.22,-6.6]:
+			var foot := Vector3(x,1.12,z)
+			_bar(foot,foot+Vector3.UP*2.85,.16,TIMBER)
+			_bar(foot+Vector3.UP*1.38,foot+Vector3(.73,2.56,0),.12,TIMBER.lightened(.1))
+	for i in 2:
+		_bar(Vector3(-54.67,1.16,-4.90-i*.46),Vector3(-54.67,3.79,-5.45-i*.46),.088,TIMBER)
+	for i in 8:
+		var foot := Vector3(-54.67,1.27+i*.33,-4.93-i*.069)
+		_bar(foot,foot+Vector3.FORWARD*.46,.069,TIMBER)
+	_lantern(Vector3(-54.62,3.85,-5.43))
+	_lantern(Vector3(-60.52,1.15,-3.02))
+	# Timber cap and curved stone lintel at the mouth of the crawler lane.
+	var entry := Vector3(-67.70,1.15,-.15)
+	for side: float in [-1.,1.]:
+		var post := entry+Vector3(0,0,side*1.71)
+		_bar(post,post+Vector3.UP*2.56,.26,TIMBER)
+		_bar(post+Vector3.UP*1.75,post+Vector3(0,2.48,-side*.65),.17,TIMBER)
+		_slab(post+Vector3.UP*.23,Vector2(.62,.6),.25,SEDIMENT)
+	_bar(entry+Vector3(0,2.64,-1.98),entry+Vector3(0,2.64,1.98),.34,TIMBER.lightened(.09))
+	_lantern(entry+Vector3(.22,0,1.42))
+	# Foreground sumac and leaves caught on the pale ledges.
+	for grove in [[-61.8,2.36,6.57,.79],[-63.7,2.05,-3.55,.65],[-44.7,1.77,5.79,.70],[-52.2,4.11,-7.10,.60],
+		[-33.8,1.03,-1.55,.62],[-40.3,1.26,5.4,.70],[-56.,2.3,6.25,.74]]:
+		var base := Vector3(grove[0],grove[1],grove[2])
+		_sumac(base,float(grove[3]))
+	for i in 75:
+		var z: float = [-1.,1.][i%2]*_rng.randf_range(3.55,4.55)
+		var p := Vector3(_rng.randf_range(-60.0,-47.3),1.157,z)
+		var along := Vector3(cos(i*1.84),0,sin(i*1.84))*_rng.randf_range(.08,.16)
+		var side := along.cross(Vector3.UP)*.42
+		_quad(p-along,p+side,p+along,p-side,COPPER.lerp(CHALK,_rng.randf_range(.13,.45)),Vector3.UP)
+
+func _burnished_tree(base: Vector3, size: float) -> void:
+	var fork := base+Vector3(.22,1.78,-.12)*size
+	_bar(base,fork,.22*size,TIMBER.darkened(.21))
+	for b in 6:
+		var a := b*2.39996
+		var branch := fork+Vector3(cos(a),.57+b*.08,sin(a))*size
+		_bar(fork-Vector3.UP*.35,branch,.12*size,TIMBER)
+		_rock(branch-Vector3.UP*.16,Vector3(.70,.42,.63)*size,COPPER.lerp(Color("#d28b40"),b*.09))
+		_sumac(branch-Vector3.UP*.42,.65*size)
+
+func _sumac(base: Vector3, scale_factor: float) -> void:
+	var trunk := base+Vector3.UP*scale_factor*1.10
+	_bar(base,trunk,.10*scale_factor,TIMBER.darkened(.24))
+	for b in 8:
+		var a := b*TAU/8.0+.35
+		var radial := Vector3(cos(a),.15+sin(b*1.84)*.18,sin(a))
+		var branch := trunk+radial*scale_factor
+		_bar(trunk-Vector3.UP*.29,branch,.049*scale_factor,TIMBER)
+		for leaf in 21:
+			var color := COPPER.lerp(Color("#e7a242"),_rng.randf_range(.06,.65))
+			var angle := _rng.randf()*TAU
+			var dir := Vector3(cos(angle),-.44,sin(angle))*scale_factor
+			var start := trunk.lerp(branch,_rng.randf_range(.38,1.))+dir*_rng.randf_range(.0,.42)
+			var width := dir.cross(Vector3.UP)*.085
+			_quad(start,start+dir*.18+width,start+dir*.43,start+dir*.18-width,color,Vector3.UP)
+			_quad(start,start+dir*.18+width,start+dir*.43,start+dir*.18-width,color.darkened(.16),Vector3.DOWN)
 
 func _build_crane(base: Vector3, rotation_y: float, scale_factor: float) -> void:
 	var transform_crane := Transform3D(Basis(Vector3.UP, rotation_y).scaled(Vector3.ONE * scale_factor), base)
@@ -200,6 +291,21 @@ func _build_crane(base: Vector3, rotation_y: float, scale_factor: float) -> void
 	_rock(front - Vector3.UP * (2.58 * scale_factor), Vector3(.50, .45, .38) * scale_factor, LIMESTONE)
 	_rock(rear - Vector3.UP * .71, Vector3(.43, .73, .48) * scale_factor, SEDIMENT)
 	_bar(transform_crane * Vector3(-.62, 2.75, -.26), transform_crane * Vector3(.61, 2.75, -.26), .12, BRONZE)
+	# Twin wheels, spoke bracing and anti-slip pawl on the ore winch.
+	for flank: float in [-1.,1.]:
+		var center := transform_crane*Vector3(flank*.60,2.77,-.26)
+		var axle := transform_crane.basis.x.normalized()
+		var radius := .67*scale_factor
+		var across := transform_crane.basis.z.normalized()
+		for tooth in 15:
+			var angle := TAU*tooth/15.
+			var next := TAU*(tooth+1)/15.
+			var r := (across*cos(angle)+Vector3.UP*sin(angle))*radius
+			var q := (across*cos(next)+Vector3.UP*sin(next))*radius
+			_bar(center+r,center+q,.10*scale_factor,BRONZE.lightened(.14))
+			if tooth%3==0:
+				_bar(center,center+r,.093*scale_factor,TIMBER.lightened(.10))
+		_bar(center,center+axle*.16*scale_factor,.14*scale_factor,BRONZE)
 	# A hanging caution pennant and brass keeper distinguish the moving end.
 	var pole := transform_crane * Vector3(.46, 4.20, 2.34)
 	var hem := transform_crane * Vector3(.58, 3.32, 2.23)
@@ -367,9 +473,7 @@ func _finish_geometry() -> void:
 	_surf.generate_normals()
 	var mesh := MeshInstance3D.new()
 	mesh.mesh = _surf.commit()
-	var material := StandardMaterial3D.new()
-	material.vertex_color_use_as_albedo = true
-	material.vertex_color_is_srgb = true
-	material.roughness = .92
+	var material := ShaderMaterial.new()
+	material.shader = STONE_SHADER
 	mesh.material_override = material
 	add_child(mesh)
