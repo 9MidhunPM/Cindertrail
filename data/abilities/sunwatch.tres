@@ -4,7 +4,7 @@
 
 [resource]
 script = ExtResource("1")
-site = &"sunwatch"
+site = &"sunwatch_observatory"
 title = "Lensmark"
 description = "Mark one foe. Your next three blade or spark hits gain four damage."
 cooldown = 14

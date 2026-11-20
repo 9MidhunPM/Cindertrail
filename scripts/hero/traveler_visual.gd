@@ -11,7 +11,7 @@ const GESTURE_LENGTH := {
 	&"deploy": 1.05, &"pack": 1.05, &"fire": 0.30,
 	&"hurt": 0.47, &"collect": 0.64, &"deliver": 1.65, &"sheathe": 0.55,
 	&"flooded_grove": .48, &"broken_quarry": .55, &"fallen_relay": .32,
-	&"lanternwood": .7, &"sunken_aqueduct": .38, &"sunwatch": .51,
+	&"lanternwood": .7, &"sunken_aqueduct": .38, &"sunwatch_observatory": .51,
 	&"last_lantern_frontier": .47,
 }
 const ATTACKS := preload("res://scripts/hero/traveler_attacks.gd")
@@ -222,7 +222,7 @@ func _update_gesture(delta: float) -> void:
 		&"sunken_aqueduct":
 			reach = Vector2(.38,-.49)
 			dip = .15
-		&"sunwatch":
+		&"sunwatch_observatory":
 			reach = Vector2(1.58,.48)
 		&"last_lantern_frontier":
 			reach = Vector2(-.26,1.36)

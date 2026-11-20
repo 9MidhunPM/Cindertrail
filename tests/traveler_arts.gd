@@ -1,7 +1,7 @@
 extends SceneTree
 ## Exercise all seven site rewards through the live controller, physics server and damage resolver.
 const ARTS := preload("res://scripts/game/traveler_arts.gd")
-const ALL := [&"flooded_grove",&"broken_quarry",&"fallen_relay",&"lanternwood",&"sunken_aqueduct",&"sunwatch",&"last_lantern_frontier"]
+const ALL := [&"flooded_grove",&"broken_quarry",&"fallen_relay",&"lanternwood",&"sunken_aqueduct",&"sunwatch_observatory",&"last_lantern_frontier"]
 var failures := 0
 var stage := Node3D.new()
 var arts := ARTS.new()
@@ -131,6 +131,22 @@ func _run() -> void:
 	arts.restore(ALL,ALL[3],17.5)
 	_expect(core.ward_strength == 0.0 and is_equal_approx(arts.remaining_seconds(),17.5), "Retry discards active protection without refreshing its cooldown")
 	stage.queue_free()
+	await _frames(2)
+	# Use the actual generated camps and checkpoint keys, not the tuning filenames.
+	set_meta(&"direct_journey", true)
+	change_scene_to_file("res://scenes/main.tscn")
+	await scene_changed
+	var game = current_scene
+	var learned := PackedStringArray()
+	for camp: CinderSite in game.sites:
+		if camp.spec.energy <= 0.0:
+			continue
+		var title: String = game.arts.ability_name(camp.checkpoint_id)
+		_expect(not title.is_empty() and not learned.has(title) and game.arts.unlock(camp.checkpoint_id),
+			"Live %s checkpoint unlocks its unique traveler art" % camp.label)
+		learned.append(title)
+	_expect(learned.size() == ALL.size(), "All seven extraction sites grant a portable reward")
+	current_scene.queue_free()
 	await _frames(2)
 	print("Traveler art failures ",failures)
 	quit(1 if failures else 0)

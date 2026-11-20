@@ -95,7 +95,7 @@ func _shape() -> void:
 			for i in 3:
 				var x := (i - 1) * .18
 				_bar(Vector3(x,0,0), Vector3(x,.04,_radius * (.75 if i != 1 else 1.0)), .038)
-		&"sunwatch":
+		&"sunwatch_observatory":
 			for i in 4:
 				var a := TAU * i / 4.0
 				var tip := Vector3(cos(a),sin(a),0) * .37

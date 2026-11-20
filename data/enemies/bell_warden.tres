@@ -17,4 +17,4 @@ radius = 0.38
 stride_frequency = 4
 knock_factor = 0.55
 water_factor = 0.55
-home_sites = PackedStringArray("sunwatch", "fallen_relay")
+home_sites = PackedStringArray("sunwatch_observatory", "fallen_relay")

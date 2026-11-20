@@ -118,7 +118,7 @@ func cast(aim_direction: Vector3, ground := Vector3.INF) -> bool:
 		&"fallen_relay": accepted = _spark(aim, ground)
 		&"lanternwood": accepted = _ward()
 		&"sunken_aqueduct": accepted = _dash(aim)
-		&"sunwatch": accepted = _mark(aim, ground)
+		&"sunwatch_observatory": accepted = _mark(aim, ground)
 		&"last_lantern_frontier": accepted = _wick(aim)
 	if accepted:
 		_cooldown = _selected.cooldown
@@ -135,7 +135,7 @@ func _cast_sound() -> String:
 		&"broken_quarry": return "slam"
 		&"fallen_relay": return "attack"
 		&"lanternwood": return "collect"
-		&"sunwatch": return "blade_ready"
+		&"sunwatch_observatory": return "blade_ready"
 		_: return "spin"
 
 func _physics_process(delta: float) -> void:
