@@ -2,6 +2,7 @@ class_name CinderInstalledModule
 extends Node3D
 
 const FIELD_MATERIAL := preload("res://art/materials/slowing_field_material.tres")
+const MAX_VISUAL_LEVEL := 3
 
 var kind: int
 var level: int
@@ -19,11 +20,10 @@ var acquired := false
 
 func configure(type: int, rank: int, spec: CinderModuleStats) -> void:
 	kind = type
-	level = rank
 	stats = spec
 	model = spec.model.instantiate() as Node3D
 	add_child(model)
-	model.scale = Vector3.ONE * 1.55 * pow(1.07, level - 1)
+	set_level(rank)
 	if kind == 1:
 		_configure_emitter()
 		return
@@ -43,6 +43,10 @@ func configure(type: int, rank: int, spec: CinderModuleStats) -> void:
 	carriage.add_child(muzzle)
 	muzzle.position = Vector3(0, 0.30, 0.47) if kind == 0 else Vector3(0, 0.29, 0.04)
 	charge_material = _own_glow("Amber_crystal*" if kind == 0 else "Bowl_glow*")
+
+func set_level(rank: int) -> void:
+	level = rank
+	model.scale = Vector3.ONE * 1.55 * pow(1.07, clampi(level, 1, MAX_VISUAL_LEVEL) - 1)
 
 func _own_glow(pattern: String) -> StandardMaterial3D:
 	var lens := model.find_child(pattern, true, false) as MeshInstance3D

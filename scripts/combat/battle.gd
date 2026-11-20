@@ -5,7 +5,7 @@ signal message(text: String)
 signal sound(cue: String)
 signal enemy_defeated(enemy: CinderEnemy)
 signal roamer_removed(enemy: CinderEnemy, defeated: bool)
-## Damage dealt to a creature. source is "melee", "spark" or "tower".
+## Damage dealt to a creature. source is "melee", "spark", "ability" or "tower".
 signal damaged(point: Vector3, amount: float, source: StringName, fatal: bool)
 
 const MODULES: Array[CinderModuleStats] = [
@@ -19,8 +19,13 @@ const REPAIR_COST := 8
 const REPAIR_AMOUNT := 20.0
 const SPARK_DAMAGE := 4.0
 const SPARK_COOLDOWN := 0.55
+const BASE_UPGRADE_CAP := 3
+const MAX_UPGRADE_CAP := 10
 
 var scrap := 16
+var upgrade_cap := BASE_UPGRADE_CAP:
+	set(value):
+		upgrade_cap = clampi(value, BASE_UPGRADE_CAP, MAX_UPGRADE_CAP)
 var active_wave := false
 var enemies: Array[CinderEnemy] = []
 # Each entry is an owned module. Its installed socket is temporary.
@@ -31,6 +36,8 @@ var core: SunCore
 var engaged := false
 var held := false
 var halted := false
+## Enabled for the current camp after the player deliberately resumes extraction at full restoration.
+var post_restoration := false
 var remaining_spawns := 0
 var total_in_wave := 0
 var spawn_timer := 0.0
@@ -80,10 +87,23 @@ func prepare(camp: CinderSite, sun: SunCore) -> void:
 	held = false
 	engaged = false
 	active_wave = false
+	post_restoration = false
 
-func begin() -> bool:
-	if halted or held or engaged or not is_instance_valid(site) or site.remaining_energy <= 0.0 or core.restoration >= 100.0:
+func begin(after_full_restoration := false) -> bool:
+	if halted or not is_instance_valid(site) or site.remaining_energy <= 0.0 or not is_instance_valid(core):
 		return false
+	var fully_restored := core.restoration >= 100.0
+	if fully_restored != after_full_restoration:
+		return false
+	if engaged:
+		if not held or not after_full_restoration:
+			return false
+		post_restoration = true
+		resume()
+		return true
+	if held:
+		return false
+	post_restoration = after_full_restoration
 	engaged = true
 	_start_wave()
 	return true
@@ -113,6 +133,7 @@ func recall() -> void:
 	held = false
 	engaged = false
 	active_wave = false
+	post_restoration = false
 	remaining_spawns = 0
 	last_breadcrumb = Vector3.INF
 	_landmark_lane = -1
@@ -181,10 +202,10 @@ func upgrade(index: int) -> bool:
 	if held or halted or not towers.has(index):
 		return false
 	var tower := towers[index]
-	if tower.level >= 3:
-		message.emit("This module is fully upgraded.")
-		return false
 	var cost := upgrade_cost(index)
+	if cost < 0:
+		message.emit("Defense level cap reached (%d)." % upgrade_cap)
+		return false
 	if scrap < cost:
 		message.emit("Upgrade costs %d scrap." % cost)
 		return false
@@ -192,8 +213,7 @@ func upgrade(index: int) -> bool:
 		if module.socket == index:
 			scrap -= cost
 			module.level += 1
-			tower.level = module.level
-			tower.model.scale *= 1.07
+			tower.set_level(module.level)
 			message.emit("%s upgraded to level %d." % [tower.stats.label, tower.level])
 			sound.emit("build")
 			return true
@@ -280,7 +300,7 @@ func _count_for(wave: int) -> int:
 
 ## Scrap needed to raise the tower in this socket by one level; -1 when it cannot be upgraded.
 func upgrade_cost(index: int) -> int:
-	if not towers.has(index) or towers[index].level >= 3:
+	if not towers.has(index) or towers[index].level >= upgrade_cap:
 		return -1
 	return towers[index].stats.upgrade_cost * towers[index].level
 
@@ -307,8 +327,13 @@ func landmark_hit(enemy: CinderEnemy, damage: float) -> void:
 	if enemy.site_of_origin == site and not enemy.pursuing and enemies.has(enemy):
 		_hit(enemy, damage)
 
+func ability_hit(enemy: CinderEnemy, amount: float) -> void:
+	if halted or amount <= 0.0 or not is_instance_valid(enemy) or not enemies.has(enemy):
+		return
+	_hit(enemy, amount, &"ability")
+
 func _advance_waves(delta: float) -> void:
-	if not engaged or held or site.remaining_energy <= 0 or core.restoration >= 100.0:
+	if not engaged or held or site.remaining_energy <= 0.0 or (core.restoration >= 100.0 and not post_restoration):
 		return
 	if not active_wave:
 		intermission -= delta

@@ -33,6 +33,7 @@ var _health_value: Label
 var _restoration_value: Label
 var _scrap: Label
 var _beacon_note: Label
+var _ability_readout: Label
 var _objective_panel: PanelContainer
 var _objective: Label
 var _objective_caption: Label
@@ -52,6 +53,7 @@ var _module_cards: Array[PanelContainer] = []
 var _module_names: Array[Label] = []
 var _module_values: Array[Label] = []
 var _module_detail: Label
+var _upgrade_cap_label: Label
 var _prompt_panel: PanelContainer
 var _prompt_key: Label
 var _prompt_key_panel: PanelContainer
@@ -137,6 +139,13 @@ func render(state: Dictionary) -> void:
 	_scrap.text = "%d" % scrap
 	_beacon_note.text = "Sun restored  ·  Hilltop Beacon" if restoration >= 99.9 else "Restore to 100% to reach the final defense"
 	_beacon_note.modulate = GOLD if restoration >= 99.9 else MUTED
+	var ability := String(state.get("ability_name", ""))
+	var cooldown := float(state.get("ability_cooldown", 0.0))
+	_ability_readout.visible = not ability.is_empty()
+	if _ability_readout.visible:
+		var readiness := "Ready" if cooldown <= 0.0 else "%d s" % ceili(cooldown)
+		_ability_readout.text = "G  %s   ·   %s   ·   Q cycle" % [ability, readiness]
+		_ability_readout.modulate = TEAL if cooldown <= 0.0 else MUTED
 	if health < _last_health - 0.01:
 		_hurt = minf(1.0, _hurt + (_last_health - health) * 0.09 + 0.25)
 	_last_health = health
@@ -193,6 +202,8 @@ func render(state: Dictionary) -> void:
 	var prices: Array = state.get("prices", [])
 	var owned: Array = state.get("owned", [])
 	var summaries: Array = state.get("summaries", [])
+	var upgrade_cap := int(state.get("upgrade_cap", CinderBattle.BASE_UPGRADE_CAP))
+	_upgrade_cap_label.text = "Defense upgrade cap  ·  Lv %d" % upgrade_cap
 	for index in MODULES.size():
 		var price := int(prices[index]) if index < prices.size() else 0
 		var level := int(owned[index]) if index < owned.size() else 0
@@ -202,7 +213,7 @@ func render(state: Dictionary) -> void:
 			_module_cards[index].add_theme_stylebox_override("panel", style)
 		_module_cards[index].modulate = Color.WHITE if affordable or selected == index else Color(1, 1, 1, 0.62)
 		if level > 0:
-			_module_values[index].text = "Owned  ·  Lv %d  ·  free" % level
+			_module_values[index].text = "Lv %d/%d  ·  free" % [level, upgrade_cap]
 			_module_values[index].modulate = TEAL
 		elif price > 0:
 			_module_values[index].text = "%d scrap" % price if affordable else "%d scrap  ·  need %d" % [price, price - scrap]
@@ -293,6 +304,8 @@ func _build_vitals() -> void:
 	_restoration.custom_minimum_size.y = 9.0
 	_beacon_note = _label("", &"Caption")
 	stack.add_child(_beacon_note)
+	_ability_readout = _label("", &"Caption")
+	stack.add_child(_ability_readout)
 
 func _build_objective() -> void:
 	var column := VBoxContainer.new()
@@ -394,6 +407,9 @@ func _build_controls() -> void:
 	_module_detail = _label("", &"Body")
 	_module_detail.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_tactical.add_child(_module_detail)
+	_upgrade_cap_label = _label("", &"Caption")
+	_upgrade_cap_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_tactical.add_child(_upgrade_cap_label)
 	var rack := _horizontal(_tactical, 10)
 	rack.alignment = BoxContainer.ALIGNMENT_CENTER
 	for index in MODULES.size():
@@ -565,6 +581,7 @@ func _pause_text(checkpoint_hint: String) -> String:
 	var lines := [
 		"WASD move  ·  Shift sprint  ·  Ctrl walk  ·  Mouse look",
 		"LMB or F  tap for cuts, hold and release to spin  ·  RMB  sun spark",
+		"G  cast equipped ability  ·  Q  cycle unlocked abilities",
 		"E  interact  ·  M  map  ·  Hold R  pack the shrine",
 		"Defense:  1 / 2 / 3 choose a tower  ·  click a socket  ·  U upgrade  ·  Space start wave",
 	]
