@@ -1,7 +1,7 @@
 """Build the articulated valley bestiary with Blender --background --python this_file."""
 from pathlib import Path
 from math import sin, cos, pi
-import random
+import sys
 import bpy
 import bmesh
 import numpy as np
@@ -23,7 +23,7 @@ PALETTES = {
 }
 
 
-def atlas(material_colors):
+def atlas(material_colors, guardian=False):
     size = 1024
     y, x = np.mgrid[:size, :size].astype(np.float32) / size
     rng = np.random.default_rng(123)
@@ -61,6 +61,13 @@ def atlas(material_colors):
     bs.inputs['Base Color'].default_value=rgb
     bs.inputs['Emission Color'].default_value=rgb
     bs.inputs['Emission Strength'].default_value=.85
+    if guardian:
+        dusk=vein.copy()
+        dusk.name='Violet crystal slit'
+        dusk_bs=dusk.node_tree.nodes.get('Principled BSDF')
+        for socket in ['Base Color','Emission Color']:
+            dusk_bs.inputs[socket].default_value=(.35,.075,.53,1)
+        return [mat,vein,dusk]
     return [mat,vein]
 
 
@@ -115,7 +122,7 @@ class Joint:
             self.vertices.extend([world(Vector(p)-self.origin) for p in row])
         def face(ids,coords):
             self.faces.append(tuple(start+i for i in ids))
-            self.paint.append(int(ink==4))
+            self.paint.append(max(0,ink-3))
             column=min(ink,3)
             self.uv.append([((column+.015+.97*u)/4,.014+.972*v) for u,v in coords])
         for j in range(rows):
@@ -163,7 +170,7 @@ def arthropod(kind):
             leg.limb([hip,knee,ankle,toe],[.082,.075,.04,.009],3)
             middle=(s*.48,.485,z+(j-1)*.09)
             leg.limb([hip,middle,knee],[.055,(.105,.13),.066],1,10)
-            leg.shell(knee,(.09,.083,.087),4,n=9,rows=4)
+            leg.shell(knee,(.078,.069,.073),4,n=9,rows=4)
             leg.limb([knee,ankle,toe],[.092,(.051,.073),.003],0,9)
             if slim:
                 leg.limb([knee,(s*.74,.47,z-.28),(s*.78,.45,z-.47)],[(.035,.10),(.018,.095),.003],2)
@@ -183,6 +190,16 @@ def arthropod(kind):
                 root.limb([(s*.22,.55,z+.035),(s*.29,.53,z),(s*.36,.474,z-.075)],
                           [.008,.014,.005],4,7)
                 root.shell((s*.21,.58,z),(.079,.063,.11),0,10,4,lean=.033)
+    if kind=='crawler_static':
+        # Fault line runs through the dorsal plates, then forks above the eyes.
+        # Its taper keeps the irregular split legible against the slate shell.
+        root.limb([(0,.64,-.48),(.047,.669,-.33),(-.029,.676,-.22),
+                   (.048,.674,-.09),(-.012,.674,.02),(.021,.672,.13)],
+                  [.006,.022,.025,.025,.021,.026],4,7)
+        for s in [-1,1]:
+            root.limb([(.021,.672,.13),(s*.099,.667,.209),(s*.119,.658,.258),
+                       (s*.21,.638,.307),(s*.247,.61,.394)],
+                      [.026,.022,.017,.025,.006],4,7)
     head=Joint('HeadPivot',(0,.42,.37),root)
     head.shell((0,.415,.48*length),(.236,.147,.20),0)
     for s in [-1,1]:
@@ -244,6 +261,20 @@ def hulking(kind):
             for j in range(3):
                 root.limb([(s*.055,1.10+j*.11,.415),(s*.13,1.16+j*.11,.435),(s*.19,1.16+j*.10,.39)],
                           [.012,.019,.009],4,7)
+    if boss:
+        # A shattered crescent hangs off one shoulder, open above the sternum.
+        # The second short stump makes the missing arc clear in silhouette.
+        rack=[(-.52,1.49,-.09),(-.81,1.56,-.14),(-.99,1.81,-.15),
+              (-1.01,2.04,-.12),(-.89,2.24,-.08),(-.69,2.33,-.04),(-.57,2.32,-.015)]
+        root.limb(rack,[.129,.128,.108,.095,.081,.059,.009],1,8)
+        inner=[(x+.037,y-.018,z+.067) for x,y,z in rack]
+        root.limb(inner,[.046,.048,.041,.032,.024,.016,.003],2,7)
+        for j in [1,2,3,4]:
+            x,y,z=rack[j]
+            root.limb([(x-.052,y-.027,z+.06),(x-.011,y+.008,z+.086),
+                       (x+.029,y+.032,z+.061)], [.002,.014,.003],5,7)
+        root.limb([(.48,1.49,-.15),(.67,1.63,-.15),(.71,1.76,-.16)],
+                  [.103,.072,.043],2,7)
     if bell:
         # Flared bell-skirt hanging in overlapping oxidized lames.
         for j in range(12):
@@ -293,10 +324,12 @@ def ram():
             head.shell(points[j],(.095,.09,.085),1,10,5)
 
 
+requested = set(sys.argv[sys.argv.index('--')+1:]) if '--' in sys.argv else set()
 for species, palette in PALETTES.items():
+    if requested and species not in requested: continue
     bpy.ops.wm.read_factory_settings(use_empty=True)
     JOINTS=[]
-    mats=atlas(palette)
+    mats=atlas(palette, species=="vesper_colossus")
     if species in ['brute_static','vesper_colossus','bell_warden']:
         hulking(species)
     elif species=='quarry_ram':
