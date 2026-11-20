@@ -6,6 +6,7 @@ const TRAVELER := preload("res://scenes/player/traveler_visual.tscn")
 const SIZE := Vector2i(640, 720)
 
 var out := ""
+var record_motion := false
 
 func _initialize() -> void:
 	_run.call_deferred()
@@ -14,6 +15,7 @@ func _run() -> void:
 	for argument in OS.get_cmdline_user_args():
 		if argument.begins_with("--out="):
 			out = argument.trim_prefix("--out=")
+		record_motion = record_motion or argument == "--motion"
 	DirAccess.make_dir_recursive_absolute(out)
 	var viewport := SubViewport.new()
 	viewport.size = SIZE
@@ -69,7 +71,23 @@ func _run() -> void:
 		for frame in 120:
 			traveler.animate(1.0 / 60.0, 0.0, false)
 	await _save(viewport, "guard")
+	if record_motion:
+		await _record_stride(viewport, traveler, camera)
 	quit()
+
+func _record_stride(viewport: SubViewport, traveler: TravelerVisual, camera: Camera3D) -> void:
+	var directory := out.path_join("stride")
+	DirAccess.make_dir_recursive_absolute(directory)
+	_aim(camera, -1.2, 3.5)
+	for frame in 108:
+		var time := frame / 24.0
+		var speed := lerpf(2.05, 6.1, smoothstep(0.65, 2.65, time))
+		speed *= 1.0 - smoothstep(3.55, 3.9, time)
+		traveler.rotation.y = smoothstep(2.0, 3.0, time) * 0.9
+		for tick in 5:
+			traveler.animate(1.0 / 120.0, speed, false)
+		await RenderingServer.frame_post_draw
+		viewport.get_texture().get_image().save_jpg(directory.path_join("%03d.jpg" % frame), 0.92)
 
 func _aim(camera: Camera3D, yaw: float, distance: float) -> void:
 	var target := Vector3(0, 1.0, 0)

@@ -13,6 +13,8 @@ medallion, bracers, gloves, gathered charcoal trousers and buckled boots.
 import bpy
 import math
 import random
+import sys
+import tempfile
 from collections import defaultdict
 from pathlib import Path
 from mathutils import Matrix, Vector
@@ -36,41 +38,23 @@ def srgb(code: str) -> tuple:
     return tuple(((int(code[i:i + 2], 16) / 255 + .055) / 1.055) ** 2.4 for i in (0, 2, 4))
 
 
+sys.path.insert(0, str(Path(__file__).parent))
+from traveler_atlas import PANELS, paint
+
 MATERIALS = {}
-SURFACE_TILES = {}
+PAINT = None
+FAMILIES = {}
 
 
-def surface_tile(kind):
-    """Render subdued, repeatable material masks for embedding in the GLB."""
-    if kind in SURFACE_TILES:
-        return SURFACE_TILES[kind]
-    size = 128
-    grain = random.Random(11283)
-    image = bpy.data.images.new(kind, width=size, height=size, alpha=False)
-    image.colorspace_settings.name = 'Non-Color'
-    pixels = []
-    for y in range(size):
-        v = y / size * TAU
-        for x in range(size):
-            u = x / size * TAU
-            mottling = math.sin(3 * u + 2 * v + math.sin(2 * v)) * math.cos(2 * v - u)
-            dust = grain.uniform(-.036, .036)
-            if kind == 'Brushed wool':
-                weave = math.cos(27 * u) * math.sin(24 * v + math.sin(u))
-                stroke = math.sin(4 * u - 9 * v + math.sin(3 * v))
-                value = .88 + mottling * .080 + weave * .035 + stroke * .042 + dust
-            elif kind == 'Oiled leather':
-                crease = abs(math.sin(4 * u + v + .8 * math.sin(3 * v)))
-                value = .89 + mottling * .073 - crease ** 9 * .115 + dust
-            else:
-                hammer = math.sin(9 * u - 3 * v) * math.sin(11 * v + 4 * u)
-                value = .91 + mottling * .066 + hammer * .038 + dust
-            value = min(1.0, value)
-            pixels.extend((value, value, value, 1.0))
-    image.pixels.foreach_set(pixels)
-    image.pack()
-    SURFACE_TILES[kind] = image
-    return image
+def load_paint():
+    global PAINT
+    if PAINT is None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'Traveler painted panels.png'
+            paint(path)
+            PAINT = bpy.data.images.load(str(path))
+            PAINT.pack()
+    return PAINT
 
 
 def material(name, code, metallic=0.0, rough=.8, glow=0.0, tile=None):
@@ -82,17 +66,12 @@ def material(name, code, metallic=0.0, rough=.8, glow=0.0, tile=None):
     shader.inputs['Metallic'].default_value = metallic
     shader.inputs['Roughness'].default_value = rough
     if tile:
-        nodes = value.node_tree.nodes
-        links = value.node_tree.links
-        raster = nodes.new('ShaderNodeTexImage')
-        raster.image = surface_tile(tile)
-        tint = nodes.new('ShaderNodeMix')
-        tint.data_type = 'RGBA'
-        tint.blend_type = 'MULTIPLY'
-        tint.inputs[0].default_value = 1.0
-        tint.inputs[6].default_value = color
-        links.new(raster.outputs['Color'], tint.inputs[7])
-        links.new(tint.outputs[2], shader.inputs['Base Color'])
+        # The atlas stores full sRGB pigment. Metallic and roughness stay
+        # physically separate, so the lantern fittings and wool catch different light.
+        raster = value.node_tree.nodes.new('ShaderNodeTexImage')
+        raster.image = load_paint()
+        value.node_tree.links.new(raster.outputs['Color'], shader.inputs['Base Color'])
+        FAMILIES[name] = FAMILIES.setdefault(tile, name)
     if glow > 0.0:
         shader.inputs['Emission Color'].default_value = color
         shader.inputs['Emission Strength'].default_value = glow
@@ -150,26 +129,52 @@ def joint(name, location, parent=None, basis=None):
     return empty
 
 
+def panel_for(joint_name, slot):
+    if slot in (TEAL, WORN):
+        if joint_name == 'Hood':
+            return 'hood'
+        if joint_name.startswith(('UpperBody', 'Mantle')):
+            return 'mantle'
+        return 'coat'
+    return {FOLD: 'fold', OCHRE: 'lining', EMBLEM: 'clasp', HARNESS: 'harness',
+            DARK_LEATHER: 'trim', GLOVE: 'glove', CUFF: 'cuff', SOLE: 'sole',
+            TROUSER: 'trousers', SLEEVE: 'sleeve', BRASS: 'brass',
+            STEEL: 'blade', GRIP: 'grip'}.get(slot, 'trim')
+
+
 def realize(name, part):
     mesh = bpy.data.meshes.new(name + 'Geometry')
     mesh.from_pydata([tuple(p) for p in part.points], [], part.faces)
-    order = list(dict.fromkeys(part.slots))
+    shared = [FAMILIES.get(slot, slot) for slot in part.slots]
+    order = list(dict.fromkeys(shared))
     for slot in order:
         mesh.materials.append(bpy.data.materials[slot])
-    for polygon, slot in zip(mesh.polygons, part.slots):
+    for polygon, slot in zip(mesh.polygons, shared):
         polygon.material_index = order.index(slot)
     mesh.shade_flat()
     mesh.update()
-    # These parts move as rigid layers. Project each facet in its rest-pose
-    # coordinates so the fabric pattern stays with the garment as it moves.
-    uvs = mesh.uv_layers.new(name='Surface')
-    for polygon in mesh.polygons:
-        normal = polygon.normal
-        drop = max(range(3), key=lambda axis: abs(normal[axis]))
-        u, v = ((1, 2), (0, 2), (0, 1))[drop]
-        for loop in polygon.loop_indices:
-            point = mesh.vertices[mesh.loops[loop].vertex_index].co
-            uvs.uv[loop].vector = (point[u] * 2.1, point[v] * 2.1)
+    uvs = mesh.uv_layers.new(name='Painted panels')
+    base = JOINTS[name].matrix_world.translation
+    for polygon, slot in zip(mesh.polygons, part.slots):
+        panel = panel_for(name, slot)
+        row, column = divmod(tuple(PANELS).index(panel), 4)
+        # Cylindrical coordinates follow each garment around its own pivot.
+        # UVs are restricted to the painted island with a four-texel inset.
+        z0, z1 = {'hood': (1.385, 1.86), 'mantle': (1.075, 1.425),
+                  'coat': (.42, 1.00), 'lining': (.25, .97)}.get(panel, (base.z - .22, base.z + .20))
+        wrap_x = base.x if name.startswith(('Foot', 'Leg', 'Knee', 'Arm', 'Elbow', 'Hand')) else 0.0
+        points = [mesh.vertices[mesh.loops[k].vertex_index].co for k in polygon.loop_indices]
+        angles = [(math.atan2(p.x-wrap_x, p.y + .018) / TAU + .5) % 1 for p in points]
+        # At the seam keep a whole face on the same side of the atlas cell.
+        if max(angles) - min(angles) > .5:
+            angles = [a + 1 if a < .5 else a for a in angles]
+            if sum(angles) > len(angles):
+                angles = [a - 1 for a in angles]
+        for k, point, u in zip(polygon.loop_indices, points, angles):
+            v = (point.z - z0) / (z1 - z0)
+            u = .008 + .984 * max(0, min(1, u))
+            v = .008 + .984 * max(0, min(1, v))
+            uvs.uv[k].vector = ((column + u) * .25, (3 - row + v) * .25)
     item = bpy.data.objects.new(name + 'Geometry', mesh)
     bpy.context.collection.objects.link(item)
     bpy.context.view_layer.update()
@@ -271,6 +276,28 @@ def band(part, points, width, thickness, slot, outward):
         part.face([a - sa, b - sb, b - sb + tb, a - sa + ta], slot, -sa)
 
 
+def piping(part, points, radius, slot, sides=7):
+    """Raised stitched edge with a continuous joint along a curved seam."""
+    if len(points) < 2:
+        return
+    path = list(map(Vector, points))
+    rings = []
+    old_side = None
+    for k, point in enumerate(path):
+        tangent = (path[min(k+1, len(path)-1)] - path[max(0, k-1)]).normalized()
+        if old_side is None:
+            _, side, cross = frame(tangent)
+        else:
+            side = (old_side - tangent * old_side.dot(tangent)).normalized()
+            cross = tangent.cross(side).normalized()
+        old_side = side
+        rings.append([point + radius * (side * math.cos(TAU*j/sides) + cross * math.sin(TAU*j/sides)) for j in range(sides)])
+    for k in range(len(rings)-1):
+        for j in range(sides):
+            corners = [rings[k][j], rings[k][(j+1)%sides], rings[k+1][(j+1)%sides], rings[k+1][j]]
+            part.face(corners, slot, rings[k][j] - path[k])
+
+
 def ring_frame(part, center, normal, up, half_w, half_h, bar, depth, slot):
     """Rectangular buckle frame lying on a surface."""
     normal = Vector(normal).normalized()
@@ -318,7 +345,7 @@ TROUSER = material('Charcoal wool', '3a3940', tile='Brushed wool')
 SLEEVE = material('Charcoal sleeve', '33333c', tile='Brushed wool')
 BRASS = material('Antique brass', 'c79349', .55, .42, tile='Hammered bronze')
 VOID = material('Inside hood', '0a0f15', 0.0, 1.0)
-STEEL = material('Sunsteel', 'c08d4d', .7, .3, tile='Hammered bronze')
+STEEL = material('Sunsteel', 'c08d4d', .7, .3, tile='Polished steel')
 EMBER = material('Ember inlay', 'ffb347', 0.0, .5, 4.0)
 GRIP = material('Grip wrap', '3b291c', tile='Oiled leather')
 
@@ -340,10 +367,10 @@ for side, tag in ((-1, 'L'), (1, 'R')):
     joint('Tail' + tag, (side * .105, -.161, .965), 'CoatHem')
 GRIP_CENTER = Vector((.306, .046, .838))
 joint('Weapon', GRIP_CENTER, 'HandR')
-SHEATH_AXIS = Vector((-1.0, -.06, -.10)).normalized()
+SHEATH_AXIS = Vector((-.45, -.44, -.79)).normalized()
 SHEATH_WIDTH = (UP - SHEATH_AXIS * UP.dot(SHEATH_AXIS)).normalized()
 SHEATH_BASIS = Matrix((SHEATH_AXIS.cross(SHEATH_WIDTH), SHEATH_AXIS, SHEATH_WIDTH)).transposed()
-SHEATH_GRIP = Vector((.205, -.236, .905))
+SHEATH_GRIP = Vector((.250, -.112, 1.002))
 joint('Sheath', SHEATH_GRIP, 'Pelvis', SHEATH_BASIS)
 
 # ---------------------------------------------------------------- hood
@@ -355,21 +382,31 @@ HOOD = [
     (1.648, .171, .186, -.040, 45), (1.690, .157, .172, -.045, 31), (1.722, .143, .158, -.048, 15),
     (1.748, .129, .143, -.049, 0), (1.792, .097, .110, -.046, 0), (1.832, .058, .069, -.038, 0),
 ]
-HOOD_TIP = Vector((0, -.018, 1.884))
-HOOD_SEGMENTS = 26
+HOOD_TIP = Vector((-.078, -.100, 1.833))
+HOOD_SEGMENTS = 36
 hood = PARTS['Hood']
 outer, inner = [], []
 for z, rx, ry, cy, opening in HOOD:
     half = math.radians(opening)
-    outer.append(ellipse(z, rx, ry, cy, 0, HOOD_SEGMENTS, half, TAU - half, False))
-    inner.append(ellipse(z - .006, rx * .84, ry * .84, cy + .006, 0, HOOD_SEGMENTS, half, TAU - half, False))
+    # The cloth caves below the crown and then folds back toward the left.
+    crown = max(0, (z - 1.66) / .172)
+    shift = -.056 * crown ** 1.35
+    cy -= .049 * crown
+    z -= .023 * crown
+    outer.append(ellipse(z, rx * 1.13, ry * 1.10, cy, shift, HOOD_SEGMENTS, half, TAU - half, False))
+    inner.append(ellipse(z - .009, rx * .79, ry * .78, cy - .012, shift, HOOD_SEGMENTS, half, TAU - half, False))
+    for k, point in enumerate(outer[-1]):
+        theta = half + (TAU - 2 * half) * k / HOOD_SEGMENTS
+        roll = math.sin(theta * 4 + (z - 1.58) * 16) * .009 * math.sin(math.pi*k/HOOD_SEGMENTS)
+        point += Vector((math.sin(theta) * roll, math.cos(theta) * roll, .005 * math.sin(theta*2)))
+
 
 
 def hood_cloth(i, j, center):
     if i == 0:
         return FOLD
-    if j in (4, 9, 17, 22) and 2 <= i <= 8:
-        return FOLD
+    if j in (7, 14, 25, 31) and 2 <= i <= 8:
+        return TEAL
     if center.z > 1.70 and j in (12, 13, 14):
         return WORN
     return TEAL
@@ -387,11 +424,29 @@ for i in range(1, len(HOOD) - 1):
         hood.face([outer[i][k], outer[i + 1][k], inner[i + 1][k], inner[i][k]], FOLD,
                   Vector((0, 1, 0)))
 
+# A turned edge and three unbalanced collar folds deepen the hood opening.
+for k in (0, -1):
+    piping(hood, [r[k] for r in outer[1:10]], .008, WORN)
+    piping(hood, [r[k] for r in inner[1:10]], .0045, DARK_LEATHER)
+for fold in range(3):
+    rings = []
+    for row in range(4):
+        ring = []
+        for k in range(42):
+            ang = TAU * k / 42
+            z = 1.395 + fold * .027 + row * .007 + .015 * math.sin(2*ang + fold*.6)
+            r = .200 - fold*.011 + math.sin(row/3*math.pi)*.016
+            ring.append(Vector((r*math.sin(ang), -.018 + r*.87*math.cos(ang), z)))
+        rings.append(ring)
+    loft(hood, rings, lambda i,j,c: FOLD if i == 0 else TEAL)
+# The face remains unlit inside even when bright sky is visible behind it.
+blob(hood, (0, .002, 1.58), (.128, .090, .142), VOID, 24, 10)
+
 # ---------------------------------------------------------------- capelet
 
 CAPE = [(1.425, .182, .158, -.012), (1.375, .250, .196, -.016), (1.305, .318, .228, -.020),
         (1.225, .352, .246, -.022)]
-CAPE_SEGMENTS = 28
+CAPE_SEGMENTS = 46
 
 
 def cape_rings(scale=1.0):
@@ -399,8 +454,8 @@ def cape_rings(scale=1.0):
     hem = []
     for k in range(CAPE_SEGMENTS):
         angle = TAU * k / CAPE_SEGMENTS
-        jag = -.046 if k % 2 else 0.0
-        z = 1.118 + .018 * math.cos(angle) + jag + rng.uniform(-.010, .010)
+        jag = .015 * math.sin(5 * angle) + .008 * math.cos(9 * angle + .4)
+        z = 1.148 + .036 * math.cos(angle) - .035 * math.sin(angle) + jag + rng.uniform(-.004, .004)
         hem.append(Vector((math.sin(angle) * .370 * scale, -.022 + math.cos(angle) * .260 * scale, z)))
     rings.append(hem)
     return rings
@@ -420,16 +475,34 @@ def cape_body(i, j, center):
     if 68 < a < 115 or 245 < a < 292:
         return None
     if i == 3 and j % 4 == 1:
-        return FOLD
+        return TEAL
     return WORN if i == 0 and j % 5 == 2 else TEAL
 
 
 loft(PARTS['UpperBody'], body_cape, cape_body)
 for tag, low, high in (('R', 55, 128), ('L', 232, 305)):
     loft(PARTS['Mantle' + tag], flap_cape,
-         lambda i, j, c, low=low, high=high: (FOLD if i == 3 and j % 2 else TEAL)
+         lambda i, j, c, low=low, high=high: TEAL
          if low <= math.degrees(angle_of(c)) <= high else None)
 
+# Turned cape bindings run on the real animated sections. A folded lower
+# facing is visible from underneath when the traveler lifts their elbows.
+for source, tag, low, high in ((body_cape,'UpperBody',115,245), (body_cape,'UpperBody',0,68),
+                               (body_cape,'UpperBody',292,360), (flap_cape,'MantleR',55,128),
+                               (flap_cape,'MantleL',232,305)):
+    hem = [point for point in source[-1] if low <= math.degrees(angle_of(point)) <= high]
+    if len(hem) < 2:
+        continue
+    # Angular sorting keeps the front section from closing across the cape.
+    hem.sort(key=angle_of)
+    part = PARTS[tag]
+    piping(part, hem, .0058, FOLD, 8)
+    reverse = [p + Vector((-p.x*.035,-p.y*.035,.022)) for p in hem]
+    loft(part, [hem, reverse], lambda i,j,c: WORN, False)
+for fold in range(2):
+    theta = [math.radians(98 + i*3) for i in range(54)]
+    cord = [on_surface(CAPE, a, 1.35-fold*.045+.016*math.sin(a*2), .005)[0] for a in theta]
+    piping(PARTS['UpperBody'], cord, .0045, FOLD, 7)
 # ---------------------------------------------------------------- torso, belt and harness
 
 TORSO = [(1.415, .125, .105, 0), (1.35, .165, .128, 0), (1.26, .198, .146, 0), (1.16, .206, .152, .004),
@@ -497,6 +570,25 @@ for k in range(12):
     pb = dock_top + Vector((math.sin(b) * .036, 0, math.cos(b) * .036 + .030))
     limb(body, pa, pb, [(0, .007), (1, .007)], BRASS, 5)
 
+# The diagonal back straps cross above the waist and are visible to either
+# side of the folded shrine. Its receiver has a dark backing and brass lugs.
+for sign in (-1, 1):
+    path = cape_strap([(sign*a, z) for a,z in ((128,1.39),(143,1.35),(154,1.305),(169,1.25),(183,1.19),(196,1.14))])
+    path.append(Vector((-sign*.094, -.224, 1.10)))
+    path.append(Vector((-sign*.125, -.150, 1.04)))
+    band(body, path, .049, .014, HARNESS, cape_normal)
+    for pt in path[1:4]:
+        norm = cape_normal(pt)
+        blob(body, pt + norm*.019, (.006,.005,.006), BRASS, 8, 4)
+    for t in (.26, .67):
+        z = 1.20 + t*.13
+        stud = Vector((sign*.078, -.248, z))
+        blob(body, stud, (.015,.010,.014), BRASS, 12, 5)
+back_plate = [(-.096,-.226,1.34),(-.062,-.237,1.39),(.063,-.237,1.39),(.097,-.226,1.34),
+              (.076,-.258,1.19),(0,-.275,1.15),(-.076,-.258,1.19)]
+body.face(back_plate, DARK_LEATHER, Vector((0,-1,0)))
+piping(body, [Vector(p) for p in back_plate + back_plate[:1]], .006, HARNESS)
+
 # ---------------------------------------------------------------- arms and gloves
 
 for side, tag in ((-1, 'L'), (1, 'R')):
@@ -509,17 +601,24 @@ for side, tag in ((-1, 'L'), (1, 'R')):
     fore = PARTS['Elbow' + tag]
     blob(fore, elbow, (.084, .086, .084), SLEEVE, 10, 5)
     limb(fore, elbow, wrist, [(0, .084), (.22, .081), (.38, .074)], SLEEVE, 11)
-    limb(fore, elbow, wrist, [(.36, .076), (.42, .080), (.86, .073), (.92, .068)],
+    limb(fore, elbow, wrist, [(.36, .073), (.42, .075), (.86, .060), (.92, .055)],
          lambda i, j, c: DARK_LEATHER if j in (2, 3) else HARNESS, 11)
     for t in (.48, .80):
-        limb(fore, elbow, wrist, [(t - .022, .084), (t + .022, .083)], BRASS, 11)
-    limb(fore, elbow, wrist, [(.90, .076), (1.0, .074), (1.03, .066)], GLOVE, 11)
+        limb(fore, elbow, wrist, [(t - .022, .084 - t*.026), (t + .022, .083 - t*.026)], BRASS, 11)
+    limb(fore, elbow, wrist, [(.90, .060), (1.0, .054), (1.03, .052)], GLOVE, 11)
     hand = PARTS['Hand' + tag]
     knuckle = wrist + Vector((side * .002, .022, -.052))
     blob(hand, knuckle, (.036, .050, .052), GLOVE, 10, 5)
     blob(hand, knuckle + Vector((side * .004, .038, -.018)), (.033, .022, .036), GLOVE, 8, 4)
     thumb_root = wrist + Vector((-side * .026, .030, -.030))
     limb(hand, thumb_root, thumb_root + Vector((-side * .006, .040, -.026)), [(0, .016), (1, .012)], GLOVE, 7, False, True)
+    # Individually cut articulated glove fingers curl towards the resting palm.
+    for finger in range(4):
+        root = knuckle + Vector((side*(-.022 + finger*.015), .026, -.012))
+        tip = root + Vector((-side*.004, .019, -.039 + abs(finger-1)*.003))
+        limb(hand, root, tip, [(0,.009),(.35,.011),(.68,.010),(1,.007)], GLOVE, 10, False, True)
+        seam = [root + Vector((side*.003,.008,-.001)), root.lerp(tip,.54) + Vector((0,.008,0)), tip + Vector((0,.004,0))]
+        piping(hand, seam, .0018, DARK_LEATHER, 5)
     for k in range(3):
         box(hand, knuckle + Vector((side * .036, .006 + k * .02 - .02, -.034)), (.004, .008, .006), DARK_LEATHER)
 
@@ -527,18 +626,46 @@ for side, tag in ((-1, 'L'), (1, 'R')):
 
 for side, tag in ((-1, 'L'), (1, 'R')):
     x = side * .124
-    limb(PARTS['Leg' + tag], (x, 0, .87), (side * .128, .005, .468),
-         [(0, .118), (.45, .132), (1.0, .118)], lambda i, j, c: FOLD if j % 6 == 3 else TROUSER, 12)
+    thigh = PARTS['Leg' + tag]
     knee = PARTS['Knee' + tag]
-    blob(knee, (side * .126, .010, .445), (.118, .120, .070), TROUSER, 12, 5)
-    limb(knee, (side * .126, .008, .452), (x, 0, .300), [(0, .118), (.45, .128), (1.0, .100)],
-         lambda i, j, c: FOLD if j % 5 == 1 else TROUSER, 12)
+    # Gathered breeches: the ridges migrate around the thigh and pinch
+    # together into the upper greave. Controlled creases replace straight tubes.
+    for part, profile in ((thigh, [(.87,.108),(.80,.119),(.73,.134),(.66,.137),
+                                   (.59,.134),(.54,.140),(.50,.129),(.461,.118)]),
+                          (knee, [(.478,.106),(.458,.12),(.437,.132),(.420,.12),
+                                  (.4,.117),(.379,.123),(.356,.112),(.337,.091),(.325,.087)])):
+        rings = []
+        for z,r in profile:
+            t = (.87-z)/.54
+            ring = []
+            for k in range(26):
+                theta = TAU*k/26
+                seam = theta*5 + .9*math.sin(t*4.7) + side*t
+                rr = r*(1 + .082*math.sin(seam) + .025*math.cos(2*seam))
+                zz = z + .014 * math.sin(theta*2 + t*5) * math.sin(math.pi*t)
+                ring.append(Vector((x + rr*math.sin(theta), .007 + rr*math.cos(theta), zz)))
+            rings.append(ring)
+        loft(part, rings, lambda i,j,c: TROUSER, True, lambda c: Vector((x,.007,c.z)))
     limb(knee, (x, 0, .348), (x, 0, .292), [(0, .102), (1, .100)], CUFF, 14)
     loft(knee, [ellipse(.348, .086, .086, 0, x, 14), ellipse(.348, .102, .102, 0, x, 14)],
          lambda i, j, c: DARK_LEATHER, True, lambda c: c - UP)
     limb(knee, (x, 0, .300), (x, .006, .100), [(0, .089), (.6, .084), (1, .081)], GLOVE, 14)
     limb(knee, (x, 0, .254), (x, 0, .216), [(0, .094), (1, .093)], DARK_LEATHER, 14)
     ring_frame(knee, (x + side * .052, .074, .235), (side * .55, .83, 0), UP, .019, .020, .006, .006, BRASS)
+    # Tapered hard leather shin, worn ridge and two working straps.
+    greave = []
+    for z,w,r in ((.129,.45,.084),(.159,.68,.089),(.215,.72,.091),(.278,.69,.096),(.300,.55,.099)):
+        row = []
+        for k in range(13):
+            a = (k/12 -.5)*w*2
+            rr = r+.010*(1-abs(k/6-1))
+            row.append(Vector((x+math.sin(a)*rr, math.cos(a)*rr, z+.006*math.cos(a*2))))
+        greave.append(row)
+    loft(knee, greave, lambda i,j,c: CUFF if j in (5,6) else HARNESS, False, lambda c: Vector((x,0,c.z)))
+    for z in (.173, .266):
+        point = Vector((x+side*.064,.067,z))
+        ring_frame(knee, point, (side*.66,.74,0), UP, .014, .012, .0035, .006, BRASS)
+        limb(knee, (x,0,z-.009),(x,0,z+.009), [(0,.094),(.15,.097),(.85,.097),(1,.094)], DARK_LEATHER, 22)
     foot = PARTS['Foot' + tag]
     # y offset, half width, top, bottom: a broad rounded toe and a squared heel.
     sections = [(-.078, .072, .122, .026), (-.040, .083, .128, .024), (.010, .090, .114, .024),
@@ -556,12 +683,30 @@ for side, tag in ((-1, 'L'), (1, 'R')):
     loft(foot, soles, lambda i, j, c: SOLE, True, lambda c: Vector((x, c.y, .013)))
     box(foot, (x, -.058, .016), (.077, .026, .017), SOLE)
 
+    welt = []
+    for k in range(28):
+        a = TAU*k/28
+        welt.append(Vector((x+.084*math.sin(a), .030+.119*math.cos(a), .033+.008*math.cos(a))))
+    piping(foot, welt+welt[:1], .004, CUFF)
+
+# A dark underside and a small saddle stitch fatigue mark give the leather
+# shoulder tabs a hand-finished edge even when the dock is empty.
+for sign in (-1, 1):
+    path = cape_strap([(sign*a,z) for a,z in ((33,1.30),(45,1.34),(62,1.38),(81,1.412),(98,1.416),(117,1.386),(134,1.35),(145,1.31))])
+    for edge in (-1,1):
+        points = []
+        for j,p in enumerate(path):
+            tangent = (path[min(j+1,len(path)-1)] - path[max(j-1,0)]).normalized()
+            n = cape_normal(p)
+            points.append(p + n*.013 + tangent.cross(n).normalized()*.017*edge)
+        piping(body, points, .0027, CUFF, 6)
+
 # ---------------------------------------------------------------- coat skirt, tails and emblem
 
 SKIRT = [(1.005, .208, .163, .000), (.905, .232, .186, -.005), (.785, .262, .210, -.012),
          (.665, .290, .232, -.019), (.565, .314, .251, -.026)]
 SPLIT = math.radians(11)
-SKIRT_SEGMENTS = 30
+SKIRT_SEGMENTS = 42
 
 
 def skirt_rings(scale):
@@ -570,7 +715,8 @@ def skirt_rings(scale):
     hem = []
     for k in range(SKIRT_SEGMENTS + 1):
         angle = SPLIT + (TAU - 2 * SPLIT) * k / SKIRT_SEGMENTS
-        z = .486 + .020 * math.cos(angle) + (-.040 if k % 2 else 0.0) + rng.uniform(-.008, .008)
+        z = .49 + .045 * math.cos(angle) - .075 * math.sin(angle + .48) + .012 * math.sin(angle * 6)
+        z += rng.uniform(-.004, .004)
         hem.append(Vector((math.sin(angle) * .334 * scale, -.030 + math.cos(angle) * .268 * scale, z)))
     rings.append(hem)
     return rings
@@ -598,6 +744,31 @@ for tag, k in (('R', 0), ('L', -1)):
     band(PARTS['Skirt' + tag], edge, .030, .004, OCHRE, lambda p: Vector((-p.x, -p.y, 0)).normalized())
 
 
+# Open-faced welt and visible inner skirt follow their own rigid garment
+# pivots. Bias the overlap and preserve long unbroken stretches for the crest.
+for part_name, grid, limits in (('CoatHem',back_skirt,(72,288)),('SkirtR',front_skirt,(0,82)),('SkirtL',front_skirt,(278,360))):
+    part = PARTS[part_name]
+    hem = [p for p in grid[-1] if limits[0] <= math.degrees(angle_of(p)) <= limits[1]]
+    hem.sort(key=angle_of)
+    if len(hem)>1:
+        piping(part, hem, .0065, FOLD, 8)
+        facings = []
+        for r in range(5):
+            facings.append([p + Vector((-p.x*.044*r/4, -p.y*.044*r/4, .039*r/4)) for p in hem])
+        loft(part, facings, lambda i,j,c: OCHRE if i<3 else FOLD, False)
+for tag, ang in (('SkirtR', 34), ('CoatHem', 184)):
+    rows = []
+    for r in range(9):
+        z = .99 - r*.049
+        row = []
+        for k in range(9):
+            a = math.radians(ang - 5 + k*1.8 + r*.65)
+            p,n = on_surface(SKIRT, a, z, .001)
+            p += n * (.010 * math.sin(k/8*math.pi))
+            row.append(p)
+        rows.append(row)
+    loft(PARTS[tag],rows, lambda i,j,c: FOLD if j==0 else TEAL,False)
+
 def coat_point(angle, z, lift):
     return on_surface(SKIRT + [(.48, .334, .268, -.030)], angle, z, lift)
 
@@ -605,8 +776,8 @@ def coat_point(angle, z, lift):
 def sail(part, top_angles, top_z, tips, flare, lining_gap=.007):
     """Long pointed coat tail: teal outside, ochre inside, with a frayed gold hem."""
     a0, a1 = (math.radians(a) for a in top_angles)
-    columns = 5
-    rows = 7
+    columns = 15
+    rows = 17
     outer = []
     for r in range(rows + 1):
         row = []
@@ -614,13 +785,14 @@ def sail(part, top_angles, top_z, tips, flare, lining_gap=.007):
             u = c / columns
             angle = a0 + (a1 - a0) * u
             bottom = tips[0] + (tips[1] - tips[0]) * u
-            bottom += -.07 * math.sin(math.pi * u * 2) ** 2 * (1 if c % 2 else .4)
+            bottom += -.061 * math.sin(math.pi * (u * 2.2 + .12)) ** 4
             z = top_z + (bottom - top_z) * (r / rows)
             point, normal = coat_point(angle, max(z, .49), .016)
             if z < .49:
                 point.z = z
                 point += normal * ((.49 - z) * .32)
             point += normal * flare * (r / rows) ** 2 * (0.6 + 0.4 * u)
+            point += normal * (.011 * math.sin(u * math.pi * 4 + r / rows * 1.3) * (r / rows))
             row.append((point, normal))
         outer.append(row)
     for r in range(rows):
@@ -667,6 +839,26 @@ def emblem(part, angle, z, scale, lift=.006):
 
 emblem(PARTS['CoatHem'], math.pi, .64, 1.0)
 emblem(PARTS['SkirtR'], math.radians(40), .66, .58, .029)
+
+# The front flap crosses the belly diagonally and lifts above one knee.
+# A single sweep of teal breaks the symmetrical opening between coat panels.
+apron = []
+for r in range(12):
+    t = r/11
+    row = []
+    for c in range(17):
+        u = c/16
+        a = math.radians(-39 + u*89 - t*(7 + 12*u))
+        hem_height = .467 + .155 * (1-u)**1.3
+        z = .992 + t*(hem_height-.992)
+        p,n = coat_point(a,z,.015+.007*math.sin(u*math.pi*2 + t))
+        row.append(p)
+    apron.append(row)
+apron_part = PARTS['SkirtR']
+loft(apron_part, apron, lambda i,j,c: TEAL, False)
+piping(apron_part,[r[0] for r in apron],.004,FOLD)
+piping(apron_part,apron[-1],.004,WORN)
+emblem(apron_part, math.radians(2), .602, .94, .032)
 
 # ---------------------------------------------------------------- sunsteel blade and scabbard
 
@@ -715,9 +907,9 @@ for t0, t1 in ((0.0, .05), (.86, .95)):
         rings.append([center + SHEATH_WIDTH * math.sin(TAU * k / 10) * w +
                       thickness * math.cos(TAU * k / 10) * .019 for k in range(10)])
     loft(sheath, rings, lambda i, j, c: BRASS, True, lambda c: mouth + SHEATH_AXIS * (c - mouth).dot(SHEATH_AXIS))
-for t in (.18, .55):
+for t in (.08, .22):
     hang = mouth.lerp(tip, t)
-    band(sheath, [hang + SHEATH_WIDTH * .03, Vector((hang.x, hang.y + .028, .995))], .022, .006, DARK_LEATHER,
+    band(sheath, [hang + SHEATH_WIDTH * .03, Vector((.215, -.10, 1.00))], .022, .006, DARK_LEATHER,
          lambda p: Vector((0, -1, 0)))
 
 for name, part in PARTS.items():
@@ -726,6 +918,9 @@ for name, part in PARTS.items():
 destination = ROOT / 'art/models/traveler.glb'
 bpy.ops.export_scene.gltf(filepath=str(destination), export_format='GLB', export_yup=True)
 
+
+if '--traveler-only' in sys.argv:
+    sys.exit(0)
 
 # ---------------------------------------------------------------- folded shrine fittings
 
