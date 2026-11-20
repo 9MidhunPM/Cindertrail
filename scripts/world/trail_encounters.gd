@@ -42,7 +42,9 @@ func configure(journey_seed: int, valley: CinderOuterValley, frontier: CinderFro
 			path = frontier.paths[1 if data[0] == "frontier_escarpment" else 2]
 		else:
 			continue
-		var section: int = data[2]
+		if path.size() < 2:
+			continue
+		var section := mini(int(data[2]), path.size() - 2)
 		var a := path[section]
 		var b := path[section + 1]
 		var delta := b - a

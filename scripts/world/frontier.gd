@@ -6,6 +6,9 @@ const LAYOUT_VERSION := 1
 const ENTRANCE := Vector3(55, 5, 214)
 const FORK := Vector3(55, 5, 280)
 const CAMP := Vector3(59, 5, 468)
+# Dry shelves beyond the fork, each with room for both approaches and the retreat arch.
+const CLEARINGS := [Vector3(22, 5, 484), Vector3(88, 5, 492)]
+const CLEARING_YAWS := [-0.21, 0.23]
 const SITE_SPEC := preload("res://data/sites/frontier.tres")
 const SCENERY := preload("res://scripts/world/frontier_scenery.gd")
 const WEST_ROUTES := [
@@ -29,6 +32,9 @@ const DISCOVERY_MESSAGES := [
 const DISCOVERY_REWARDS := [12, 16, 12]
 
 var journey_seed: int
+var randomized_layout := false
+var clearing_variant := 0
+var _clearing := Transform3D(Basis.IDENTITY, CAMP)
 var site: CinderSite
 var paths: Array[PackedVector3Array] = []
 var layout_version: int:
@@ -40,6 +46,9 @@ var _discoveries: Array[Dictionary] = []
 var _claimed := PackedStringArray()
 
 func _ready() -> void:
+	if randomized_layout:
+		var index := posmod(clearing_variant, CLEARINGS.size())
+		_clearing = Transform3D(Basis(Vector3.UP, CLEARING_YAWS[index]), CLEARINGS[index])
 	var random := RandomNumberGenerator.new()
 	random.seed = journey_seed ^ 468214
 	_scenery = SCENERY.new()
@@ -47,21 +56,21 @@ func _ready() -> void:
 	_scenery.initialize(random.randi())
 	var start := PackedVector3Array([ENTRANCE, Vector3(56, 5, 236), Vector3(49, 5, 257), FORK])
 	paths.append(start)
-	paths.append(_route(WEST_ROUTES[random.randi_range(0, WEST_ROUTES.size() - 1)]))
-	paths.append(_route(EAST_ROUTES[random.randi_range(0, EAST_ROUTES.size() - 1)]))
+	paths.append(_route(WEST_ROUTES[random.randi_range(0, WEST_ROUTES.size() - 1)], -1.0))
+	paths.append(_route(EAST_ROUTES[random.randi_range(0, EAST_ROUTES.size() - 1)], 1.0))
 	_scenery.surroundings()
 	for i in paths.size():
 		_scenery.walkway(paths[i], i)
 	_scenery.island(FORK, 5.1, 10, Color("#9b885e"))
-	_scenery.island(CAMP, 8.2, 12, Color("#c4a780"))
-	_scenery.camp(CAMP)
+	_scenery.island(_clearing.origin, 8.2, 12, Color("#c4a780"))
+	_scenery.camp(_clearing)
 	_scenery.spillway(Vector3(52, 5, 237), Vector3(62, 5, 237))
 	_sign(ENTRANCE, paths[0][1], "Last Lantern")
-	_sign(paths[0][1], ENTRANCE, "Tanners’ Road • Aqueduct")
+	_sign(paths[0][1], ENTRANCE, "Tanners’ Road")
 	_sign(FORK, paths[1][1], "Cliff stair")
 	_sign(FORK, paths[2][1], "Drowned road")
-	_sign(CAMP, paths[1][-2], "Tanners’ Road via cliff stair")
-	_sign(CAMP, paths[2][-2], "Tanners’ Road via drowned road")
+	_sign(_clearing.origin, paths[1][-2], "Tanners’ Road via cliff stair")
+	_sign(_clearing.origin, paths[2][-2], "Tanners’ Road via drowned road")
 	var first_kind := random.randi_range(0, 2)
 	var second_kind := (first_kind + random.randi_range(1, 2)) % 3
 	_add_discovery(paths[1], first_kind, -1.0)
@@ -69,27 +78,32 @@ func _ready() -> void:
 	_scenery.finish()
 	_build_site()
 
-func _route(points: Array) -> PackedVector3Array:
+func _route(points: Array, side: float) -> PackedVector3Array:
 	var result := PackedVector3Array([FORK])
 	for point: Vector2 in points:
 		result.append(Vector3(point.x, CAMP.y, point.y))
-	result.append(CAMP)
+	if randomized_layout:
+		# The final, twenty-seven metre approach fixes lane clearance at every socket.
+		result.append(_clearing * Vector3(side * 18.0, 0, -20.0))
+	result.append(_clearing.origin)
 	return result
 
 func _build_site() -> void:
 	var sockets := PackedVector3Array([
-		CAMP + Vector3(-3.8, .06, 1.8), CAMP + Vector3(2.5, .06, 3.2),
-		CAMP + Vector3(-1.0, .06, -3.8), CAMP + Vector3(4.4, .06, .45),
+		_clearing * Vector3(-3.8, .06, 1.8), _clearing * Vector3(2.5, .06, 3.2),
+		_clearing * Vector3(-1.0, .06, -3.8), _clearing * Vector3(4.4, .06, .45),
 	])
 	var lanes: Array[PackedVector3Array] = []
 	for i in range(1, 3):
 		var previous := paths[i][-2]
-		var along := CAMP.direction_to(previous)
-		lanes.append(PackedVector3Array([CAMP + along * 20.0, CAMP + along * 9.0, CAMP + along * 4.0, CAMP]))
+		var camp := _clearing.origin
+		var along := camp.direction_to(previous)
+		lanes.append(PackedVector3Array([camp + along * 20.0, camp + along * 9.0, camp + along * 4.0, camp]))
 	site = CinderSite.new()
 	add_child(site)
-	site.configure(SITE_SPEC, CAMP + Vector3.UP * .05, sockets, lanes,
-		CAMP + Vector3(0, 13, 22), CAMP + Vector3(0, .4, -3))
+	site.configure(SITE_SPEC, _clearing.origin + Vector3.UP * .05, sockets, lanes,
+		_clearing * Vector3(0, 13, 22), _clearing * Vector3(0, .4, -3))
+	site.habitat_frame.basis = _clearing.basis
 
 func _sign(origin: Vector3, toward: Vector3, label: String) -> void:
 	var along := origin.direction_to(toward)

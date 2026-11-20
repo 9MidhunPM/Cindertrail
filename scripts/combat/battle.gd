@@ -425,23 +425,51 @@ func _splash(point: Vector3, radius: float, power: float) -> void:
 		if CinderEnemy.flat_distance(enemy.global_position, point) <= radius:
 			_hit(enemy, power)
 
-## Resolve a blade swing. Each creature is struck at most once per call.
-func melee(origin: Vector3, forward: Vector3, reach: float, half_arc: float, damage: float, knockback: float) -> int:
+## Use the same reachability rules for selecting a foe and landing a blow.
+func blade_path_clear(origin: Vector3, enemy: CinderEnemy) -> bool:
+	if not is_instance_valid(enemy) or enemy.is_queued_for_deletion() or enemy.fading or enemy.health <= 0.0:
+		return false
+	if absf(enemy.global_position.y - origin.y) > 1.8:
+		return false
+	var hand := origin + Vector3.UP
+	var ray := PhysicsRayQueryParameters3D.create(hand, enemy.body_center(), 1)
+	ray.hit_from_inside = true
+	return get_world_3d().direct_space_state.intersect_ray(ray).is_empty()
+
+func closest_melee_target(origin: Vector3, radius: float) -> CinderEnemy:
+	var closest: CinderEnemy
+	var best_distance := radius * radius
+	for enemy in enemies:
+		if not is_instance_valid(enemy):
+			continue
+		var distance := (enemy.global_position - origin).slide(Vector3.UP).length_squared()
+		if distance > best_distance or (closest and distance == best_distance):
+			continue
+		if blade_path_clear(origin, enemy):
+			best_distance = distance
+			closest = enemy
+	return closest
+
+## A shared hit set lets the charged blade visit consecutive sectors of its arc.
+func melee(origin: Vector3, forward: Vector3, reach: float, half_arc: float, damage: float, knockback: float,
+		already_hit: Dictionary = {}) -> int:
 	if halted:
 		return 0
 	var aim := forward.slide(Vector3.UP).normalized()
 	var struck := 0
 	for i in range(enemies.size() - 1, -1, -1):
 		var enemy := enemies[i]
-		if enemy.fading:
+		if not is_instance_valid(enemy) or already_hit.has(enemy.get_instance_id()):
 			continue
 		var offset := (enemy.global_position - origin).slide(Vector3.UP)
-		var size := enemy.stats.radius
-		if offset.length() > reach + size or absf(enemy.global_position.y - origin.y) > 1.8:
+		if offset.length_squared() > pow(reach + enemy.stats.radius, 2):
 			continue
-		if half_arc < PI and offset.length() > 0.5 and aim.angle_to(offset.normalized()) > half_arc:
+		if half_arc < PI and offset.length_squared() > 0.0001 and aim.angle_to(offset.normalized()) > half_arc:
 			continue
-		var away := offset.normalized() if offset.length() > 0.05 else aim
+		if not blade_path_clear(origin, enemy):
+			continue
+		already_hit[enemy.get_instance_id()] = true
+		var away := offset.normalized() if offset.length_squared() > 0.0025 else aim
 		enemy.shove(away * knockback, 0.32)
 		enemy.flash()
 		_hit(enemy, damage, &"melee")

@@ -28,6 +28,10 @@ const BEACON_TRAIL := [Vector3(16, 4.8, -56), Vector3(20, 5.4, -62),
 	Vector3(20, 7.3, -69), Vector3(19, 9.3, -77), Vector3(20, 11, -81), SUMMIT]
 
 var site: CinderSite
+var layout_id := 0
+var randomized_layout := false
+var clearing_variant := 0
+var _pad := CENTER
 var beacon: Marker3D
 var caches := PackedVector3Array()
 var landmark_position := Vector3(13.65, 4.8, -55.10)
@@ -46,6 +50,10 @@ var _walk_faces := PackedVector3Array()
 
 func _ready() -> void:
 	name = "FallenRelayTerrain"
+	if randomized_layout:
+		# The ridge landing and the eastern gallery put different approaches
+		# nearest the core while the generator and summit trail stay accessible.
+		_pad = Vector3(6.3, 4.8, -52.0) if clearing_variant == 0 else Vector3(12.6, 4.8, -49.9)
 	_rng.seed = 84440
 	_visual.begin(Mesh.PRIMITIVE_TRIANGLES)
 	_collision.name = "RelayCollision"
@@ -68,12 +76,23 @@ func _ready() -> void:
 	site = CinderSite.new()
 	site.name = "FallenRelaySite"
 	add_child(site)
-	site.configure(SITE_SPEC, CENTER + Vector3.UP * 0.04,
-		PackedVector3Array([Vector3(5.4, 4.82, -55.4), Vector3(12.2, 4.82, -56.1),
-			Vector3(14.3, 4.82, -50.0), Vector3(6.4, 4.82, -49.7)]),
-		[PackedVector3Array(WEST), PackedVector3Array(NORTH), PackedVector3Array(EAST)],
-		Vector3(17.5, 16.9, -30.0), Vector3(10, 4.05, -54.4))
-	_relocate(CinderDistricts.offset("relay"))
+	var routes: Array[PackedVector3Array] = [PackedVector3Array(WEST), PackedVector3Array(NORTH), PackedVector3Array(EAST)]
+	var sockets := PackedVector3Array([Vector3(5.4, 4.82, -55.4), Vector3(12.2, 4.82, -56.1),
+		Vector3(14.3, 4.82, -50.0), Vector3(6.4, 4.82, -49.7)])
+	if randomized_layout:
+		for i in routes.size():
+			routes[i][-1] = _pad
+		if clearing_variant == 0:
+			sockets = PackedVector3Array([Vector3(4.2, 4.82, -55.1), Vector3(8.8, 4.82, -55.4),
+				Vector3(11.1, 4.82, -50.0), Vector3(6.5, 4.82, -49.1)])
+		else:
+			sockets = PackedVector3Array([Vector3(5.3, 4.82, -55.0), Vector3(10.8, 4.82, -55.8),
+				Vector3(15.1, 4.82, -49.3), Vector3(9.6, 4.82, -48.6)])
+	var framing := (_pad - CENTER) * .40
+	site.configure(SITE_SPEC, _pad + Vector3.UP * 0.04, sockets, routes,
+		Vector3(17.5, 16.9, -30.0) + framing, Vector3(10, 4.05, -54.4) + framing)
+	site.habitat_frame.origin = CENTER + Vector3.UP * .04
+	_relocate(CinderDistricts.offset("relay", layout_id))
 
 ## Geometry is authored around the old origin; move it out along the valley.
 func _relocate(shift: Vector3) -> void:
@@ -84,6 +103,12 @@ func _relocate(shift: Vector3) -> void:
 
 func world_landmark() -> Vector3:
 	return landmark_position + position
+
+func map_paths() -> Array[PackedVector3Array]:
+	return [global_transform * PackedVector3Array(APPROACH),
+		global_transform * PackedVector3Array(BEACON_TRAIL),
+		global_transform * PackedVector3Array([Vector3(4, 1.6, -34), Vector3(.5, 1.81, -37),
+			Vector3(-2.1, 2.03, -40.5)])]
 
 func _ravine() -> void:
 	# Fill beneath the exposed bridge piers with a descending, non-walkable ravine.
@@ -279,7 +304,11 @@ func _build_plateau() -> void:
 			_face(hub + along * 4.40 - across * .15, hub + along * 4.40 + across * .15,
 				hub + along * 4.89, Vector3.UP, accent)
 	_disc(CENTER + Vector3.UP * .031, 1.1, 14, .11, HIGHLIGHT, false)
-	_annular_floor(CENTER + Vector3.UP * .048, .82, 1.02, 18, COPPER)
+	if randomized_layout:
+		_disc(_pad + Vector3.UP * .061, 1.1, 14, .11, HIGHLIGHT, false)
+		_annular_floor(_pad + Vector3.UP * .083, .82, 1.02, 18, COPPER)
+	else:
+		_annular_floor(CENTER + Vector3.UP * .048, .82, 1.02, 18, COPPER)
 	for i in 22:
 		var a := TAU * i / 22.0
 		var near_lane := minf(minf(absf(sin(a)), absf(cos(a))), absf(sin(a - 2.64)))

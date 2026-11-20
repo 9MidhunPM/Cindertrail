@@ -25,12 +25,15 @@ var intensity: float:
 var view_position: Vector3
 var view_target: Vector3
 var wet := false
+## Canonical district center used by wildlife and terrain hazards, independent of the shrine pad.
+var habitat_frame := Transform3D.IDENTITY
 var _socket_rings: Array[MeshInstance3D] = []
 var _selection := StandardMaterial3D.new()
 
 func configure(data: CinderSiteSpec, center: Vector3, positions: PackedVector3Array,
 		routes: Array[PackedVector3Array], camera_eye: Vector3, camera_target: Vector3) -> void:
 	spec = data
+	habitat_frame.origin = center
 	remaining_energy = spec.energy
 	lanes = routes
 	view_position = camera_eye
@@ -53,20 +56,39 @@ func configure(data: CinderSiteSpec, center: Vector3, positions: PackedVector3Ar
 
 ## Move world-space data (attack lanes and the tactical camera) with a relocated parent.
 func shift_world(shift: Vector3) -> void:
+	transform_world(Transform3D(Basis.IDENTITY, shift))
+
+func transform_world(placement: Transform3D) -> void:
 	for i in lanes.size():
-		var lane := lanes[i]
-		for j in lane.size():
-			lane[j] += shift
-		lanes[i] = lane
-	view_position += shift
-	view_target += shift
+		lanes[i] = placement * lanes[i]
+	view_position = placement * view_position
+	view_target = placement * view_target
+	habitat_frame = placement * habitat_frame
+
+## Empty bronze-lined limestone footing for the portable shrine.
+func mark_clearing() -> void:
+	var stone := CylinderMesh.new()
+	stone.top_radius = 1.29
+	stone.bottom_radius = 1.38
+	stone.height = .075
+	stone.radial_segments = 12
+	var plinth := MeshInstance3D.new()
+	plinth.mesh = stone
+	plinth.material_override = preload("res://art/materials/stylized/painted_stone_cream.tres")
+	anchor.add_child(plinth)
+	plinth.position.y = -.022
+	_ring(anchor, .94, 1.03, .016, BRONZE)
+	_ring(anchor, 1.13, 1.18, .017, BRASS)
 
 func select_socket(index: int) -> void:
 	for i in _socket_rings.size():
 		_socket_rings[i].material_override = _selection if i == index else BRASS
 
 func wet_depth_at(point: Vector3) -> bool:
-	return wet and point.y < 0.20 and absf(point.x) < 19.0 and absf(point.z) < 19.0
+	if not wet:
+		return false
+	var local := habitat_frame.affine_inverse() * point
+	return local.y < -.53 and absf(local.x) < 19.0 and absf(local.z) < 19.0
 
 func _ring(parent: Node3D, inner: float, outer: float, altitude: float,
 		material: Material) -> MeshInstance3D:

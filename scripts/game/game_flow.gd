@@ -3,7 +3,7 @@ extends Node3D
 enum Mode { EXPLORE, DEPLOY, PREPARE, DEFEND, PACK, TRANSIT, WIN, LOSE }
 
 const SUMMIT := preload("res://scripts/world/beacon_guardian.gd")
-const GROVE := preload("res://data/sites/grove.tres")
+const JOURNEY_LAYOUT := preload("res://scripts/world/journey_layout.gd")
 const TRAVELER := preload("res://scenes/player/traveler_visual.tscn")
 const SHRINE := preload("res://scenes/core/sun_core.tscn")
 const INTERFACE := preload("res://scenes/ui/hud.tscn")
@@ -13,10 +13,10 @@ const RELAY_REGION := preload("res://scripts/world/relay.gd")
 const OUTER_VALLEY := preload("res://scenes/world/outer_valley.tscn")
 const FRONTIER := preload("res://scripts/world/frontier.gd")
 const TRAIL_PACKS := preload("res://scripts/world/trail_encounters.gd")
+const BELL_ROAD := preload("res://scripts/world/drowned_bell_road.gd")
 const CACHE_MODEL := preload("res://art/models/supply_crate.glb")
 const PACK_SECONDS := 1.7
 const OPENING := Vector3(-3.0, 0.76, 15.0)
-const LEGACY_JOURNEY_SEED := 34519
 const MIRROR_CACHE_ID := "sunwatch_mirror_recess"
 
 var mode := Mode.EXPLORE
@@ -33,10 +33,13 @@ var melee: CinderMelee
 var hud: CinderHUD
 var grove: CinderSite
 var grove_terrain: CinderGrove
+var bell_road: BELL_ROAD
 var outer_valley: CinderOuterValley
 var frontier: CinderFrontier
 var trail_packs: TRAIL_PACKS
 var landmarks: CinderCampLandmarks
+var layout: JOURNEY_LAYOUT
+var districts: Array[Node3D] = []
 var sites: Array[CinderSite] = []
 var active_site: CinderSite
 var beacon: Marker3D
@@ -70,9 +73,6 @@ func _ready() -> void:
 	_capture_mouse = DisplayServer.get_name() != "headless" and not OS.has_feature("movie")
 	atmosphere = CinderAtmosphere.new()
 	_add_runtime(atmosphere)
-	grove_terrain = CinderGrove.new()
-	_add_runtime(grove_terrain)
-	_build_sites()
 	player = CinderPlayer.new()
 	player.name = "Traveler"
 	player.position = OPENING
@@ -102,15 +102,22 @@ func _ready() -> void:
 	_add_runtime(melee)
 	melee.bind(player, battle, director)
 	melee.swung.connect(_melee_sound)
+	melee.sword_cue.connect(soundscape.cue)
 	hud = INTERFACE.instantiate() as CinderHUD
 	add_child(hud)
 	hud.action_requested.connect(_hud_action)
-	_add_cache(Vector3(-6.1, 0.72, 9.0), 16)
 	_checkpoint_enabled = not _direct_launch()
 	if not _checkpoint_enabled:
-		_open_frontier(int(get_tree().get_meta(&"journey_seed", LEGACY_JOURNEY_SEED)))
+		var seed_value := int(get_tree().get_meta(&"journey_seed", JOURNEY_LAYOUT.LEGACY_SEED))
+		if get_tree().get_meta(&"world_layout_version", 0) == JOURNEY_LAYOUT.VERSION:
+			_build_journey(JOURNEY_LAYOUT.generate(seed_value))
+		else:
+			_build_journey(JOURNEY_LAYOUT.restore({"journey_seed": seed_value}))
 	else:
 		_checkpoint = JourneyCheckpoint.read()
+		if not _checkpoint.is_empty() and JOURNEY_LAYOUT.restore(_checkpoint) == null:
+			push_warning("The saved journey uses an unrecognized valley layout.")
+			_checkpoint = {}
 		_front_end = FRONT_END.instantiate() as CinderFrontEnd
 		add_child(_front_end)
 		_front_end.begin_journey.connect(_begin_journey)
@@ -124,6 +131,10 @@ func _ready() -> void:
 		if entry == &"continue":
 			_continue_journey()
 		else:
+			# The title overlooks a real Grove. The rest of the valley belongs to the
+			# selected journey and is assembled only after New or Continue.
+			grove_terrain = CinderGrove.new()
+			_add_runtime(grove_terrain)
 			_front_active = true
 			hud.hide()
 			player.set_physics_process(false)
@@ -133,7 +144,6 @@ func _ready() -> void:
 			else:
 				_front_end.show_menu(not _checkpoint.is_empty())
 	battle.damaged.connect(_count_defeat)
-	hud.bind(self)
 	_sync_controls()
 	_render_hud()
 
@@ -158,15 +168,24 @@ func _enter_journey() -> void:
 	_render_hud()
 
 func _begin_journey() -> void:
+	var previous: Dictionary = get_tree().get_meta(&"last_valley", {}) if _checkpoint.is_empty() else _checkpoint
+	var old_pads: Dictionary = previous.get("clearing_variants", {})
+	var next := JOURNEY_LAYOUT.generate(randi())
+	# The Grove entrance and the frontier fork are shared by all three trail networks.
+	# Reroll those two clearings as well so the first and last familiar approaches change.
+	while next.layout_id == previous.get("world_layout_id", 0) or (
+			next.clearing(&"flooded_grove") == old_pads.get(&"flooded_grove", -1)
+			or next.clearing(&"last_lantern_frontier") == old_pads.get(&"last_lantern_frontier", -1)):
+		next = JOURNEY_LAYOUT.generate(randi())
 	if JourneyCheckpoint.write({}):
 		_checkpoint.clear()
 	else:
 		_notify("The new journey could not replace the last checkpoint")
-	_open_frontier(randi())
+	_build_journey(next)
 	_enter_journey()
 
 func _continue_journey() -> void:
-	_open_frontier(int(_checkpoint.get("journey_seed", LEGACY_JOURNEY_SEED)))
+	_build_journey(JOURNEY_LAYOUT.restore(_checkpoint))
 	if not _checkpoint.is_empty():
 		_restore_checkpoint()
 	_enter_journey()
@@ -209,22 +228,33 @@ func _add_runtime(node: Node) -> void:
 	node.process_mode = Node.PROCESS_MODE_PAUSABLE
 	add_child(node)
 
-func _build_sites() -> void:
-	grove = CinderSite.new()
-	grove.name = "FloodedGroveSite"
-	grove.wet = true
-	var center := Vector3(0, 0.73, 0)
-	grove.configure(GROVE, center,
-		PackedVector3Array([Vector3(-3.45, 0.75, -1.5), Vector3(2.6, 0.75, -3.05),
-			Vector3(3.6, 0.75, 1.4), Vector3(-2, 0.75, 3.45)]),
-		[PackedVector3Array([Vector3(-13, 0, -9), Vector3(-10, 0, -4), Vector3(-7, 0, -2),
-			Vector3(-4, 0.66, 0), center]),
-		PackedVector3Array([Vector3(14, 0, -9), Vector3(11, 0, -4), Vector3(7, 0, 1),
-			Vector3(4, 0.66, 0), center])], Vector3(10, 12.3, 19.7), Vector3(0, 0.42, -1))
+func _build_journey(selected: JOURNEY_LAYOUT) -> void:
+	layout = selected
+	get_tree().set_meta(&"last_valley", layout.checkpoint_fields())
+	if grove_terrain != null:
+		grove_terrain.free()
+	grove_terrain = CinderGrove.new()
+	grove_terrain.randomized_layout = layout.version > 0
+	grove_terrain.clearing_variant = layout.clearing(&"flooded_grove")
+	_add_runtime(grove_terrain)
+	grove = grove_terrain.build_grove_site()
 	_add_runtime(grove)
 	sites.append(grove)
+	bell_road = BELL_ROAD.new()
+	bell_road.name = "DrownedBellRoad"
+	grove_terrain.add_child(bell_road)
+	bell_road.configure(layout.journey_seed, bell_road.to_local(grove.anchor.global_position))
+	bell_road.toll_requested.connect(soundscape.toll_bell)
+	bell_road.raised.connect(grove_terrain.release_herons)
 	var quarry := QUARRY_REGION.new()
 	var relay := RELAY_REGION.new()
+	quarry.layout_id = layout.layout_id
+	quarry.randomized_layout = layout.version > 0
+	quarry.clearing_variant = layout.clearing(&"broken_quarry")
+	relay.layout_id = layout.layout_id
+	relay.randomized_layout = layout.version > 0
+	relay.clearing_variant = layout.clearing(&"fallen_relay")
+	districts.assign([grove_terrain, quarry, relay])
 	_add_runtime(quarry)
 	_add_runtime(relay)
 	sites.append(quarry.site)
@@ -235,35 +265,45 @@ func _build_sites() -> void:
 	summit.build(beacon)
 	summit.cleared_crown.connect(_guardian_fell)
 	summit.sighted.connect(_guardian_sighting)
-	for point in quarry.caches + relay.caches:
-		_add_cache(point, 20)
-	_waymark("Broken Quarry", Vector3(-4.1, 0.71, 2.25), Vector3.LEFT)
-	_waymark("Fallen Relay", Vector3(1.38, 0.71, -4.28), Vector3.FORWARD)
-	_waymark("Hilltop Beacon", Vector3(15.4, 4.80, -56.3) + CinderDistricts.offset("relay"), Vector3(1, 0, -1))
+	_add_cache(Vector3(-6.1, 0.72, 9.0), 16, "grove_approach" if layout.version else "")
+	_add_district_caches("quarry", quarry.caches)
+	_add_district_caches("relay", relay.caches)
+	var grove_paths := grove_terrain.map_paths()
+	var destinations := ["Pilgrims’ Cross", "Broken Quarry", "Fallen Relay"]
+	for index in grove_paths.size():
+		var trail := grove_paths[index]
+		var exit := trail[-2]
+		var direction := exit.direction_to(trail[-3])
+		_waymark(destinations[index], exit + direction.cross(Vector3.UP) * 1.12, direction)
+	_waymark("Hilltop Beacon", relay.to_global(Vector3(15.4, 4.80, -56.3)), Vector3(1, 0, -1))
 	outer_valley = OUTER_VALLEY.instantiate() as CinderOuterValley
+	outer_valley.layout_id = layout.layout_id
+	outer_valley.clearing_variants = layout.clearings
 	_add_runtime(outer_valley)
 	sites.append_array(outer_valley.get_sites())
 	for index in outer_valley.caches.size():
 		_add_cache(outer_valley.caches[index], 14, outer_valley.cache_ids[index])
-	_waymark("Pilgrims’ Cross", Vector3(-2.5, 0.72, 19.3), Vector3.BACK)
 	landmarks = CinderCampLandmarks.new()
 	_add_runtime(landmarks)
 	landmarks.revealed_cache.connect(_reveal_mirror_cache)
 	landmarks.configure(grove_terrain, quarry, relay, outer_valley)
 
-func _open_frontier(journey_seed: int) -> void:
-	if frontier != null:
-		return
 	frontier = FRONTIER.new()
-	frontier.journey_seed = journey_seed
+	frontier.journey_seed = layout.journey_seed
+	frontier.randomized_layout = layout.version > 0
+	frontier.clearing_variant = layout.clearing(&"last_lantern_frontier")
 	_add_runtime(frontier)
 	sites.append(frontier.site)
-	outer_valley.seed_life(journey_seed)
+	outer_valley.seed_life(layout.journey_seed)
 	trail_packs = TRAIL_PACKS.new()
 	_add_runtime(trail_packs)
-	trail_packs.configure(journey_seed, outer_valley, frontier, battle)
-	if hud != null:
-		hud.bind(self)
+	trail_packs.configure(layout.journey_seed, outer_valley, frontier, battle)
+	hud.bind(self)
+
+func _add_district_caches(district: String, points: PackedVector3Array) -> void:
+	for index in points.size():
+		var stable_id := "%s_supply_%d" % [district, index]
+		_add_cache(points[index], 20, stable_id if layout.version else "")
 
 func _reveal_mirror_cache(point: Vector3) -> void:
 	if not _claimed_caches.has(MIRROR_CACHE_ID):
@@ -283,6 +323,8 @@ func _physics_process(delta: float) -> void:
 		return
 	if trail_packs != null:
 		trail_packs.observe(delta, player.global_position, mode == Mode.EXPLORE or mode == Mode.TRANSIT)
+	if mode == Mode.EXPLORE or mode == Mode.TRANSIT:
+		bell_road.listen(player.global_position)
 	summit.watch(core.restoration, player.global_position, active_site, camera, delta)
 	_notice_time = maxf(0.0, _notice_time - delta)
 	_journey_seconds += delta
@@ -324,11 +366,26 @@ func _update_hud_clock(delta: float) -> void:
 		_hud_clock = 0
 		_render_hud()
 
+## Catch releases even when the pointer has crossed onto the HUD since pressing.
+func _input(event: InputEvent) -> void:
+	if melee == null or not player.move_enabled or _map_open:
+		return
+	if event.is_action_released("melee"):
+		melee.release(&"keyboard", _sword_direction(get_viewport().get_mouse_position()))
+	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and not event.pressed:
+		melee.release(&"mouse", _sword_direction(event.position))
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_APPLICATION_FOCUS_OUT and is_instance_valid(melee):
+		melee.cancel()
+
 func _unhandled_input(event: InputEvent) -> void:
 	if _front_active or _settings_open:
 		return
 	if event.is_action_pressed("map") and not _paused and mode != Mode.WIN and mode != Mode.LOSE:
 		_map_open = not _map_open
+		if _map_open:
+			melee.cancel()
 		get_tree().paused = _map_open
 		_render_hud()
 		return
@@ -349,7 +406,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	if _direct_launch() and event.is_action_pressed("restart") and (mode == Mode.WIN or mode == Mode.LOSE or _paused):
 		restart()
 		return
-	if _paused or mode == Mode.WIN or mode == Mode.LOSE:
+	if _paused or _map_open or mode == Mode.WIN or mode == Mode.LOSE:
 		return
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		director.orbit(event.relative)
@@ -358,16 +415,19 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("start_wave"):
 		start_wave()
 	if mode == Mode.PREPARE or mode == Mode.DEFEND:
+		var previous_selection := _selected
 		if event.is_action_pressed("module_bolt"):
 			_selected = 0 if _selected != 0 else -1
 		if event.is_action_pressed("module_slow"):
 			_selected = 1 if _selected != 1 else -1
 		if event.is_action_pressed("module_mortar"):
 			_selected = 2 if _selected != 2 else -1
+		if _selected >= 0 and _selected != previous_selection:
+			melee.cancel()
 		if event.is_action_pressed("upgrade") and battle != null:
 			battle.upgrade(_hovered)
 	if event.is_action_pressed("melee"):
-		swing(get_viewport().get_mouse_position())
+		swing(get_viewport().get_mouse_position(), &"keyboard")
 	if event is InputEventMouseButton and event.pressed:
 		_handle_click(event)
 
@@ -381,7 +441,7 @@ func _handle_click(event: InputEventMouseButton) -> void:
 			_selected = -1
 		return
 	if event.button_index == MOUSE_BUTTON_LEFT:
-		swing(event.position)
+		swing(event.position, &"mouse")
 	elif event.button_index == MOUSE_BUTTON_RIGHT:
 		var origin := player.global_position + Vector3.UP * 1.13
 		var direction := -camera.global_basis.z
@@ -396,18 +456,24 @@ func _handle_click(event: InputEventMouseButton) -> void:
 		if battle.attack(origin, direction.normalized()):
 			player.visual.gesture(&"fire")
 
-## Swing the sunsteel blade toward the camera's facing, or toward the pointer in defense.
-func swing(pointer: Vector2) -> bool:
-	if melee == null or not player.move_enabled:
+## Without a nearby target, exploration swings use the camera and defense uses the pointer.
+func swing(pointer: Vector2, source: StringName = &"") -> bool:
+	if melee == null or not player.move_enabled or _map_open:
 		return false
+	var direction := _sword_direction(pointer)
+	return melee.request(direction) if source.is_empty() else melee.press(direction, source)
+
+func _sword_direction(pointer: Vector2) -> Vector3:
 	var direction := -camera.global_basis.z
 	if mode == Mode.PREPARE or mode == Mode.DEFEND:
 		var pointed := _pointer_ground(pointer)
 		if pointed != Vector3.INF:
 			direction = pointed - player.global_position
-	return melee.request(direction)
+	return direction
 
 func _melee_sound(index: int, hits: int) -> void:
+	if index == CinderMelee.ATTACKS.SPIN:
+		return
 	soundscape.cue("slam" if index == 2 else "slash")
 	if hits > 0:
 		soundscape.cue("impact")
@@ -533,6 +599,8 @@ func _extract(delta: float) -> void:
 	core.receive_site_energy(active_site, draw, director.reduced_motion)
 	if draw > 0.0:
 		soundscape.hear_extraction()
+		if active_site == grove:
+			bell_road.apply_reserve(grove.remaining_energy, grove.spec.energy, true, director.reduced_motion)
 	if core.restoration >= 100.0 or active_site.remaining_energy <= 0.0:
 		battle.hold()
 		mode = Mode.PREPARE if mode != Mode.PACK else Mode.PACK
@@ -581,6 +649,8 @@ func _cancel_pack() -> void:
 func _sync_controls() -> void:
 	var traveling := mode == Mode.EXPLORE or mode == Mode.TRANSIT
 	player.move_enabled = not _front_active and not _paused and (traveling or mode == Mode.PREPARE or mode == Mode.DEFEND)
+	if not player.move_enabled and melee:
+		melee.cancel()
 	player.tactical = not traveling
 	if _capture_mouse:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED if traveling and not _paused and not _front_active else Input.MOUSE_MODE_VISIBLE
@@ -693,11 +763,12 @@ func _store_checkpoint(safe_position: Vector3) -> void:
 		"guardian_cleared": summit.cleared, "guardian_sighted": summit.halfway_seen,
 		"shortcuts": outer_valley.unlocked_shortcut_ids(),
 		"landmarks": landmarks.checkpoint_progress(),
-		"journey_seed": frontier.journey_seed, "frontier_version": CinderFrontier.LAYOUT_VERSION,
+		"frontier_version": CinderFrontier.LAYOUT_VERSION,
 		"frontier_discoveries": frontier.claimed_discoveries(),
 		"frontier_revealed": frontier.revealed_discoveries(),
 		"trail_packs": trail_packs.progress(),
 	}
+	state.merge(layout.checkpoint_fields())
 	if state != _checkpoint and JourneyCheckpoint.write(state):
 		_checkpoint = state
 
@@ -725,6 +796,7 @@ func _restore_checkpoint() -> void:
 		var record: Dictionary = records.get(site.checkpoint_id, {})
 		site.remaining_energy = clampf(record.get("reserve", site.spec.energy), 0.0, site.spec.energy)
 		site.threat = maxi(0, record.get("threat", 0))
+	bell_road.apply_reserve(grove.remaining_energy, grove.spec.energy, false)
 	summit.cleared = bool(_checkpoint.get("guardian_cleared", false))
 	summit.halfway_seen = bool(_checkpoint.get("guardian_sighted", false))
 	_claimed_caches = _checkpoint.get("claimed", PackedStringArray())
@@ -790,7 +862,7 @@ func _hint(nearest: CinderSite) -> String:
 	return ""
 
 func _render_hud() -> void:
-	if hud == null:
+	if hud == null or layout == null:
 		return
 	var local_site := active_site if active_site != null else _near_site()
 	hud.render({

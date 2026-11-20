@@ -27,7 +27,7 @@ func configure(grove: CinderGrove, quarry: CinderQuarry, relay: CinderRelay,
 	_quarry = quarry
 	_relay = relay
 	_outer = outer
-	_positions[GROVE] = PackedVector3Array([CinderGrove.BELL_POSITION])
+	_positions[GROVE] = PackedVector3Array([grove.world_landmark()])
 	_positions[QUARRY] = PackedVector3Array([quarry.world_landmark()])
 	_positions[RELAY] = PackedVector3Array([relay.world_landmark()])
 	for area in [LANTERNWOOD, AQUEDUCT, SUNWATCH]:
@@ -119,7 +119,7 @@ func hint(point: Vector3, aim: Vector3, site: CinderSite,
 			LANTERNWOOD: action = "E   Flash the lantern"
 			AQUEDUCT: action = "E   Open the sluice"
 			SUNWATCH: action = "E   Sweep the survey beam"
-	_prompt.position = handle + Vector3.UP * 1.85
+	_prompt.global_position = handle + Vector3.UP * 1.85
 	_prompt.text = action
 	_prompt.show()
 	return action

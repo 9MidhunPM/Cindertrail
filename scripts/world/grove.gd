@@ -3,6 +3,7 @@ extends Node3D
 ## Hand-laid Flooded Grove. Geometry is baked once into static vertex-coloured batches.
 ## All points on the causeways and in the flooded lanes belong to the same physics space.
 
+const GROVE_SPEC := preload("res://data/sites/grove.tres")
 const ARCH = preload("res://art/models/ruin_arch.glb")
 const PILLAR = preload("res://art/models/ruin_pillar.glb")
 const WATER = preload("res://art/materials/grove/shallows.gdshader")
@@ -18,6 +19,15 @@ const SHADE = Color("#849298")
 const MOSS = Color("#687e51")
 const REED = Color("#597f58")
 const BARK = Color("#534840")
+
+var randomized_layout := false
+var clearing_variant := 0
+
+# The north arcade and southern bell crossing have different sight lines across
+# the water. Both use the same district entrances and physical bell mechanism.
+var _clearing := Vector2.ZERO
+var _entrances: Array = []
+var _ford_routes: Array[PackedVector3Array] = []
 
 var rng := RandomNumberGenerator.new()
 var ground := StaticBody3D.new()
@@ -36,13 +46,16 @@ func _ready() -> void:
 	add_child(ground)
 	_box_floor(Vector3(0,-0.25,0),Vector3(49,.5,49))
 	_pool()
+	_plan_clearing()
 	_island()
-	_walk([Vector2(-1,25),Vector2(-3.4,16),Vector2(-2.6,10),Vector2(.2,4.5)], 3.45)
-	_walk([Vector2(-24.5,1),Vector2(-15,1),Vector2(-9,2),Vector2(-4.4,1)], 2.9)
-	_walk([Vector2(0,-25),Vector2(0,-19),Vector2(2,-12.5),Vector2(.5,-4.4)], 3.1)
-	# Wading lines climb out of the pool via broad submerged limestone ramps.
-	_wade(Vector2(-12,-5),Vector2(-4,-.2))
-	_wade(Vector2(12,-4),Vector2(4,.6))
+	for i in _entrances.size():
+		_walk(_entrances[i], [3.45, 2.9, 3.1][i])
+	if randomized_layout:
+		for route in _ford_routes:
+			_wade(Vector2(route[1].x, route[1].z), Vector2(route[3].x, route[3].z))
+	else:
+		_wade(Vector2(-12,-5),Vector2(-4,-.2))
+		_wade(Vector2(12,-4),Vector2(4,.6))
 	_architecture()
 	_shore()
 	_plantings()
@@ -54,6 +67,81 @@ func _ready() -> void:
 	_finish_mesh()
 	_wildlife = WILDLIFE.new()
 	add_child(_wildlife)
+
+func _plan_clearing() -> void:
+	if randomized_layout:
+		_clearing = Vector2(.8, -4.15) if clearing_variant == 0 else Vector2(.6, 5.4)
+	_entrances = [
+		[Vector2(-1,25), Vector2(-3.4,16), Vector2(-2.6,10), _clearing + Vector2(.2,4.5)],
+		[Vector2(-24.5,1), Vector2(-15,1), Vector2(-9,2), _clearing + Vector2(-4.4,1)],
+		[Vector2(0,-25), Vector2(0,-19), Vector2(2,-12.5), _clearing + Vector2(.5,-4.4)],
+	]
+	var center := _pad()
+	if not randomized_layout:
+		_ford_routes = [
+			PackedVector3Array([Vector3(-13,0,-9), Vector3(-10,0,-4), Vector3(-7,0,-2), Vector3(-4,.66,0), center]),
+			PackedVector3Array([Vector3(14,0,-9), Vector3(11,0,-4), Vector3(7,0,1), Vector3(4,.66,0), center]),
+		]
+		return
+
+	var west := Vector3(-13,0,-.6) if clearing_variant == 0 else Vector3(-14,0,6.7)
+	var east := Vector3(15,0,-4.5) if clearing_variant == 0 else Vector3(16,0,10.4)
+	var west_toe := Vector3(-10.5,0,-2.1) if clearing_variant == 0 else Vector3(-9.8,0,4.2)
+	var east_toe := Vector3(12.0,0,-1.4) if clearing_variant == 0 else Vector3(13.3,0,8.4)
+	for entry in [[west, west_toe, Vector3(-4.3,-.05,-.2)], [east, east_toe, Vector3(4.3,-.05,.2)]]:
+		var toe: Vector3 = entry[1]
+		var landing: Vector3 = center + entry[2]
+		var slope := toe.lerp(landing, .5)
+		slope.y = .45
+		_ford_routes.append(PackedVector3Array([entry[0], toe, slope, landing, center]))
+
+func _pad() -> Vector3:
+	return Vector3(_clearing.x, .73, _clearing.y)
+
+func world_landmark() -> Vector3:
+	return to_global(BELL_POSITION + Vector3(_clearing.x, 0, _clearing.y))
+
+## A submerged ruin and the two dry causeway stones its sunken road connects.
+## These belong to the optional crossing, independently of the defense bell.
+func bell_road_sockets() -> Dictionary:
+	if randomized_layout and clearing_variant == 1:
+		return {
+			"ruin": to_global(Vector3(-5.6, .06, -5.65)),
+			"start": to_global(Vector3(-11.4, .68, 1.6)),
+			"end": to_global(Vector3(1.34, .68, -14.65)),
+		}
+	return {
+		"ruin": to_global(Vector3(-6.75, .06, 5.85)),
+		"start": to_global(Vector3(-2.6, .68, 10)),
+		"end": to_global(Vector3(-10.8, .68, 1.7)),
+	}
+
+func map_paths() -> Array[PackedVector3Array]:
+	var routes: Array[PackedVector3Array] = []
+	for path in _entrances:
+		var road := PackedVector3Array()
+		for point: Vector2 in path:
+			road.append(to_global(Vector3(point.x, .68, point.y)))
+		road.append(to_global(_pad()))
+		routes.append(road)
+	return routes
+
+func build_grove_site() -> CinderSite:
+	var site := CinderSite.new()
+	site.name = "FloodedGroveSite"
+	site.wet = true
+	var offset := Vector3(_clearing.x, 0.0, _clearing.y)
+	var sockets := PackedVector3Array([Vector3(-3.45,.75,-1.5), Vector3(2.6,.75,-3.05),
+		Vector3(3.6,.75,1.4), Vector3(-2,.75,3.45)])
+	for i in sockets.size():
+		sockets[i] = to_global(sockets[i] + offset)
+	var routes: Array[PackedVector3Array] = []
+	for path in _ford_routes:
+		routes.append(global_transform * path)
+	site.configure(GROVE_SPEC, to_global(_pad()), sockets, routes,
+		to_global(Vector3(10,12.3,19.7) + offset), to_global(Vector3(0,.42,-1) + offset))
+	site.habitat_frame = global_transform.translated_local(Vector3(0, .73, 0))
+	return site
 
 func release_herons() -> void:
 	_wildlife.lift_flock()
@@ -108,12 +196,13 @@ func _exposed_roots() -> void:
 			_rock(at, Vector3(.25, .085, .24), MOSS.darkened(.07), 6)
 
 func _bell_shrine() -> void:
-	var base := Vector2(BELL_POSITION.x, BELL_POSITION.z)
+	var handle := BELL_POSITION + Vector3(_clearing.x, 0, _clearing.y)
+	var base := Vector2(handle.x, handle.z)
 	_disc(base, .56, .69, .81, SHADE, 9)
 	_disc(base, .49, .79, .89, CREAM, 9)
-	var crown := BELL_POSITION + Vector3.UP * 1.65
+	var crown := handle + Vector3.UP * 1.65
 	for hand in [-1.0, 1.0]:
-		var toe := BELL_POSITION + Vector3.RIGHT * float(hand) * .47
+		var toe := handle + Vector3.RIGHT * float(hand) * .47
 		var joint := crown + Vector3.RIGHT * float(hand) * .34
 		_limb(toe, joint, .076, .06, BARK, 5)
 		_limb(toe + Vector3.BACK * .29, joint, .066, .055, BARK, 5)
@@ -167,7 +256,7 @@ func _bell_shrine() -> void:
 	shimmer.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	shimmer.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	_bell_wave.mesh = wave
-	_bell_wave.position = BELL_POSITION + Vector3.UP * .06
+	_bell_wave.position = handle + Vector3.UP * .06
 	_bell_wave.material_override = shimmer
 	_bell_wave.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(_bell_wave)
@@ -214,14 +303,14 @@ func _island() -> void:
 	var edge := PackedVector2Array()
 	for i in 28:
 		var a := i*TAU/28
-		edge.append(Vector2(cos(a),sin(a))*rng.randf_range(5.38,5.65))
+		edge.append(_clearing + Vector2(cos(a),sin(a))*rng.randf_range(5.38,5.65))
 	_slab(edge,-.18,.61,SHADE)
 	var cylinder := CylinderShape3D.new()
 	cylinder.radius = 5.46
 	cylinder.height = .72
 	var collision := CollisionShape3D.new()
 	collision.shape = cylinder
-	collision.position.y = .34
+	collision.position = Vector3(_clearing.x, .34, _clearing.y)
 	ground.add_child(collision)
 	# Broad segments laid around the old ritual disk, with narrow joints and lichen.
 	for row in 4:
@@ -233,22 +322,22 @@ func _island() -> void:
 			var b := a+TAU/count
 			var poly := PackedVector2Array()
 			for sample in [[inner+.015,a+.006],[outer-.012,a+.006],[outer-.012,(a+b)*.5],[outer-.012,b-.006],[inner+.015,b-.006],[inner+.015,(a+b)*.5]]:
-				poly.append(Vector2(cos(sample[1]),sin(sample[1]))*float(sample[0]))
+				poly.append(_clearing + Vector2(cos(sample[1]),sin(sample[1]))*float(sample[0]))
 			_slab(poly,.58,.695+rng.randf_range(-.015,.012),_stone())
-	_disc(Vector2.ZERO,.93,.60,.71,LIGHT,18)
+	_disc(_clearing,.93,.60,.71,LIGHT,18)
 	for i in 12:
 		var a := TAU*i/12
 		var rad := Vector2(cos(a),sin(a))
 		var tangent := Vector2(-rad.y,rad.x)
-		_slab(PackedVector2Array([rad*.62-tangent*.052,rad*.89,rad*.62+tangent*.052]),.712,.717,Color("#8c7555"))
+		_slab(PackedVector2Array([_clearing+rad*.62-tangent*.052,_clearing+rad*.89,_clearing+rad*.62+tangent*.052]),.712,.717,Color("#8c7555"))
 	for i in 54:
 		var a := TAU*rng.randf()
-		var p := Vector2(cos(a),sin(a))*rng.randf_range(4.88,5.39)
+		var p := _clearing + Vector2(cos(a),sin(a))*rng.randf_range(4.88,5.39)
 		_litter(p,.716)
 	for i in 42:
 		var a := rng.randf()*TAU
-		var pos := Vector2(cos(a),sin(a))*rng.randf_range(5.37,5.85)
-		if abs(pos.x)<2.4 or abs(pos.y)<1.8: continue
+		var pos := _clearing + Vector2(cos(a),sin(a))*rng.randf_range(5.37,5.85)
+		if abs(pos.x-_clearing.x)<2.4 or abs(pos.y-_clearing.y)<1.8: continue
 		_rock(Vector3(pos.x,.12,pos.y),Vector3(.42,.33,.53)*rng.randf_range(.6,1.6),SHADE)
 		if i%2==0: _grass(pos,.3,7)
 
@@ -379,6 +468,10 @@ func _shore() -> void:
 		var x := -5.32+i*.44
 		_rock(Vector3(x,.37,9.),Vector3(.42,.29,.44),CREAM)
 		_box_floor(Vector3(x,.30,9.),Vector3(.72,.62,.69))
+	if randomized_layout:
+		# The southern approach turns with the shrine. Connect its fixed bend
+		# to the cache stones across the gap left by the shallower turn.
+		_walk([Vector2(-5.35, 9), Vector2(-4.08, 9), Vector2(-2.6, 10)], 1.25)
 	for cluster in [[-17.5,10.2,5.1,2.6],[-18.6,-12.0,5.4,2.9],[20.,8.2,6.,3.4],[16.5,-18.0,5.,2.2],[8.,-22.,4.,2.3],[-9.,-21.,4.8,2.1]]:
 		var x := float(cluster[0])
 		var z := float(cluster[1])
@@ -476,7 +569,7 @@ func _water_garden() -> void:
 	_cascade(Vector2(-9.38,7.0),2.14,1.02,.81)
 	# High beside the return trail, one bronze brazier marks the ruins at dusk.
 	# The amber ceremonial paving catches a warmer bounce than the shaded banks.
-	for pool in [Vector3(-2.7,3.2,9.5),Vector3(.48,3.8,-.34)]:
+	for pool in [Vector3(-2.7,3.2,9.5),Vector3(.48 + _clearing.x,3.8,-.34 + _clearing.y)]:
 		var bounce:=OmniLight3D.new()
 		bounce.position=pool
 		bounce.light_color=Color("#ffca86")

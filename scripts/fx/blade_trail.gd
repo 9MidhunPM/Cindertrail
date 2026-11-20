@@ -9,6 +9,7 @@ const MAX_SECTIONS := 22
 var source: TravelerVisual
 var _samples: Array[Dictionary] = []
 var _strip := ImmediateMesh.new()
+var _sampling := false
 
 func _ready() -> void:
 	mesh = _strip
@@ -24,11 +25,16 @@ func _process(delta: float) -> void:
 		sample.age += delta
 	while not _samples.is_empty() and _samples[0].age > LIFETIME:
 		_samples.pop_front()
-	if source != null and source.attacking():
+	var active := source != null and source.trailing()
+	if active:
+		if not _sampling:
+			_samples.clear()
 		var blade := source.blade_segment()
-		_samples.append({"base": blade[0], "tip": blade[1], "age": 0.0})
-		if _samples.size() > MAX_SECTIONS:
-			_samples.pop_front()
+		if _samples.is_empty() or blade[1].distance_squared_to(_samples[-1].tip) > 0.000004:
+			_samples.append({"base": blade[0], "tip": blade[1], "age": 0.0})
+			if _samples.size() > MAX_SECTIONS:
+				_samples.pop_front()
+	_sampling = active
 	_strip.clear_surfaces()
 	if _samples.size() < 2:
 		return

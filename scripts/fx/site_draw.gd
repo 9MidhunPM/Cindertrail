@@ -1,6 +1,6 @@
 extends MeshInstance3D
 
-## Offsets from the deployment anchor. Each pair traces a feature to the place
+## Offsets from the authored habitat frame. Each pair traces a feature to the place
 ## where its current breaks free of the ground, cable, branch or glass.
 const STREAMS := {
 	&"flooded_grove": [Color("#5de6d1"),
@@ -61,7 +61,7 @@ func receive(site: CinderSite, focus: Vector3, amount: float, reduced_motion: bo
 		return
 	if _site_id != site.checkpoint_id:
 		_site_id = site.checkpoint_id
-		global_position = site.anchor.global_position
+		global_transform = site.habitat_frame
 		_build(to_local(focus))
 	if not visible:
 		_clock = 0.0
@@ -99,7 +99,7 @@ func _build(focus: Vector3) -> void:
 	for i in 3:
 		var source: Vector3 = theme[1+i*2]
 		var bend: Vector3 = theme[2+i*2]
-		var toward := Vector3(-source.x, 0, -source.z).normalized()
+		var toward := (focus - source).slide(Vector3.UP).normalized()
 		var across := toward.cross(Vector3.UP)
 		var is_mirror := _site_id == &"sunwatch_observatory"
 		# Follow the feature first, then spiral around the brass ring which

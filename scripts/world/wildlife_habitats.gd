@@ -21,38 +21,49 @@ func _populate() -> void:
 		return
 	_seed = _world.frontier.journey_seed
 	for site: CinderSite in _world.sites:
-		var p := site.anchor.global_position
+		var habitat: Transform3D = site.habitat_frame
 		match site.checkpoint_id:
 			&"flooded_grove":
+				# The southern clearing occupies the old swimming channel.
+				var inlet := Vector3.ZERO
+				var grove: CinderGrove = _world.grove_terrain
+				if grove.randomized_layout and grove.clearing_variant == 1:
+					inlet = Vector3(2.0, 0.0, 6.0)
 				for i in 5:
-					var offset := Vector3((i % 3) * .47, (i % 2) * .019, (i / 3) * .74)
-					_place(S.FISH, p + Vector3(1.1, -.64, 10.9) + offset, p + Vector3(4.2, -.70, 9.5) + offset)
-				_place(S.FROG, p + Vector3(.70, -.47, 13.6), p + Vector3(1.2, -.70, 11.4))
-				_place(S.FROG, p + Vector3(-5.8, -.47, 11.3), p + Vector3(-7.3, -.66, 10.6))
+					var offset := inlet + Vector3((i % 3) * .47, (i % 2) * .019, (i / 3) * .74)
+					_place(S.FISH, habitat * (Vector3(1.1, -.64, 10.9) + offset), habitat * (Vector3(4.2, -.70, 9.5) + offset))
+				_place(S.FROG, habitat * Vector3(.70, -.47, 13.6), habitat * Vector3(1.2, -.70, 11.4))
+				_place(S.FROG, habitat * Vector3(-5.8, -.47, 11.3), habitat * Vector3(-7.3, -.66, 10.6))
 			&"broken_quarry":
-				_place(S.PIKA, p + Vector3(4.1, .02, 2.75), p + Vector3(6.0, .05, 3.7))
-				_place(S.PIKA, p + Vector3(-3.8, .04, -3.0), p + Vector3(-5.4, .21, -4.7))
+				_place(S.PIKA, habitat * Vector3(4.1, .02, 2.75), habitat * Vector3(6.0, .05, 3.7))
+				_place(S.PIKA, habitat * Vector3(-3.8, .04, -3.0), habitat * Vector3(-5.4, .21, -4.7))
 				# These raised benches are decorative rock, above the traversable floor.
-				_place(S.GOAT, p + Vector3(-7.55, 2.09, -7.34), p + Vector3(-5.55, 2.23, -7.62), true)
-				_place(S.GOAT, p + Vector3(-.02, 3.54, -7.56), p + Vector3(1.88, 3.35, -7.64), true)
+				_place(S.GOAT, habitat * Vector3(-7.55, 2.09, -7.34), habitat * Vector3(-5.55, 2.23, -7.62), true)
+				_place(S.GOAT, habitat * Vector3(-.02, 3.54, -7.56), habitat * Vector3(1.88, 3.35, -7.64), true)
 			&"lanternwood":
 				for i in 3:
 					var offset := Vector3(i * 1.25, 0, i * .75)
-					_place(S.DEER, p + Vector3(-6.5, .1, 5.9) + offset, p + Vector3(-12.8, 0, 8.5) + offset)
+					_place(S.DEER, habitat * (Vector3(-6.5, .1, 5.9) + offset), habitat * (Vector3(-12.8, 0, 8.5) + offset))
 			&"sunken_aqueduct":
-				_place(S.OTTER, p + Vector3(-9.7, -.51, -5.0), p + Vector3(-12, -.7, -5.2))
-				_place(S.OTTER, p + Vector3(-11.3, -.49, -5.13), p + Vector3(-8.2, -.70, -5.45))
+				_place(S.OTTER, habitat * Vector3(-9.7, -.51, -5.0), habitat * Vector3(-12, -.7, -5.2))
+				_place(S.OTTER, habitat * Vector3(-11.3, -.49, -5.13), habitat * Vector3(-8.2, -.70, -5.45))
 			&"sunwatch_observatory", &"fallen_relay":
-				_place(S.KITE, p + Vector3(-3, 7, -3), p + Vector3(-13, 12, -8))
+				_place(S.KITE, habitat * Vector3(-3, 7, -3), habitat * Vector3(-13, 12, -8))
 			&"last_lantern_frontier":
 				# The two pillars beside Last Lantern have different authored heights.
-				_place(S.OWL, p + Vector3(-5.5, 2.78, 3.3), p + Vector3(5.8, 3.24, 3.6))
+				_place(S.OWL, habitat * Vector3(-5.5, 2.78, 3.3), habitat * Vector3(5.8, 3.24, 3.6))
 	for road_name in ["High orchard", "Masons’ walk"]:
 		var valley: CinderOuterValley = _world.outer_valley
-		var road: PackedVector3Array = valley.roads[valley.road_names.find(road_name)]
-		var tangent := road[2].direction_to(road[3])
+		var road_index := valley.road_names.find(road_name)
+		if road_index < 0:
+			continue
+		var road := valley.roads[road_index]
+		if road.size() < 2:
+			continue
+		var segment := mini(2, road.size() - 2)
+		var tangent := road[segment].direction_to(road[segment + 1])
 		var verge := tangent.cross(Vector3.UP).normalized()
-		var point := road[2].lerp(road[3], .53) + verge * 2.2
+		var point := road[segment].lerp(road[segment + 1], .53) + verge * 2.2
 		_place(S.DEER if road_name == "High orchard" else S.PIKA, point, point + verge * 4.8 + tangent)
 	_populate_bell_fish()
 

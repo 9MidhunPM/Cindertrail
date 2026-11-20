@@ -154,20 +154,21 @@ func island(at: Vector3, radius: float, sides: int, color: Color) -> void:
 	_shelf(at - Vector3.UP * 5.2,
 		Vector3(radius * 1.55, 4.8, radius * 1.55), color.darkened(.39))
 
-func camp(at: Vector3) -> void:
-	_asset(ARCH, at + Vector3(0, 0, 6.5), 2.15, 0.0, 105.0)
-	_asset(PILLAR, at + Vector3(-5.5, 0, 3.3), 1.12, -.25, 80.0)
-	_asset(PILLAR, at + Vector3(5.8, 0, 3.6), 1.30, .10, 80.0)
+func camp(clearing: Transform3D) -> void:
+	var yaw := clearing.basis.get_euler().y
+	_asset(ARCH, clearing * Vector3(0, 0, 6.5), 2.15, yaw, 105.0)
+	_asset(PILLAR, clearing * Vector3(-5.5, 0, 3.3), 1.12, yaw - .25, 80.0)
+	_asset(PILLAR, clearing * Vector3(5.8, 0, 3.6), 1.30, yaw + .10, 80.0)
 	for side in [-1.0, 1.0]:
-		_road_lantern(at + Vector3(side * 4.6, 0, 4.8), true)
-		var shelf := at + Vector3(side * 12.0, -5.65, 10)
+		_road_lantern(clearing * Vector3(side * 4.6, 0, 4.8), true)
+		var shelf := clearing * Vector3(side * 12.0, -5.65, 10)
 		_shelf(shelf, Vector3(8.0, 7.5, 11.5), Color("#476660"))
-		_asset(COPPER_TREE, shelf + Vector3.UP * 8.5, 1.9, -side * .9, 100.0)
+		_asset(COPPER_TREE, shelf + Vector3.UP * 8.5, 1.9, yaw - side * .9, 100.0)
 	for index in 18:
 		var angle := TAU * index / 18.0
 		var rim := Vector3(cos(angle), 0, sin(angle))
-		var brand := at + rim * 6.2 + Vector3.UP * .016
-		_queue(_slab_mesh, brand, Vector3(.16, .021, .83), -angle + PI * .5, Color("#78634b"))
+		var brand := clearing * (rim * 6.2 + Vector3.UP * .016)
+		_queue(_slab_mesh, brand, Vector3(.16, .021, .83), yaw - angle + PI * .5, Color("#78634b"))
 
 func spillway(left: Vector3, right: Vector3) -> void:
 	var origin := (left + right) * .5

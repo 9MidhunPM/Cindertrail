@@ -564,7 +564,7 @@ func _show_overlay(mode: String, paused: bool, settings_open: bool, checkpoint_a
 func _pause_text(checkpoint_hint: String) -> String:
 	var lines := [
 		"WASD move  ·  Shift sprint  ·  Ctrl walk  ·  Mouse look",
-		"LMB or F  sword combo (3 hits)  ·  RMB  sun spark",
+		"LMB or F  tap for cuts, hold and release to spin  ·  RMB  sun spark",
 		"E  interact  ·  M  map  ·  Hold R  pack the shrine",
 		"Defense:  1 / 2 / 3 choose a tower  ·  click a socket  ·  U upgrade  ·  Space start wave",
 	]
@@ -592,7 +592,7 @@ func _control_hints(mode: String, selected: int) -> String:
 				keys += "\nEsc   cancel building"
 			return keys
 		"Explore", "Transit":
-			return "WASD   move\nShift   sprint\nLMB / F   sword\nRMB   sun spark\nE   interact\nM   map    Esc   pause"
+			return "WASD   move\nShift   sprint\nLMB / F   tap cut, hold spin\nRMB   sun spark\nE   interact\nM   map    Esc   pause"
 		_:
 			return ""
 

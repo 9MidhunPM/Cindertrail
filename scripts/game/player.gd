@@ -8,6 +8,9 @@ var visual: TravelerVisual
 var recovery_point: Vector3
 ## Seconds of committed swing: steering is reduced and the facing is held.
 var attack_hold := 0.0
+var _aim_target: CinderEnemy
+var _aim_heading := 0.0
+var _windup_left := 0.0
 ## Short forward burst from a swing, decaying each physics step.
 var lunge := Vector3.ZERO
 
@@ -24,6 +27,28 @@ func _ready() -> void:
 	collider.position.y = 0.83
 	add_child(collider)
 
+func commit_swing(target: CinderEnemy, fallback: Vector3, windup: float, duration: float) -> void:
+	_aim_target = target
+	_aim_heading = atan2(-fallback.x, -fallback.z)
+	_windup_left = windup
+	attack_hold = duration
+
+func clear_swing() -> void:
+	_aim_target = null
+	_windup_left = 0.0
+	attack_hold = 0.0
+	lunge = Vector3.ZERO
+
+func _turn_into_swing(delta: float) -> void:
+	if _windup_left <= 0.0:
+		return
+	if is_instance_valid(_aim_target) and not _aim_target.fading:
+		var offset := (_aim_target.global_position - global_position).slide(Vector3.UP)
+		if offset.length_squared() > 0.0025:
+			_aim_heading = atan2(-offset.x, -offset.z)
+	visual.rotation.y = lerp_angle(visual.rotation.y, _aim_heading, minf(delta / _windup_left, 1.0))
+	_windup_left = maxf(0.0, _windup_left - delta)
+
 func _physics_process(delta: float) -> void:
 	if camera == null:
 		return
@@ -39,6 +64,7 @@ func _physics_process(delta: float) -> void:
 	if Input.is_action_pressed("walk"):
 		speed = 2.05
 	if attack_hold > 0.0:
+		_turn_into_swing(delta)
 		attack_hold = maxf(0.0, attack_hold - delta)
 		speed *= 0.28
 	velocity.x = move_toward(velocity.x, direction.x * speed, delta * 31.0)

@@ -1,8 +1,7 @@
 class_name CinderOuterValley
 extends Node3D
 
-const LAND := preload("res://art/outer_valley/outer_land.glb")
-const TRAILS := preload("res://data/outer_valley/trails.json")
+const CLEARINGS := preload("res://scripts/world/outer_shrine_clearings.gd")
 const LANDMARKS := preload("res://data/outer_valley/landmarks.json")
 const PIGMENT := preload("res://art/outer_valley/valley_pigment.gdshader")
 const POOL := preload("res://art/materials/grove/shallows.gdshader")
@@ -14,6 +13,8 @@ const SITE_DATA := {
 	"sunken_aqueduct": preload("res://data/sites/sunken_aqueduct.tres"),
 	"sunwatch": preload("res://data/sites/sunwatch.tres"),
 }
+## The original map named camp junctions by compass direction. These IDs now
+## follow their camp when a layout places it in a different sector.
 const DESTINATIONS := {
 	"quarry": "Broken Quarry", "grove": "Flooded Grove", "relay": "Fallen Relay",
 	"west": "Lanternwood", "south": "Sunken Aqueduct", "east": "Sunwatch Observatory",
@@ -23,6 +24,9 @@ const DESTINATIONS := {
 	"quarry_gate": "Broken Quarry", "relay_gate": "Fallen Relay",
 }
 
+var layout_id := 0
+var clearing_variants: Dictionary = {}
+var _graph: Dictionary
 var sites: Array[CinderSite] = []
 var roads: Array[PackedVector3Array] = []
 var road_names := PackedStringArray()
@@ -35,7 +39,9 @@ var _camp_detail := DETAIL.new()
 
 func _ready() -> void:
 	name = "OuterValley"
-	var land := LAND.instantiate()
+	_graph = CinderDistricts.graph(layout_id)
+	var land_scene := load(CinderDistricts.landscape_path(layout_id)) as PackedScene
+	var land := land_scene.instantiate()
 	add_child(land)
 	var pigment := ShaderMaterial.new()
 	pigment.shader = PIGMENT
@@ -61,8 +67,8 @@ func _ready() -> void:
 			piece.material_override = bark
 		elif not str(piece.name).begins_with("Lantern"):
 			piece.material_override = pigment
-	for key: String in TRAILS.data.nodes:
-		junctions[key] = _point(TRAILS.data.nodes[key])
+	for key: String in _graph.nodes:
+		junctions[key] = _point(_graph.nodes[key])
 	var wood: Vector3 = junctions.west
 	var sluice: Vector3 = junctions.south
 	var summit: Vector3 = junctions.east
@@ -72,7 +78,7 @@ func _ready() -> void:
 		summit + Vector3(-5.5, 0, 5), summit + Vector3(5.5, 0, 5)])
 	add_child(_camp_detail)
 	_camp_detail.setup(_landmarks, junctions)
-	for trail: Array in TRAILS.data.trails:
+	for trail: Array in _graph.trails:
 		var route := PackedVector3Array([junctions[trail[1]]])
 		for coord: Array in trail[2]:
 			route.append(_point(coord))
@@ -99,6 +105,9 @@ func _ready() -> void:
 		_winches.append(winch)
 
 func _create_camp(definition: Dictionary) -> void:
+	var spec: CinderSiteSpec = SITE_DATA[definition.resource]
+	var variant := int(clearing_variants.get(spec.id, 0))
+	definition = CLEARINGS.resolve(definition, variant, layout_id > 0)
 	var origin: Vector3 = junctions[definition.node]
 	var sockets := PackedVector3Array()
 	for offset: Array in definition.sockets:
@@ -112,8 +121,11 @@ func _create_camp(definition: Dictionary) -> void:
 	var site := CinderSite.new()
 	site.name = definition.resource.to_pascal_case() + "Site"
 	add_child(site)
-	site.configure(SITE_DATA[definition.resource], origin + Vector3.UP * .05, sockets, lanes,
+	site.configure(spec, origin + _point(definition.get("anchor", [0, .05, 0])), sockets, lanes,
 		origin + _point(definition.eye), origin + _point(definition.target))
+	site.habitat_frame.origin = origin + Vector3.UP * .05
+	if layout_id > 0:
+		site.mark_clearing()
 	sites.append(site)
 
 func _sign(origin: Vector3, next: Vector3, label: String) -> void:
@@ -201,7 +213,7 @@ func route_between_nodes(start_id: String, end_id: String) -> PackedVector3Array
 		if here == end_id:
 			break
 		for i in roads.size():
-			var record: Array = TRAILS.data.trails[i]
+			var record: Array = _graph.trails[i]
 			if here != record[1] and here != record[3]:
 				continue
 			if not _road_is_open(record[0]):

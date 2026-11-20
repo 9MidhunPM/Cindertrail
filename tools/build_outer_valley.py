@@ -7,6 +7,7 @@ winch bridges share their dimensions with the GDScript loader.
 """
 from __future__ import annotations
 
+import argparse
 import json
 import math
 import random
@@ -18,7 +19,12 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA = ROOT / "data/outer_valley"
-TRAILS = json.loads((DATA / "trails.json").read_text())
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("--layout", type=int, default=0, choices=range(4),
+                    help="0 recreates the original valley. Layouts 1–3 bake the journey variants.")
+layout_id = parser.parse_args().layout if __name__ == "__main__" else 0
+graph_name = f"layout_{layout_id}.json" if layout_id else "trails.json"
+TRAILS = json.loads((DATA / graph_name).read_text())
 MARKS = json.loads((DATA / "landmarks.json").read_text())
 NODES = {k: np.array(v, float) for k, v in TRAILS["nodes"].items()}
 ROADS = {name: np.array([NODES[a], *pts, NODES[b]]) for name, a, pts, b in TRAILS["trails"]}
@@ -676,11 +682,15 @@ def gltf():
     scene["buffers"].append({"byteLength":len(blob)})
     js=json.dumps(scene,separators=(",",":")).encode()
     js+=b' '*(-len(js)%4)
-    out=ROOT/"art/outer_valley/outer_land.glb"
-    with out.open("wb") as f:
+    filename = f"outer_land_{layout_id}.glb" if layout_id else "outer_land.glb"
+    out = ROOT / "art/outer_valley" / filename
+    # The editor can watch this directory during a bake. Publish only complete GLBs.
+    staged = out.with_suffix(".tmp")
+    with staged.open("wb") as f:
         f.write(struct.pack("<4sII",b"glTF",2,28+len(js)+len(blob)))
         f.write(struct.pack("<I4s",len(js),b"JSON")+js)
         f.write(struct.pack("<I4s",len(blob),b"BIN\x00")+blob)
+    staged.replace(out)
     print(f"{out.name}: {len(chunks)} culled sections, {sum(len(v[1]) for v in chunks.values()):,} triangles, {out.stat().st_size//1024:,} KiB.")
 
 if __name__=="__main__":

@@ -15,6 +15,7 @@ const ATTACKS := preload("res://scripts/hero/traveler_attacks.gd")
 const SHEATHE_DELAY := 3.2
 
 @onready var carry_anchor: Node3D = $CarryAnchor
+@onready var _rig: Node3D = $Traveler
 @onready var _pelvis := _joint("Pelvis")
 @onready var _body := _joint("UpperBody")
 @onready var _head := _joint("Hood")
@@ -51,6 +52,7 @@ var _ember: StandardMaterial3D
 var drawn := false
 var _attack := -1
 var _attack_age := 0.0
+var _charge := 0.0
 var _struck := false
 var _attack_weight := 0.0
 var _guard_weight := 0.0
@@ -118,9 +120,39 @@ func attack(index: int) -> bool:
 	_attack_age = 0.0
 	_struck = false
 	_idle_armed = 0.0
-	if _action == &"sheathe":
-		_age = _duration
+	_charge = 0.0
+	_interrupt_sheathe()
 	return true
+
+func _interrupt_sheathe() -> void:
+	if _action == &"sheathe":
+		_action = &""
+		_age = _duration
+
+func set_charge(amount: float) -> void:
+	_charge = clampf(amount, 0.0, 1.0)
+	if _charge > 0.0:
+		_idle_armed = 0.0
+		_interrupt_sheathe()
+		if not drawn:
+			_set_drawn(true)
+
+func cancel_attack() -> void:
+	_attack = -1
+	_charge = 0.0
+	_attack_age = 0.0
+	_rig.rotation.y = 0.0
+	_attack_weight = 0.0
+	_hop = 0.0
+
+func attack_age() -> float:
+	return _attack_age
+
+func trailing() -> bool:
+	if _attack < 0:
+		return false
+	var window: Vector2 = ATTACKS.TRAIL_WINDOWS[_attack]
+	return _attack_age >= window.x and _attack_age <= window.y
 
 func attacking() -> bool:
 	return _attack >= 0
@@ -187,6 +219,7 @@ func animate(delta: float, speed: float, tactical: bool) -> void:
 	_last_heading = rotation.y
 	_turn = lerpf(_turn, clampf(yaw_rate * 0.13, -1.0, 1.0), blend)
 	_update_gesture(delta)
+	var pose := _advance_attack(delta)
 
 	var decel := clampf((_prior_speed - speed) / maxf(delta, 0.001) / 22.0, 0.0, 1.0)
 	_brake = lerpf(_brake, decel, 1.0 - exp(-delta * (16.0 if decel > _brake else 5.2)))
@@ -205,7 +238,7 @@ func animate(delta: float, speed: float, tactical: bool) -> void:
 	var breath := sin(_time * 1.85)
 	var y := _rest_y - 0.053 - _guard * 0.031 - _crouch - _brake * 0.047
 	y += (-0.061 + rise * lerpf(0.036, 0.084, run)) * _stride + breath * 0.004
-	_pelvis.position.y = y
+	_pelvis.position.y = y - float(pose.get("crouch", 0.0)) * _attack_weight
 
 	_body.rotation = Vector3(
 		-0.025 - _stride * (0.075 + run * 0.13) - _crouch * 1.6 + _brake * 0.15 + _recoil + _flinch * 0.5,
@@ -235,9 +268,16 @@ func animate(delta: float, speed: float, tactical: bool) -> void:
 	var coat_target := Vector3(-0.032 - _stride * (0.08 + run * 0.13),
 		swing * 0.085 - _turn * 0.13, -sin(angle - 0.3) * _stride * 0.054 - _turn * 0.12)
 	_coat.rotation = _coat.rotation.lerp(coat_target, 1.0 - exp(-9.0 * delta))
-	_combat(delta, run)
+	_pelvis.position.y += _hop
+	_combat(delta, run, pose)
 	_grip_shrine()
+	if _attack == 2:
+		var support := smoothstep(0.03, 0.13, _attack_age) * (1.0 - smoothstep(0.48, 0.70, _attack_age))
+		_reach_hand(0, _weapon.global_position + _weapon.global_basis.z * 0.052, support)
 	_secondary(delta)
+	if _attack >= 0 and not _struck and _attack_age >= ATTACKS.impact(_attack):
+		_struck = true
+		strike.emit(_attack)
 
 ## Follow the moving shrine with both wrists while the frame stays in reach.
 ## The shoulder and elbow aim solve has no authority over the shrine's motion.
@@ -247,23 +287,27 @@ func _grip_shrine() -> void:
 	var progress := _age / _duration
 	var grip := smoothstep(0.0, 0.16, progress) * (1.0 - smoothstep(0.62, 0.94, progress))
 	for i in 2:
-		var arm := _arms[i]
-		var elbow := _elbows[i]
-		var hand := _hands[i]
 		var side := -1.0 if i == 0 else 1.0
 		var target := _grip_target.global_position + global_basis * Vector3(side * 0.12, 0.085, 0.0)
-		var offset := target - arm.global_position
-		var length_a := elbow.position.length()
-		var length_b := hand.position.length()
-		var distance := clampf(offset.length(), 0.07, length_a + length_b - 0.001)
-		var direction := offset.normalized()
-		if direction.is_zero_approx():
-			continue
-		var pole := (global_basis * Vector3(side, -0.52, 0.12)).slide(direction).normalized()
-		var along := (length_a * length_a - length_b * length_b + distance * distance) / (2.0 * distance)
-		var elbow_target := arm.global_position + direction * along + pole * sqrt(maxf(0, length_a * length_a - along * along))
-		_aim_link(arm, elbow, elbow_target, grip)
-		_aim_link(elbow, hand, target, grip)
+		_reach_hand(i, target, grip)
+
+func _reach_hand(i: int, target: Vector3, weight: float) -> void:
+	var arm := _arms[i]
+	var elbow := _elbows[i]
+	var hand := _hands[i]
+	var offset := target - arm.global_position
+	var length_a := elbow.position.length()
+	var length_b := hand.position.length()
+	var distance := clampf(offset.length(), 0.07, length_a + length_b - 0.001)
+	var direction := offset.normalized()
+	if direction.is_zero_approx():
+		return
+	var side := -1.0 if i == 0 else 1.0
+	var pole := (global_basis * Vector3(side, -0.52, 0.12)).slide(direction).normalized()
+	var along := (length_a * length_a - length_b * length_b + distance * distance) / (2.0 * distance)
+	var elbow_target := arm.global_position + direction * along + pole * sqrt(maxf(0, length_a * length_a - along * along))
+	_aim_link(arm, elbow, elbow_target, weight)
+	_aim_link(elbow, hand, target, weight)
 
 func _aim_link(joint: Node3D, end: Node3D, target: Vector3, weight: float) -> void:
 	var inverse := joint.global_basis.orthonormalized().inverse()
@@ -284,40 +328,42 @@ func _secondary(delta: float) -> void:
 		var panel := Vector3(clampf(thigh * 0.62 - _body.rotation.x * 0.25, -0.12, 0.95), 0.0, side * 0.02)
 		_skirts[i].rotation = _skirts[i].rotation.lerp(panel, follow)
 
-func _combat(delta: float, run: float) -> void:
+func _advance_attack(delta: float) -> Dictionary:
 	var pose: Dictionary = {}
 	if _attack >= 0:
 		_attack_age += delta
 		var length: float = ATTACKS.length(_attack)
-		if not _struck and _attack_age >= ATTACKS.impact(_attack):
-			_struck = true
-			strike.emit(_attack)
 		if _attack_age >= length:
 			_attack = -1
 		else:
 			pose = ATTACKS.sample(_attack, _attack_age)
-	var target_weight := 0.0 if pose.is_empty() else 1.0
+	var target_weight := 1.0 if _attack >= 0 else _charge
+	if _attack < 0 and _charge > 0.0:
+		pose = ATTACKS.WIND_UP
 	_attack_weight = move_toward(_attack_weight, target_weight, delta * (14.0 if target_weight > 0.0 else 6.0))
+	_rig.rotation.y = TAU * ATTACKS.SPIN_TURN_SIGN * ATTACKS.spin_progress(_attack_age) if _attack == ATTACKS.SPIN else 0.0
+	_hop = float(pose.get("hop", 0.0)) * _attack_weight
+	_pelvis.rotation.y = lerpf(_pelvis.rotation.y, float(pose.get("hips", 0.0)) * _attack_weight, 1.0 - exp(-24.0 * delta))
+	return pose
+
+func _combat(delta: float, run: float, pose: Dictionary) -> void:
 	_guard_weight = lerpf(_guard_weight, float(drawn and _attack < 0) * (1.0 - run * 0.7), 1.0 - exp(-8.0 * delta))
-	if drawn and _attack < 0:
+	if drawn and _attack < 0 and _charge <= 0.0:
 		_idle_armed += delta
 		if _idle_armed > SHEATHE_DELAY and _action != &"sheathe":
 			gesture(&"sheathe")
 	if _ember:
 		var heat := 1.4 + 5.0 * _attack_weight + (0.0 if pose.is_empty() else float(pose.get("heat", 0.0)) * 6.0)
+		if _charge >= 1.0:
+			heat += 2.4 + 1.6 * sin(_time * TAU * 2.0)
 		_ember.emission_energy_multiplier = lerpf(_ember.emission_energy_multiplier, heat, 1.0 - exp(-20.0 * delta))
 	if pose.is_empty():
 		pose = ATTACKS.guard(run)
 	var w := maxf(_attack_weight, _guard_weight)
 	if w <= 0.001:
 		_hands[1].rotation = _hands[1].rotation.lerp(Vector3.ZERO, 1.0 - exp(-10.0 * delta))
-		_hop = lerpf(_hop, 0.0, 1.0 - exp(-12.0 * delta))
 		return
 	var aw := _attack_weight
-	_pelvis.position.y += -float(pose.get("crouch", 0.0)) * aw
-	_hop = lerpf(_hop, float(pose.get("hop", 0.0)) * aw, 1.0 - exp(-30.0 * delta))
-	_pelvis.position.y += _hop
-	_pelvis.rotation.y = lerpf(_pelvis.rotation.y, float(pose.get("hips", 0.0)) * aw, 1.0 - exp(-24.0 * delta))
 	_body.rotation += (pose.get("body", Vector3.ZERO) as Vector3) * aw
 	_head.rotation += (pose.get("head", Vector3.ZERO) as Vector3) * aw
 	_arms[1].rotation = _arms[1].rotation.lerp(pose.get("arm_r", _arms[1].rotation), w)
@@ -332,8 +378,8 @@ func _combat(delta: float, run: float) -> void:
 func _aim_blade(direction: Vector3, weight: float) -> void:
 	var hand := _hands[1]
 	var parent_basis := (hand.get_parent() as Node3D).global_basis.orthonormalized()
-	var world_dir := (global_basis * direction).normalized()
-	var flat_side := global_basis.x if absf(world_dir.dot(global_basis.y)) > 0.9 else global_basis.y
+	var world_dir := (_rig.global_basis * direction).normalized()
+	var flat_side := _rig.global_basis.x if absf(world_dir.dot(global_basis.y)) > 0.9 else global_basis.y
 	var desired := Basis.looking_at(world_dir, flat_side)
 	var local := (parent_basis.inverse() * desired).get_rotation_quaternion()
 	var current := Quaternion.from_euler(hand.rotation)
@@ -363,6 +409,19 @@ func _place_foot(i: int, phase: float, run: float, stance: float, cycle_length: 
 	forward *= _stride
 	roll *= _stride
 	var side := -1.0 if i == 0 else 1.0
+	lift *= _stride
+	# Opposite lead feet sell the crossing cuts. The free leg tucks on the pivot.
+	if _attack == 0 or _attack == 1:
+		var beat := sin(PI * _attack_age / ATTACKS.length(_attack))
+		var lead := side if _attack == 1 else -side
+		forward += lead * 0.15 * beat
+		lift += maxf(lead, 0.0) * sin(PI * minf(1.0, _attack_age / ATTACKS.impact(_attack))) * 0.065
+	elif _attack == ATTACKS.SPIN:
+		var pivot := sin(PI * ATTACKS.spin_progress(_attack_age))
+		forward -= side * 0.16 * pivot
+		lift += maxf(side, 0.0) * pivot * 0.175
+	elif _attack == 2:
+		lift += _hop * (0.28 if i == 0 else 0.50)
 	var local_step := Vector3(side * 0.124, 0.0, -forward)
 	# Keep the support leg under the same patch of ground through a turn.
 	var planted := _stride > 0.35 and phase < stance and absf(_turn) > 0.14
@@ -379,7 +438,7 @@ func _place_foot(i: int, phase: float, run: float, stance: float, cycle_length: 
 	_sample_ground(i, local_step, delta)
 	roll += _slope_tilt[i] * (1.0 - 0.8 * smoothstep(0.0, 0.22, lift))
 	# The ankle rises as the heel rolls up, keeping the toe at floor level.
-	var ankle_y := 0.090 + lift * _stride + absf(sin(roll)) * (0.14 if roll < 0.0 else 0.065)
+	var ankle_y := 0.090 + lift + absf(sin(roll)) * (0.14 if roll < 0.0 else 0.065)
 	var drop := _pelvis.position.y - ankle_y - _ground_offset[i]
 	var distance := clampf(Vector2(forward, drop).length(), 0.12, THIGH_LENGTH + SHIN_LENGTH - 0.001)
 	var hip_cos := (THIGH_LENGTH ** 2 + distance ** 2 - SHIN_LENGTH ** 2) / (2.0 * THIGH_LENGTH * distance)

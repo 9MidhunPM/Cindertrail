@@ -23,6 +23,10 @@ const IRON := Color("#443e40")
 const COPPER := Color("#bc652a")
 
 var site: CinderSite
+var layout_id := 0
+var randomized_layout := false
+var clearing_variant := 0
+var _pad := GROUND
 var caches := PackedVector3Array([Vector3(-36.0, 0.91, 5.76)])
 const DROP_TIME := .42
 var landmark_position := Vector3(-59.6, 1.15, -2.35)
@@ -41,6 +45,10 @@ var _solid := StaticBody3D.new()
 var _surf := SurfaceTool.new()
 
 func _ready() -> void:
+	if randomized_layout:
+		# The short crane-side hold exposes the traveler to the mine entrance.
+		# The loading court gives a longer firing lane and a shorter retreat.
+		_pad = Vector3(-57.2, 1.15, 1.4) if clearing_variant == 0 else Vector3(-49.4, 1.15, -1.6)
 	_rng.seed = 41926
 	_solid.name = "StaticQuarryCollision"
 	add_child(_solid)
@@ -55,7 +63,7 @@ func _ready() -> void:
 	_loading_tracks()
 	_finish_geometry()
 	_configure_site()
-	_relocate(CinderDistricts.offset("quarry"))
+	_relocate(CinderDistricts.offset("quarry", layout_id))
 
 ## Geometry is authored around the old origin; move it out along the valley.
 func _relocate(shift: Vector3) -> void:
@@ -70,6 +78,12 @@ func world_landmark() -> Vector3:
 func world_impact() -> Vector3:
 	return impact_position + position
 
+func map_paths() -> Array[PackedVector3Array]:
+	var approach := PackedVector3Array(TRAIL)
+	approach.append(_pad)
+	return [global_transform * approach, global_transform * PackedVector3Array([
+		Vector3(-36, .92, 2), Vector3(-36, .92, 6.5)])]
+
 func _configure_site() -> void:
 	site = CinderSite.new()
 	site.name = "BrokenQuarrySite"
@@ -79,10 +93,20 @@ func _configure_site() -> void:
 	])
 	var lane := PackedVector3Array([
 		Vector3(-68, 1.15, -0.5), Vector3(-65, 1.15, 0.15),
-		Vector3(-61.0, 1.15, 0.15), Vector3(-57.5, 1.15, -0.6), GROUND,
+		Vector3(-61.0, 1.15, 0.15), Vector3(-57.5, 1.15, -0.6), _pad,
 	])
-	site.configure(DATA, GROUND, sockets, [lane],
-		Vector3(-64.0, 13.6, 16.8), Vector3(-55.6, 1.48, 0.0))
+	if randomized_layout:
+		if clearing_variant == 0:
+			lane[-2] = Vector3(-59.4, 1.15, .45)
+			sockets = PackedVector3Array([Vector3(-58, 1.18, -2.9), Vector3(-54.1, 1.18, -.8),
+				Vector3(-54.2, 1.18, 3.2), Vector3(-59.2, 1.18, 3.5)])
+		else:
+			sockets = PackedVector3Array([Vector3(-57.4, 1.18, 2.7), Vector3(-55.7, 1.18, -3.1),
+				Vector3(-50.4, 1.18, 2.6), Vector3(-48, 1.18, .9)])
+	var framing := (_pad - GROUND) * .40
+	site.configure(DATA, _pad, sockets, [lane],
+		Vector3(-64.0, 13.6, 16.8) + framing, Vector3(-55.6, 1.48, 0.0) + framing)
+	site.habitat_frame.origin = GROUND
 	add_child(site)
 
 func _build_trail() -> void:
@@ -163,7 +187,7 @@ func _build_court() -> void:
 	for step in range(28):
 		var a := TAU * step / 28.0
 		var b := TAU * (step + 1) / 28.0
-		var inset := GROUND + Vector3.UP * .017
+		var inset := _pad + Vector3.UP * .017
 		var p := Vector3(cos(a), 0, sin(a))
 		var q := Vector3(cos(b), 0, sin(b))
 		_quad(inset + p * (radius - .08), inset + p * radius,
@@ -172,7 +196,7 @@ func _build_court() -> void:
 		var a := TAU * step / 8.0
 		var p := Vector3(cos(a), 0, sin(a))
 		var side := p.cross(Vector3.UP) * .037
-		var base := GROUND + p * 1.13 + Vector3.UP * .019
+		var base := _pad + p * 1.13 + Vector3.UP * .019
 		_tri(base - side, base + side, base + p * .2, BRONZE, Vector3.UP)
 	_lantern(Vector3(-59.5, 1.15, 2.6))
 	_lantern(Vector3(-51.3, 1.15, -4.25))

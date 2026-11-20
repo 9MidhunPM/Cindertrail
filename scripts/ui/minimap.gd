@@ -21,7 +21,7 @@ var radius_m := 95.0
 var full := false
 var objective := Vector3.INF
 var _roads: Array[PackedVector3Array] = []
-var _lakes: Array[Rect2] = []
+var _lake_center := Vector3.INF
 var _bounds := Rect2()
 var _font: Font
 var _pulse := 0.0
@@ -42,7 +42,8 @@ func _ready() -> void:
 func bind(world: Node) -> void:
 	game = world
 	_roads.clear()
-	_lakes = [Rect2(-24.5, -24.5, 49, 49)]
+	var grove: CinderGrove = world.get("grove_terrain")
+	_lake_center = grove.global_position if grove != null else Vector3.INF
 	var outer = world.get("outer_valley")
 	if outer != null:
 		for road: PackedVector3Array in outer.roads:
@@ -117,9 +118,9 @@ func _draw_map() -> void:
 	# Land bands follow every trail so the walkable valley reads as a shape.
 	for road in _roads:
 		_polyline(road, center, scale_px, yaw, origin, LAND, maxf(26.0 * scale_px, 6.0), reach)
-	for lake in _lakes:
-		var middle := _to_map(Vector3(lake.get_center().x, 0, lake.get_center().y), center, scale_px, yaw, origin)
-		_canvas.draw_circle(middle, lake.size.x * 0.44 * scale_px, Color(WATER, 0.45))
+	if _lake_center != Vector3.INF:
+		var middle := _to_map(_lake_center, center, scale_px, yaw, origin)
+		_canvas.draw_circle(middle, 21.56 * scale_px, Color(WATER, 0.45))
 	for road in _roads:
 		_polyline(road, center, scale_px, yaw, origin, Color(TRAIL, 0.85), maxf(2.6 * scale_px, 1.6), reach)
 	# Caches, discoveries and the beacon.

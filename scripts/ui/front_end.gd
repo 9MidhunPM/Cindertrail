@@ -479,7 +479,7 @@ func _show_controls() -> void:
 	_back_button.text = "Back to title"
 	for entry in [
 		["W A S D", "Move"], ["Ctrl   ·   Shift", "Hold to walk  /  sprint"],
-		["Left click   ·   F", "Sunsteel sword: tap for a three-strike combo"],
+		["Left click   ·   F", "Tap for sword cuts. Hold until the blade glows, release to spin."],
 		["Right click   ·   M", "Sun spark at range  /  open the valley map"],
 		["E", "Unfold shrine, repair, open cache, deliver"],
 		["1   2   3   ·   Left click", "Select module  /  place on socket"],
