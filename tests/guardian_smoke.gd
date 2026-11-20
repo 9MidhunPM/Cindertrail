@@ -112,7 +112,26 @@ func _run() -> void:
 	game.player.global_position = game.beacon.global_position + Vector3(0, .15, 1.55)
 	game.interact()
 	await _frames(100)
-	_check(game.mode == game.Mode.WIN and game.atmosphere.sunrise and game.core.get_parent() == game.beacon
+	_check(game.mode == game.Mode.WIN and game.core.get_parent() == game.beacon
 		and game.core.form == SunCore.Form.DELIVERED and game.core.get_instance_id() == original,
-		"Delivery places the original sun in the cradle and starts sunrise")
+		"Delivery places the original sun in the cradle")
+	_check(game.finale.active and JourneyCheckpoint.read().get("guardian_cleared", false),
+		"Closing during the ending retains the guardian-cleared checkpoint")
+	await _frames(175)
+	_check(game.atmosphere.sunrise, "The first painted beat wakes daylight across the valley")
+	game._hud_action(&"title")
+	await scene_changed
+	game = current_scene
+	game._continue_journey()
+	await _frames(8)
+	_check(game.summit.cleared and game.core.form == SunCore.Form.CARRIED and game.core.restoration == 100.0,
+		"Continue after an interrupted ending returns to the cleared crown")
+	var restored_id: int = game.core.get_instance_id()
+	game.interact()
+	_check(game.mode == game.Mode.WIN and game.finale.active, "The resumed traveler delivers without repeating the guardian")
+	game.finale.skip()
+	_check(game.core.get_instance_id() == restored_id and game.core.get_parent() == game.beacon,
+		"Immediate skip places the resumed core in the cradle")
+	_check(JourneyCheckpoint.read().is_empty() and game.hud.visible,
+		"Skipping the ending settles dawn, clears the completed journey, and reveals the results")
 	quit(1 if failures else 0)

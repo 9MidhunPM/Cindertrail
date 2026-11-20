@@ -37,3 +37,21 @@ godot --headless --fixed-fps 60 --script tests/combat_smoke.gd
 XDG_DATA_HOME="$(mktemp -d)" CINDERTRAIL_TEST_SAVE=1 godot --headless --fixed-fps 60 \
     --script tests/journey_front_smoke.gd
 ```
+
+## Beacon ending
+
+The finale smoke check runs a full 26-second presentation on the real summit, then exercises reduced motion, keyboard skip and immediate skip from a carried sun. The guardian check writes its late-game fixture into an isolated save and verifies Continue after interrupting the film.
+
+```bash
+godot --headless --fixed-fps 60 --script tests/beacon_finale_smoke.gd
+XDG_DATA_HOME="$(mktemp -d)" CINDERTRAIL_TEST_SAVE=1 godot --headless --fixed-fps 60 \
+    --script tests/guardian_smoke.gd
+```
+
+To capture the ending with its stereo score, start Godot on a graphical display. The runner stages a guardian-cleared summit, records delivery through the live game and saves one screenshot per shot. Its `FILM_BEGIN_FRAME` output marks the first frame of the 26-second sequence in the recording.
+
+```bash
+mkdir -p evidence/beacon-finale
+godot --resolution 1280x720 --fixed-fps 24 --write-movie "$PWD/evidence/beacon-finale/sunrise.avi" \
+    --script tests/beacon_finale_smoke.gd -- --film="$PWD/evidence/beacon-finale"
+```

@@ -725,7 +725,8 @@ func _deliver(identity: int) -> bool:
         return false
     _check(game.core.get_instance_id() == identity and _core_count() == 1, "The same core is delivered")
     if use_window:
-        await _physics_frames(160)
+        game.finale.skip()
+        await _physics_frames(3)
         await _capture("beacon-sunrise.png")
     return true
 
@@ -926,7 +927,8 @@ func _dawn_frame() -> void:
     game.interact()
     if not await _wait_mode("Win", 80):
         return
-    await _physics_frames(320)
+    game.finale.skip()
+    await _physics_frames(3)
     _check(game.core.get_instance_id() == identity and game.core.get_parent() == beacon,
         "End frame shows the delivered core with its original identity")
     await _capture("beacon-sunrise.png")
