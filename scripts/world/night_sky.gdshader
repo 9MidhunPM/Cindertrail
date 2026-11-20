@@ -1,7 +1,9 @@
 shader_type sky;
 
 uniform float dawn : hint_range(0.0, 1.0) = 0.0;
-uniform vec3 night_low : source_color = vec3(0.11, 0.28, 0.46);
+uniform vec3 moon_direction;
+uniform vec3 sun_direction;
+uniform vec3 night_low : source_color = vec3(0.085, 0.202, 0.382);
 uniform vec3 night_high : source_color = vec3(0.018, 0.061, 0.17);
 uniform vec3 dawn_low : source_color = vec3(0.94, 0.51, 0.28);
 uniform vec3 dawn_high : source_color = vec3(0.19, 0.38, 0.63);
@@ -36,7 +38,6 @@ void sky() {
 	vec3 low = mix(night_low, dawn_low, dawn);
 	vec3 high = mix(night_high, dawn_high, dawn);
 	vec3 color = mix(low, high, smoothstep(0.0, 0.63, h));
-	vec3 moon_direction = normalize(vec3(0.49, 0.25, -0.91));
 	float moon = dot(EYEDIR, moon_direction);
 	float crescent = smoothstep(0.99969, 0.99977, moon);
 	crescent *= 1.0 - smoothstep(0.99971, 0.99979,
@@ -51,7 +52,6 @@ void sky() {
 		* (1.0 - smoothstep(0.16, 0.44, h));
 	vec3 cloud_light = mix(vec3(0.057, 0.123, 0.216), vec3(0.99, 0.47, 0.32), dawn);
 	color = mix(color, cloud_light, cloud * mix(0.25, 0.68, dawn));
-	vec3 sun_direction = normalize(vec3(-0.42, 0.185, -0.91));
 	float daylight = max(dot(EYEDIR, sun_direction), 0.0);
 	color += vec3(1.0, 0.45, 0.14) * dawn * (pow(daylight, 12.0) * 0.18 + smoothstep(0.998, 0.999, daylight) * 3.0);
 	// Infinite sky silhouettes preserve every playable terrain sightline.
