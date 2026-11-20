@@ -63,7 +63,11 @@ var _last_status := ""
 var _reward_panel: PanelContainer
 var _reward_icon: TextureRect
 var _reward_name: Label
+var _reward_effect: Label
 var _reward_detail: Label
+var _guide_panel: PanelContainer
+var _guide_text: Label
+var _guide_seconds := 0.0
 var _reward_seconds := 0.0
 var _vignette: ColorRect
 var _hurt := 0.0
@@ -244,6 +248,7 @@ func render(state: Dictionary) -> void:
 	_pack.visible = calm and mode == "Pack"
 	_toast_box.visible = calm and _reward_seconds <= 0.
 	_reward_panel.visible = calm and _reward_seconds > 0.
+	_guide_panel.visible = calm and _reward_seconds <= 0. and not _guide_text.text.is_empty()
 	_pack.value = clampf(float(state.get("pack_progress", 0.0)), 0.0, 1.0) * 100.0
 
 	var status := String(state.get("status", "")).strip_edges()
@@ -264,18 +269,35 @@ func toggle_gameplay_hud() -> void:
 	_gameplay_hidden = not _gameplay_hidden
 	render(_last_state)
 
-func announce_ability(title: String, icon: Texture2D, cap: int, first_achievement: bool) -> void:
+func announce_ability(title: String, icon: Texture2D, cap: int, first_achievement: bool, description := "") -> void:
 	_reward_icon.texture = icon
 	_reward_name.text = title
+	if description.is_empty():
+		for slot: Dictionary in _last_state.get("ability_slots", []):
+			if slot.get("name") == title:
+				description = str(slot.get("description", ""))
+				break
+	_reward_effect.text = description
+	_reward_effect.visible = not description.is_empty()
 	_reward_detail.text = "Defense rank limit %d" % cap
 	if first_achievement:
 		_reward_detail.text += "   ·   Achievement earned"
-	_reward_seconds = 4.
+	_reward_seconds = 6.0
+	_guide_panel.hide()
 	for child in _toast_box.get_children():
 		child.queue_free()
 	_toast_box.hide()
 	_reward_panel.modulate.a = 1.
 	_reward_panel.visible = overlay.visible
+
+## A persistent line stays until the guide replaces or clears it. A modal suspends reading time.
+func guide_line(text: String, persistent := false) -> void:
+	_guide_text.text = text.strip_edges()
+	_guide_seconds = -1.0 if persistent else clampf(2.5 + text.length() / 15.0, 4.5, 10.0)
+	_guide_panel.visible = overlay.visible and _reward_seconds <= 0.0 and not _guide_text.text.is_empty()
+
+func art_feedback(reason: String) -> void:
+	_art_dock.show_feedback(reason)
 
 func modal_open() -> bool:
 	return visible and _modal != &""
@@ -286,6 +308,11 @@ func _process(delta: float) -> void:
 		_reward_panel.modulate.a = clampf(_reward_seconds / .22, 0., 1.)
 		if _reward_seconds <= 0.:
 			_reward_panel.hide()
+	if _guide_seconds > 0.0 and _guide_panel.is_visible_in_tree():
+		_guide_seconds = maxf(0.0, _guide_seconds - delta)
+		if _guide_seconds == 0.0:
+			_guide_text.text = ""
+			_guide_panel.hide()
 	_hurt = maxf(0.0, _hurt - delta * 1.6)
 	_vignette.material.set_shader_parameter("strength", _hurt)
 	_vignette.visible = _hurt > 0.01 and overlay.visible
@@ -412,6 +439,20 @@ func _build_controls() -> void:
 	footer.add_theme_constant_override("separation", 8)
 	footer.alignment = BoxContainer.ALIGNMENT_END
 	_pin(footer, 0.5, 1.0, 0.0, -22.0)
+	_guide_panel = _panel(Vector2(14, 7), footer)
+	_guide_panel.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_guide_panel.accessibility_name = "Lantern"
+	var guide_style := _style(Color("#10232bee"), Color("#5f8789"), Vector2(14, 7), 3)
+	guide_style.border_width_left = 3
+	_guide_panel.add_theme_stylebox_override("panel", guide_style)
+	var guide_words := _vertical(_guide_panel, 1)
+	var speaker := _label("Lantern", &"Accent")
+	speaker.add_theme_color_override("font_color", TEAL)
+	guide_words.add_child(speaker)
+	_guide_text = _label("", &"Body")
+	_guide_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	guide_words.add_child(_guide_text)
+	_guide_panel.hide()
 	_prompt_panel = _panel(Vector2(14, 8), footer)
 	_prompt_panel.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	var prompt := _horizontal(_prompt_panel, 12)
@@ -476,6 +517,8 @@ func _size_panels() -> void:
 	_objective_panel.custom_minimum_size.x = available
 	_wave_panel.custom_minimum_size.x = available
 	_vitals_panel.custom_minimum_size.x = 171. if narrow else 205.
+	_guide_text.custom_minimum_size.x = clampf(width * .40, 220., 470.)
+	_reward_effect.custom_minimum_size.x = clampf(width * .33, 210., 385.)
 	for card in _module_cards:
 		card.custom_minimum_size = Vector2(133. if narrow else 161., 53.)
 	# On narrow targets the art settings sit above the tower rack.
@@ -500,6 +543,10 @@ func _build_toasts() -> void:
 	words.add_child(_label("Art recovered", &"Accent"))
 	_reward_name = _label("", &"Title")
 	words.add_child(_reward_name)
+	_reward_effect = _label("", &"Body")
+	_reward_effect.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	words.add_child(_reward_effect)
+	words.add_child(_label("Q  Cycle arts     ·     G  Cast equipped art", &"Accent"))
 	_reward_detail = _label("", &"Caption")
 	words.add_child(_reward_detail)
 	_reward_panel.hide()
