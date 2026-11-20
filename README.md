@@ -4,30 +4,32 @@ An open-world, portable-base tower-defense adventure. Explore a continuous 3D va
 
 ## Play
 
-Extract the [Linux x86_64 build](build/Cindertrail-linux-x86_64.tar.gz) and run `./Cindertrail.x86_64`. To run from source, open [project.godot](project.godot) in Godot 4.7.2 and press **F5**, or use the terminal commands below.
+Extract the Linux x86_64 build and run `./Cindertrail.x86_64`. To run from source, open [project.godot](project.godot) in Godot 4.7.2 and press **F5**, or use the terminal commands below.
 
 ```sh
 godot --headless --editor --path . --import
 godot --path .
 ```
 
-The native project uses Mobile rendering. The valley and its sites share one continuous 3D world. The run keeps the same core, site reserves, local threat and owned modules until restart.
+The title opens on the Flooded Grove. **New journey** starts the four-panel motion comic. **Continue journey** resumes at the last safe checkpoint. A checkpoint preserves your trail position, shrine health, restoration, scrap, modules, caches, unlocked shortcuts, remaining camp reserves and local threat. The game saves when you are carrying the shrine on safe ground after breaking pursuit.
+
+The six camps share one continuous 3D world and all use the same protected sun. Each camp has 25 points of restoration. Defend four camps to exhaustion or combine partial reserves from several camps, then bring the restored sun to the hilltop beacon.
 
 | Input | Action |
 | --- | --- |
-| **WASD**, mouse, **Shift** | Move, look and sprint |
-| **E** | Unfold at a pad, open a supply crate, repair near the deployed shrine, or deliver the restored sun |
+| **WASD**, mouse, **Shift**, **Ctrl** | Move, look, sprint and walk |
+| **E** | Unfold at a pad, open a supply crate or shortcut, repair near the deployed shrine, or deliver the restored sun |
 | **1 / 2 / 3**, left click | Select a module, then place it on an open socket |
 | **Space** | Start the attack and begin extracting restoration |
 | **U** | Upgrade the tower under the pointer |
 | Left click while traveling, right click in defense | Fire the traveler's ranged attack |
 | **Hold R** | Recall modules and fold the shrine near its pad |
-| **Esc**, **Enter** | Pause or resume, then restart from pause or the end screen |
+| **Esc**, **Enter** | Pause or resume. Enter activates the focused menu action |
 | **F10** | Toggle HUD visibility |
 
 Use the in-world markers to choose your next camp. Reach 100% restoration, then carry the sun to the hilltop beacon. Repairs use scrap and restore shrine health.
 
-See [playtest and visual evidence](evidence/README.md), [repeatable QA commands](tools/qa/README.md) and the original [visual fieldbook](OPEN_ME.html).
+See the [polish milestone report](docs/POLISH_VERIFICATION.md), [repeatable QA commands](tools/qa/README.md) and the original [visual fieldbook](OPEN_ME.html).
 
 ## Included
 

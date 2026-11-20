@@ -10,7 +10,7 @@ godot --script tools/qa/runtime.gd -- --case=grove --out="$PWD/evidence/grove"
 
 The capture runner loads the main game into a fixed 1920×1080 viewport. It walks the explorer along the causeway using the movement actions, deploys the core, holds the pack action and walks out again. It profiles quiet exploration before taking the first capture. The renderer, graphics device, resolution, draw calls and enemy count are written to the JSON report. Frame time measures elapsed wall time between rendered frames, including vsync where enabled.
 
-Use `--case=render-tour` to capture all four locations and profile a late Relay wave. The render tour preloads restoration and threat at Relay and full restoration at the beacon. The complete-route checks below earn all restoration through actual waves.
+Use `--case=render-tour` to capture the three original sites and sunrise, and profile a late Relay wave. Use `--case=outer-profile` for a sample while walking along the trail to Pilgrims' Cross. The render tour preloads restoration and threat at Relay and full restoration at the beacon. The complete-route checks below earn restoration through actual waves.
 
 To record the camera transition, use a fresh output directory, add `--fixed-fps 60` before Godot's `--` separator and append `--record-transition` after it. Encode the recorded frames at 30 fps.
 
@@ -22,10 +22,18 @@ python tools/qa/compare.py evidence/grove-baseline evidence/runtime evidence/gro
 ## Gameplay checks
 
 ```bash
-for test_case in relocation terrain defeat three-sites grove-relay; do
+for test_case in relocation terrain defeat campaign-combinations campaign-west campaign-south; do
     godot --headless --fixed-fps 60 --script tools/qa/runtime.gd -- \
         --case="$test_case" --out="$PWD/evidence/checks"
 done
 ```
 
-Headless checks exercise the production state machine, combat and physics. The runner sends movement and packing actions through Input. It calls the same gameplay APIs the controls use to activate interactions, purchases and waves. Both routes traverse the full distances at the same speeds as normal play. Use the windowed `--case=input` to repeat the camera orbit, Escape, deploy, tower placement and pack checks through the viewport's input path.
+Headless checks exercise the production state machine, combat and physics. The runner sends movement and packing actions through Input. It calls the same gameplay APIs the controls use to activate interactions, purchases and waves. Both routes traverse the full distances at the same speeds as normal play. The reported journey length measures game time during automated input. Use the windowed `--case=input` to repeat the camera orbit, Escape, deploy, tower placement and pack checks through the viewport's input path.
+
+```bash
+godot --headless --fixed-fps 60 --script tests/outer_valley_walk.gd
+godot --headless --fixed-fps 60 --script tests/traveler_motion.gd
+godot --headless --fixed-fps 60 --script tests/combat_smoke.gd
+XDG_DATA_HOME="$(mktemp -d)" CINDERTRAIL_TEST_SAVE=1 godot --headless --fixed-fps 60 \
+    --script tests/journey_front_smoke.gd
+```
