@@ -44,6 +44,7 @@ var _safe_time := 0.0
 var _safe_probe := 0.0
 var _safe_now := false
 var _deferred_restore := Vector3.INF
+var _restore_frame := 0
 var _input_after_frame := -1
 ## Seconds of committed swing: steering is reduced and the facing is held.
 var attack_hold := 0.0
@@ -175,9 +176,11 @@ func restore_position(saved: Vector3) -> void:
 	if not saved.is_finite():
 		saved = _footing.opening
 	_footing.history.clear()
-	if not _try_reposition(saved, saved):
-		# Freshly instantiated static bodies may join the physics space next tick.
-		_deferred_restore = saved
+	# Layouts rebuild and translate several districts in the same frame as
+	# Continue. The old broadphase may already contain a valid but unrelated
+	# trail anchor. Let one complete physics step publish the requested district.
+	_deferred_restore = saved
+	_restore_frame = Engine.get_physics_frames() + 2
 
 func _try_reposition(origin: Vector3, saved: Vector3 = Vector3.INF) -> bool:
 	var place := _footing.anchor_for(origin, saved)
@@ -226,7 +229,8 @@ func _physics_process(delta: float) -> void:
 	if camera == null:
 		return
 	if _deferred_restore.is_finite():
-		_try_reposition(_deferred_restore, _deferred_restore)
+		if Engine.get_physics_frames() < _restore_frame or not _try_reposition(_deferred_restore, _deferred_restore):
+			return
 	var direction := Vector3.ZERO
 	_stagger = maxf(0.0, _stagger - delta)
 	_dash_recovery = maxf(0.0, _dash_recovery - delta)

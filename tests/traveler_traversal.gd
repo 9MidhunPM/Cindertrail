@@ -136,6 +136,17 @@ func _run() -> void:
 	jumps = moves.count("jump")
 	await _ticks(3)
 	_check(jumps == moves.count("jump") and pawn.is_on_floor(), "A menu Space release cannot launch the traveler when movement returns")
+	# Simulate Continue moving a newly built district while another safe
+	# road is already registered. Its old transform must not win the lookup.
+	var terrace := _box(Vector3(22,4,-10),Vector3(4,.5,4))
+	await _ticks(2)
+	terrace.position = Vector3(30,10,-16)
+	var saved_terrace := terrace.position + Vector3(.30,.45,.55)
+	var prior_position := pawn.position
+	pawn.restore_position(saved_terrace)
+	_check(pawn.position == prior_position, "Continue waits before choosing among old and newly moved colliders")
+	await _ticks(5)
+	_check(pawn.position.distance_to(saved_terrace) < .26, "Continue uses the original terrace after its colliders synchronize")
 	var ramp := _box(Vector3(11,.4,0),Vector3(4,.5,8))
 	ramp.rotation.x = deg_to_rad(18.0)
 	await _ticks(4)
