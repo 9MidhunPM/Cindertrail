@@ -8,6 +8,8 @@ The 18 concept images were generated during the Cindertrail design conversation.
 
 The four opening comic panels were generated with the built-in OpenAI image tool for Cindertrail. The project keeps the cropped panels and art brief in `art/comic/`.
 
+The three finale paintings were generated for Cindertrail with the same built-in image tool. The beacon score was composed for the 26-second timeline and is reproducible from its Python source. [Finale art and prompts](art/comic/ending/README.md) · [Score source](tools/score_last_sunrise.py)
+
 The palette, Godot material/shader resources, procedural Blender builder, exported static starter meshes and documentation were prepared for this project. The models are editable starting points; no existing game's characters or source models are included.
 
 The living valley's surface masks and six painted workshop trims are original procedural artwork. The material source lists the maps, channels, and generation command. [Valley paint](art/textures/stylized/README.md)
