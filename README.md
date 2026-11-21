@@ -2,6 +2,25 @@
 
 An open-world, portable-base tower-defense adventure. Explore a continuous 3D valley from a free third-person camera, deploy the one sun shrine at a chosen site, defend from a fixed angled camera, then pack and relocate before the position becomes untenable.
 
+## Watch
+
+| Gameplay · full run | Intro film | Original concept trailer |
+| --- | --- | --- |
+| [![Gameplay highlights: exploration, shrine defense, Vesper, and sunrise](media/gameplay_contact_sheet.jpg)](media/Cindertrail_Gameplay.mp4) | [![Cindertrail intro film](media/screenshots/intro.webp)](CINDERTRAIL_The_Morning_That_Never_Came_720p.mp4) | [![Original concept trailer storyboard](media/trailer_contact_sheet.jpg)](media/CINDERTRAIL_Concept_Trailer.mp4) |
+| [Watch the 104-second gameplay capture with game audio](media/Cindertrail_Gameplay.mp4) | [Watch the 122-second intro film](CINDERTRAIL_The_Morning_That_Never_Came_720p.mp4) | [Watch the original 30-second trailer](media/CINDERTRAIL_Concept_Trailer.mp4) · [Trailer contact sheet](media/trailer_contact_sheet.jpg) |
+
+## Screenshots
+
+Captured from the playable Godot project. Open any image for its full-size view.
+
+| Exploration | Shrine defense |
+| --- | --- |
+| ![The traveler approaching the Flooded Grove shrine](media/screenshots/exploration.webp) | ![A live Flooded Grove defense with towers covering the lanes](media/screenshots/shrine-defense.webp) |
+
+| Vesper fight | Sunrise ending |
+| --- | --- |
+| ![The sun shrine and traveler during Vesper's exposed-chest phase](media/screenshots/vesper-fight.webp) | ![The restored sun delivered at the hilltop beacon](media/screenshots/sunrise.webp) |
+
 ## Play
 
 Open [project.godot](project.godot) in Godot 4.7.2 and press **F5**, or run these commands from the project directory.
