@@ -1,0 +1,13 @@
+.git
+.godot
+.env
+.env.*
+build
+evidence
+docs
+media
+tools
+tests
+art/textures/third_party
+*.mp4
+*.blend
