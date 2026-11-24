@@ -1,0 +1,268 @@
+#field-guide {
+  --guide-text: #f2e9d8;
+  --guide-gold: #e4ac5c;
+  --guide-line: #ffffff2b;
+  background: #0b1317;
+  color: var(--guide-text);
+  scroll-margin-top: 4.5rem;
+}
+
+.guide-inner {
+  width: min(89%, 1360px);
+  margin-inline: auto;
+  padding-block: clamp(52px, 4.8vw, 78px) clamp(64px, 7.8vw, 120px);
+  font-family: var(--sans, Arial, sans-serif);
+}
+
+.guide-heading-row,
+.guide-paging,
+.guide-inputs,
+.guide-inputs li,
+.guide-figure figcaption {
+  display: flex;
+  align-items: center;
+}
+
+.guide-credit { display: grid; gap: .14rem; }
+.guide-medium { color: #a6a9a4; font-size: .9em; text-transform: none; letter-spacing: .025em; }
+
+.guide-media-switch {
+  display: inline-flex;
+  flex-shrink: 0;
+  border: 1px solid var(--guide-line);
+  border-radius: 3px;
+}
+
+.guide-media-switch button {
+  padding: .43rem .65rem;
+  border: 0;
+  color: #c1c2b8;
+  background: transparent;
+  font: 500 .72rem/1.25 var(--sans, Arial, sans-serif);
+  cursor: pointer;
+}
+
+.guide-media-switch button + button { border-inline-start: 1px solid var(--guide-line); }
+.guide-media-switch button[aria-pressed=true] { color: var(--guide-gold); background: #e4ac5c12; }
+.guide-media-switch button:hover { color: var(--guide-text); }
+
+.guide-heading-row,
+.guide-figure figcaption {
+  justify-content: space-between;
+}
+
+.guide-heading-row h2,
+.guide-details h3 {
+  font-family: var(--serif, Georgia, serif);
+  font-weight: 500;
+  letter-spacing: -.045em;
+}
+
+.guide-heading-row h2 {
+  margin: 0;
+  font-size: clamp(3.3rem, 6.5vw, 6.6rem);
+  line-height: 1;
+}
+
+.guide-paging { gap: 8px; }
+
+.guide-count,
+.guide-figure figcaption,
+.guide-inputs kbd {
+  font: 500 .68rem/1.4 var(--mono, "IBM Plex Mono", monospace);
+}
+
+.guide-count {
+  margin-inline-end: 12px;
+  color: #c2bab0;
+  letter-spacing: .1em;
+}
+
+.guide-count span { color: var(--guide-gold); }
+
+.guide-arrow {
+  display: grid;
+  place-items: center;
+  width: 43px;
+  height: 43px;
+  padding: 0;
+  color: var(--guide-text);
+  border: 1px solid var(--guide-line);
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+  transition: color .2s, border-color .2s, background-color .2s;
+}
+
+.guide-arrow:hover {
+  color: var(--guide-gold);
+  border-color: var(--guide-gold);
+  background: #e4ac5c0b;
+}
+
+.guide-tabs {
+  display: flex;
+  gap: clamp(20px, 3.5vw, 64px);
+  margin-block: clamp(24px, 3.6vw, 56px) clamp(20px, 3vw, 46px);
+  border-bottom: 1px solid var(--guide-line);
+}
+
+.guide-tabs button {
+  position: relative;
+  padding: .7rem 0 .95rem;
+  font: 500 clamp(.8rem, 1.08vw, 1rem)/1.3 var(--sans, Arial, sans-serif);
+  color: #b5b5b0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.guide-tabs button[aria-selected=true],
+.guide-tabs button:hover {
+  color: var(--guide-text);
+}
+
+.guide-tabs button::after {
+  content: "";
+  position: absolute;
+  bottom: -1px;
+  inset-inline: 0;
+  height: 2px;
+  background: var(--guide-gold);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform .24s ease-out;
+}
+
+.guide-tabs button[aria-selected=true]::after { transform: scaleX(1); }
+
+#field-guide :focus-visible {
+  outline: 2px solid var(--guide-gold);
+  outline-offset: 4px;
+}
+
+.guide-chapter {
+  display: grid;
+  grid-template-columns: minmax(0, 1.58fr) minmax(0, 1fr);
+  gap: clamp(32px, 5.6vw, 92px);
+  align-items: center;
+}
+
+.guide-chapter[hidden] { display: none; }
+.guide-figure { min-width: 0; margin: 0; }
+
+.guide-picture {
+  overflow: hidden;
+  aspect-ratio: 16 / 9;
+  background: #142329;
+}
+
+.guide-picture img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
+.guide-figure figcaption {
+  gap: 1rem;
+  padding-top: .88rem;
+  color: #b9b6ac;
+  text-transform: uppercase;
+  letter-spacing: .11em;
+}
+
+.guide-details {
+  max-width: 29rem;
+  padding-bottom: 1.6rem;
+}
+
+.guide-details h3 {
+  margin: 0;
+  font-size: clamp(2.4rem, 4.1vw, 4.8rem);
+  line-height: .99;
+  text-wrap: balance;
+}
+
+.guide-details p {
+  margin: 1.1rem 0 1.55rem;
+  color: #c7c6be;
+  font-size: clamp(.97rem, 1.15vw, 1.13rem);
+  line-height: 1.65;
+}
+
+.guide-inputs {
+  list-style: none;
+  gap: .75rem 1.25rem;
+  flex-wrap: wrap;
+  margin: 0;
+  padding: 0;
+}
+
+.guide-inputs li {
+  gap: .46rem;
+  color: #d0c9bb;
+  font-size: .78rem;
+}
+
+.guide-inputs kbd {
+  min-width: 1.55rem;
+  padding: .15rem .36rem;
+  border: 1px solid #72716a;
+  border-radius: 3px;
+  color: var(--guide-text);
+  text-align: center;
+}
+
+.guide-announcement {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .guide-chapter:not([hidden]) .guide-picture img { animation: guide-landscape .55s cubic-bezier(.2,.65,.3,1) both; }
+  .guide-chapter:not([hidden]) .guide-details { animation: guide-caption .45s ease-out both; }
+  @keyframes guide-landscape {
+    from { opacity: .25; transform: scale(1.035); }
+    to { opacity: 1; transform: scale(1); }
+  }
+  @keyframes guide-caption {
+    from { opacity: .25; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @supports (animation-timeline: view()) {
+    .guide-heading-row, .guide-chapter:not([hidden]) .guide-figure {
+      animation: guide-enter linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 80%;
+    }
+    @keyframes guide-enter {
+      from { opacity: .65; transform: translateY(16px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .guide-arrow, .guide-tabs button::after { transition: none; }
+}
+
+@media (max-width: 760px) {
+  .guide-inner { width: 89%; }
+  .guide-chapter { grid-template-columns: 1fr; gap: 1.65rem; }
+  .guide-details { max-width: 36rem; padding: 0; }
+  .guide-details p { margin-block: .7rem 1rem; }
+  .guide-figure figcaption { padding-top: .6rem; font-size: .61rem; }
+}
+
+@media (max-width: 490px) {
+  .guide-arrow { width: 38px; height: 38px; }
+  .guide-count { display: none; }
+  .guide-tabs { gap: 0; justify-content: space-between; }
+  .guide-tabs button { font-size: .78rem; }
+}

@@ -11,3 +11,6 @@ tests
 art/textures/third_party
 *.mp4
 *.blend
+!showcase/**/*.mp4
+showcase/game/runtime
+showcase/game/.prepare.*

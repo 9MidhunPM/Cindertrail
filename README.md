@@ -2,6 +2,23 @@
 
 An open-world, portable-base tower-defense adventure. Explore a continuous 3D valley from a free third-person camera, deploy the one sun shrine at a chosen site, defend from a fixed angled camera, then pack and relocate before the position becomes untenable.
 
+## Browser showcase
+
+The [showcase](showcase/) opens on the valley’s original concept art. Choose a landscape, scroll through the field guide to compare illustrations with in-game captures, or rotate the bronze shrine from the game. **Watch trailer** plays the 30-second concept film. **Play in browser** launches the original Godot game with a keyboard and mouse.
+
+Run from the repository root with Python 3, curl, unzip, split and sha256sum available.
+
+```sh
+sh deploy/web/prepare-game.sh
+python3 -m http.server 8000 --directory showcase
+```
+
+Open [localhost:8000](http://localhost:8000/). The preparation script verifies the pinned official release and writes its runtime to an ignored directory. The site loads the game only on request. The first launch downloads about 169 MiB before HTTP compression. Desktop play requires WebGL 2. Use **Esc** to pause the game and **F8** to return to the showcase. The guide and trailer also work on touchscreens.
+
+The existing [Docker deployment](deploy/web/Dockerfile) builds the same site with precompressed game files. The launcher caps the drawing buffer at a 720p pixel budget, and the page suspends its 3D viewer and soundtrack while the game is open. Reduced-motion preferences disable parallax and automatic rotation.
+
+The showcase uses the repository’s original concept boards, gameplay stills, concept trailer, and shrine geometry. Its optional soundtrack is an edited excerpt of Scott Buckley’s [Memories of Stone](https://www.scottbuckley.com.au/library/memories-of-stone/), licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Font and Three.js licenses are included alongside their local files.
+
 ## Watch
 
 | Gameplay · full run | Intro film | Original concept trailer |
