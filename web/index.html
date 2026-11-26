@@ -27,12 +27,13 @@
   </header>
   <main id="main">
     <section class="story" aria-label="The sun shrine">
-      <div class="stage" aria-hidden="true">
-        <div class="stage-landscape"></div>
-        <div class="stage-glow"></div>
+      <div class="stage">
+        <div class="stage-landscape" aria-hidden="true"></div>
+        <div class="stage-glow" aria-hidden="true"></div>
         <img class="stage-poster" src="/shrine/carry.webp" width="750" height="750" alt="" fetchpriority="high">
         <div class="stage-canvas"></div>
-        <div class="component" hidden><span></span></div>
+        <div class="component" aria-hidden="true" hidden><span></span></div>
+        <p class="inspection-hint" id="shrine-controls"><span aria-hidden="true">↔</span> Drag to rotate <span class="keyboard-hint">or use arrow keys</span></p>
       </div>
       <div class="chapters">
         <article class="chapter hero">
@@ -49,7 +50,7 @@
           <div class="copy">
             <p class="eyebrow">Deploy</p>
             <h2>Unfold the<br>sun shrine.</h2>
-            <p class="description">Set the lantern down at a camp. Three bronze legs swing into place, and the camera rises to reveal the paths you’ll need to defend.</p>
+            <p class="description">Set the lantern down at a camp. Release the bronze armor and swing the geared tripod into place. The camera rises to reveal the paths you’ll need to defend.</p>
           </div>
           <figure class="chapter-poster"><img src="/shrine/unfold.webp" alt="The shrine's hinged legs swinging into tripod position" width="750" height="750" loading="lazy"></figure>
         </article>
@@ -57,7 +58,7 @@
           <div class="copy">
             <p class="eyebrow">Defend</p>
             <h2>Draw light from<br>the valley.</h2>
-            <p class="description">Place defenses along the approaches. Hold the camp while its fading reserves flow into the miniature sun between the three orbital rings.</p>
+            <p class="description">Place defenses along the approaches. Hold the camp as its fading reserves feed the miniature sun. Three engraved rings turn around it as it gathers light.</p>
           </div>
           <figure class="chapter-poster"><img src="/shrine/restore.webp" alt="Three opened bronze rings orbit the restored sun" width="750" height="750" loading="lazy"></figure>
         </article>

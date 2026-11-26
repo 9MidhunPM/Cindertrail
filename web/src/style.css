@@ -238,3 +238,31 @@ footer .footer-links a { text-decoration: none; }
 @media (prefers-reduced-motion: no-preference) {
   html { scroll-behavior: smooth; }
 }
+
+.inspection-hint {
+  display: none;
+  position: absolute;
+  right: var(--gutter);
+  bottom: clamp(14px, 4.5svh, 46px);
+  z-index: 2;
+  font-size: .75rem;
+  color: #f1d6a9;
+  letter-spacing: .02em;
+  padding: .45rem .65rem;
+  background: #0b191de8;
+  border: 1px solid #d4a96758;
+  border-radius: 2px;
+}
+.inspection-hint span:first-child { margin-right: .25rem; color: #e2ae65; }
+.story[data-scene='live'] .inspection-hint { display: block; }
+.story[data-scene='live'] .chapters { pointer-events: none; }
+.story[data-scene='live'] .copy { pointer-events: auto; }
+.story[data-scene='live'] .stage-canvas > canvas { pointer-events: auto; cursor: grab; touch-action: pan-y; }
+.story[data-scene='live'] .stage-canvas > canvas.dragging { cursor: grabbing; }
+.stage-canvas > canvas:focus-visible { outline: 2px solid #ffd191; outline-offset: -6px; }
+@media (pointer: coarse) {
+  .keyboard-hint { display: none; }
+}
+@media (max-width: 780px) {
+  .inspection-hint { right: 12px; bottom: 7px; font-size: .68rem; }
+}
