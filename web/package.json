@@ -1,0 +1,16 @@
+{
+  "name": "cindertrail-homepage",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node stage-media.mjs && vite",
+    "build": "node stage-media.mjs && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "three": "0.186.1"
+  },
+  "devDependencies": {
+    "vite": "7.3.7"
+  }
+}

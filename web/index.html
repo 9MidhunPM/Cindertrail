@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#081517">
+  <meta name="description" content="Carry a miniature sun across a ruined valley. A third-person adventure with portable tower defense.">
+  <meta property="og:title" content="Cindertrail — Carry the Last Sunrise">
+  <meta property="og:description" content="Explore the valley, unfold the sun shrine, and defend the last light.">
+  <meta property="og:image" content="https://cindertrail.midhunpm.in/shrine/valley.webp">
+  <link rel="icon" href="/favicon.png" type="image/png">
+  <link rel="preload" href="/fonts/cormorant-garamond-normal-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="canonical" href="https://cindertrail.midhunpm.in/">
+  <title>CINDERTRAIL — Carry the Last Sunrise</title>
+  <link rel="stylesheet" href="/src/style.css">
+  <script type="module" src="/src/main.js"></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <header class="header" id="top">
+    <a class="brand" href="#top"><span class="sun-mark" aria-hidden="true"></span>Cindertrail</a>
+    <nav aria-label="Main navigation">
+      <a href="#shrine">The shrine</a>
+      <a href="#gameplay">Gameplay</a>
+      <a class="nav-play" href="/play/">Play now <span aria-hidden="true">↗</span></a>
+    </nav>
+  </header>
+  <main id="main">
+    <section class="story" aria-label="The sun shrine">
+      <div class="stage" aria-hidden="true">
+        <div class="stage-landscape"></div>
+        <div class="stage-glow"></div>
+        <img class="stage-poster" src="/shrine/carry.webp" width="750" height="750" alt="" fetchpriority="high">
+        <div class="stage-canvas"></div>
+        <div class="component" hidden><span></span></div>
+      </div>
+      <div class="chapters">
+        <article class="chapter hero">
+          <div class="copy">
+            <p class="eyebrow">An exploration and tower-defense adventure</p>
+            <h1>Cindertrail</h1>
+            <p class="subtitle">Carry the Last Sunrise</p>
+            <p class="description">The valley has gone dark. Cross its ruins with a miniature sun and defend it long enough to bring back dawn.</p>
+            <div class="actions"><a class="button" href="/play/">Play now <span aria-hidden="true">↗</span></a><a class="secondary" href="#shrine">Discover the shrine <span aria-hidden="true">↓</span></a></div>
+          </div>
+          <figure class="chapter-poster"><img src="/shrine/carry.webp" alt="A golden miniature sun inside the folded bronze shrine" width="750" height="750"></figure>
+        </article>
+        <article class="chapter" id="shrine">
+          <div class="copy">
+            <p class="eyebrow">Deploy</p>
+            <h2>Unfold the<br>sun shrine.</h2>
+            <p class="description">Set the lantern down at a camp. Three bronze legs swing into place, and the camera rises to reveal the paths you’ll need to defend.</p>
+          </div>
+          <figure class="chapter-poster"><img src="/shrine/unfold.webp" alt="The shrine's hinged legs swinging into tripod position" width="750" height="750" loading="lazy"></figure>
+        </article>
+        <article class="chapter" id="restore">
+          <div class="copy">
+            <p class="eyebrow">Defend</p>
+            <h2>Draw light from<br>the valley.</h2>
+            <p class="description">Place defenses along the approaches. Hold the camp while its fading reserves flow into the miniature sun between the three orbital rings.</p>
+          </div>
+          <figure class="chapter-poster"><img src="/shrine/restore.webp" alt="Three opened bronze rings orbit the restored sun" width="750" height="750" loading="lazy"></figure>
+        </article>
+        <article class="chapter" id="relocate">
+          <div class="copy">
+            <p class="eyebrow">Relocate</p>
+            <h2>Pack up.<br>Carry on.</h2>
+            <p class="description">Recall your defenses, fold the shrine, and find a fresh camp. The same sun keeps its restoration, and your modules keep their upgrades.</p>
+          </div>
+          <figure class="chapter-poster"><img src="/shrine/relocate.webp" alt="The folded sun shrine ready to carry to the next camp" width="750" height="750" loading="lazy"></figure>
+        </article>
+      </div>
+    </section>
+    <section class="gameplay wrap" id="gameplay">
+      <div class="section-heading">
+        <div><p class="eyebrow">Gameplay</p><h2>One valley. Two ways to see it.</h2></div>
+        <p>Explore in third person. Unfold the shrine to take a tactical view of the same terrain.</p>
+      </div>
+      <div class="captures">
+        <figure><img src="/media/exploration.webp" alt="The traveler crossing a stone causeway through the Flooded Grove" width="1280" height="720" loading="lazy"><figcaption>Exploration <span>Flooded Grove</span></figcaption></figure>
+        <figure><img src="/media/defense.webp" alt="A raised tactical view of towers defending the shrine at the Grove crossing" width="1280" height="720" loading="lazy"><figcaption>Shrine defense <span>Flooded Grove</span></figcaption></figure>
+      </div>
+      <p class="watch"><a class="secondary" id="watch" href="/media/gameplay.mp4">Watch gameplay <span aria-hidden="true">▷</span></a></p>
+      <div id="video-slot"></div>
+    </section>
+    <section class="ending">
+      <div class="wrap">
+        <p class="eyebrow">The hilltop beacon</p>
+        <h2>Bring back dawn.</h2>
+        <a class="button" href="/play/">Play now <span aria-hidden="true">↗</span></a>
+      </div>
+    </section>
+  </main>
+  <footer class="wrap">
+    <a class="brand" href="#top"><span class="sun-mark" aria-hidden="true"></span>Cindertrail</a>
+    <div class="footer-links">
+      <a href="/showcase/#field-guide">Field guide</a>
+      <a href="https://github.com/9MidhunPM/Cindertrail">Source &amp; credits <span aria-hidden="true">↗</span></a>
+    </div>
+  </footer>
+</body>
+</html>

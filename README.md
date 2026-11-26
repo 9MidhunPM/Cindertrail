@@ -4,6 +4,8 @@ An open-world, portable-base tower-defense adventure. Explore a continuous 3D va
 
 ## Browser showcase
 
+Explore the [animated shrine homepage](https://cindertrail.midhunpm.in/), open the [field guide](https://cindertrail.midhunpm.in/showcase/#field-guide), or [play Cindertrail in your browser](https://cindertrail.midhunpm.in/play/). The [homepage source and build instructions](web/) include the editable Blender shrine.
+
 The [showcase](showcase/) opens on the valley’s original concept art. Choose a landscape, scroll through the field guide to compare illustrations with in-game captures, or rotate the bronze shrine from the game. **Watch trailer** plays the 30-second concept film. **Play in browser** launches the original Godot game with a keyboard and mouse.
 
 Run from the repository root with Python 3, curl, unzip, split and sha256sum available.
