@@ -93,18 +93,16 @@ def ring_rail(name, radius, start, sweep, basis, segments, section, materials, f
     width = len(section)
     vertices = []
     faces = []
-    for i in range(segments+1):
+    for i in range(segments):
         theta = start + sweep*i/segments
         for radial, depth in section:
             r = radius + radial
             vertices.append(basis @ Vector((r*cos(theta), r*sin(theta), depth)))
-        if i:
-            for j, material_index in enumerate(facets):
-                a = (i-1)*width+j
-                b = (i-1)*width+(j+1)%width
-                faces.append(((a, a+width, b+width, b), material_index))
-    faces.extend([(tuple(range(width)), 0),
-                  (tuple(reversed(range(segments*width, (segments+1)*width))), 0)])
+        following = (i+1)%segments
+        for j, material_index in enumerate(facets):
+            k = (j+1)%width
+            faces.append(((i*width+j, following*width+j, following*width+k, i*width+k),
+                          material_index))
     return mesh_object(name, vertices, faces, materials)
 
 
@@ -195,19 +193,19 @@ for i, rotations in enumerate([(pi/2,0,0),(.2,pi/2,.25),(1.0,.5,1.1)]):
     basis = Euler(rotations, 'XYZ').to_matrix()
     radius = .535 + i*.058
     start = -.54 + i*.42
-    sweep = 4.91 - i*.19
+    sweep = 2*pi
     gimbal = pivot(f"Orbital ring {i+1}", (0,0,0), [])
     gimbal.parent = carrier
     gimbal.location = solar_center - carrier.location
-    rail = ring_rail("Forged orbital rail", radius, start, sweep, basis, 48,
+    rail = ring_rail("Forged orbital rail", radius, start, sweep, basis, 64,
                      [(-.026,-.015),(-.018,-.026),(.015,-.026),(.026,-.015),
                       (.026,.015),(.015,.026),(-.018,.026),(-.026,.015)],
                      [bronze,gold,dark], [0,1,0,2,0,1,0,2])
     rail.parent = gimbal
-    channel = ring_rail("Amber passage", radius+.027, start+.05, sweep-.1, basis, 42,
+    channel = ring_rail("Amber passage", radius+.027, start, sweep, basis, 64,
                         [(0,-.006),(.003,-.006),(.003,.006),(0,.006)], [ember], [0]*4)
     channel.parent = gimbal
-    runner = ring_rail("Floating copper runner", radius-.057, start+.14, sweep-.28, basis, 40,
+    runner = ring_rail("Floating copper runner", radius-.057, start, sweep, basis, 64,
                        [(-.009,-.006),(.009,-.006),(.009,.006),(-.009,.006)],
                        [patina,copper], [0,1,0,1])
     runner.parent = gimbal
@@ -227,15 +225,6 @@ for i, rotations in enumerate([(pi/2,0,0),(.2,pi/2,.25),(1.0,.5,1.1)]):
             mark_faces.append(((mark,mark+1,mark+2,mark+3), int(j%4 == 0)))
     etching = mesh_object("Radial calibration etching", marks, mark_faces, [dark,patina])
     etching.parent = gimbal
-    for angle in (start, start+sweep):
-        radial = basis @ Vector((cos(angle),sin(angle),0))
-        tangent = basis @ Vector((-sin(angle),cos(angle),0))
-        terminal = cylinder("Ring terminal weight", 10, .038, .059, radial*radius, dark)
-        terminal.rotation_euler = tangent.to_track_quat('Z','Y').to_euler()
-        terminal.parent = gimbal
-        lens = cylinder("Amber terminal lens", 10, .024, .065, radial*radius, ember)
-        lens.rotation_euler = tangent.to_track_quat('Z','Y').to_euler()
-        lens.parent = gimbal
     gimbals.append(gimbal)
 
 hinges = []

@@ -125,6 +125,7 @@ export async function mountShrine(story, isCurrent) {
   let lastActivity = 0;
   let yaw = 0;
   let pitch = 0;
+  let orbitPhase = 0;
   const time = { value: 0 };
   const heat = { value: 0 };
   const ringMotion = [];
@@ -217,9 +218,14 @@ export async function mountShrine(story, isCurrent) {
     sceneLight.intensity = lerp(.20, 1.15, energy) + .26 * response;
     solarMaterial.emissiveIntensity = lerp(1.25, 2.45, energy * pulse);
     for (const material of illuminated) material.emissiveIntensity = .45 + energy * pulse * 1.30 + response * .33;
+    const orbit = clamp((position - .40) * 8) * clamp((.91 - position) * 10);
+    if (orbit > 0) orbitPhase += elapsed * .74 * orbit;
+    else orbitPhase = 0;
     ringMotion.forEach((ring, index) => {
-      ring.rotation.x = Math.sin(time.value * .72 + index * 1.8) * energy * .084;
-      ring.rotation.z = Math.cos(time.value * .94 + index * 2.1) * energy * .092;
+      // Each centered gimbal turns around a different axis.
+      const angle = orbitPhase * (1 + index * .19);
+      ring.rotation.set(angle * [1, 0, .36][index], angle * [0, -1, .54][index],
+        angle * [0, 0, .82][index]);
     });
     streams.forEach(({ curve, line, points }, i) => {
       line.visible = points.visible = energy > 0;
@@ -257,7 +263,7 @@ export async function mountShrine(story, isCurrent) {
       renderer.setSize(width, height, false);
     }
     renderer.render(scene, camera);
-    if (input.dragging || timestamp - lastActivity < 1650) schedule();
+    if (orbit > 0 || input.dragging || timestamp - lastActivity < 1650) schedule();
   }
 
   function schedule() {
